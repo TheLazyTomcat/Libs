@@ -16,13 +16,13 @@
     Can be used in a non-main thread as long as you call method ProcessMessages
     or ContinuousProcessMessages at least once.
 
-    WARNING - the window must be created and managed (eg. call to method
-              ProcessMessages) in the same thread where you want to process
-              the messages, otherwise it will not work!
+      WARNING - the window must be created and managed (eg. call to method
+                ProcessMessages) in the same thread where you want to process
+                the messages, otherwise it will not work!
 
-  Version 1.4.1 (2021-11-26)
+  Version 1.5 (2022-10-24)
 
-  Last change 2022-09-14
+  Last change 2022-10-24
 
   ©2015-2022 František Milt
 
@@ -41,12 +41,12 @@
       github.com/TheLazyTomcat/Lib.UtilityWindow
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
-    WndAlloc       - github.com/TheLazyTomcat/Lib.WndAlloc
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
   * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
+    WndAlloc       - github.com/TheLazyTomcat/Lib.WndAlloc    
 
     SimpleCPUID is required only when PurePascal symbol is not defined.
 
@@ -74,6 +74,8 @@ uses
 type
   EUWException = class(Exception);
 
+  EUWSystemEror = class(EUWException);
+
 {===============================================================================
 --------------------------------------------------------------------------------
                              TMulticastMessageEvent
@@ -96,14 +98,11 @@ type
 
     Indicates that the processed message was sent, rather than posted.
 
-    It means the handling of the message was not called from method
-    ProcessMessages via a call to DispatchMessage, but directly by the system.
+    Note that if the message was sent from the same thread as the one that is
+    processing this message, this parameter will read as False.
 
-    This also means calling BreakProcessing has no immediate effect, it just
-    resets the Continue flag.
-
-    When it is true, you must take care what are you doing, because it is
-    possible to cause an application deadlock (eg. don't call SendMessage).    
+    Calling BreakProcessing when it is True has no immediate effect, as that
+    works only when processing posted message.
 }
   TMessageCallback = procedure(var Msg: TMessage; var Handled: Boolean; Sent: Boolean);
   TMessageEvent    = procedure(var Msg: TMessage; var Handled: Boolean; Sent: Boolean) of object;
@@ -134,20 +133,19 @@ type
 type
   TUtilityWindow = class(TCustomObject)
   protected
-    fWindowHandle:      HWND;
-    fMessageProcessed:  Boolean;  // internal, do not publish
-    fContinue:          Boolean;
-    fOnMessage:         TMulticastMessageEvent;
+    fWindowHandle:        HWND;
+    fContinueProcessing:  Boolean;
+    fOnMessage:           TMulticastMessageEvent;
     procedure WndProc(var Msg: TMessage); virtual;
-    Function ProcessMessagesInternal(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean): Boolean; virtual;
+    Function ProcessMessageInternal(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean): Boolean; virtual;
   public
     constructor Create;
     destructor Destroy; override;
   {
     BreakProcessing
 
-      This method, when called, will cause method ContinuousProcessMessages
-      to exit before all messages has been processed.
+      This method, when called, will cause methods ProcessMessages and
+      ContinuousProcessMessages to exit before all messages are processed.
 
       Note that if it is called from message handler and the processed message
       was sent, rather than posted, this method has no immediate effect.
@@ -155,7 +153,7 @@ type
   }
     procedure BreakProcessing; virtual;
   {
-    ProcessMessages
+    ProcessMessage
 
       Processes (dispatches) all sent message and then retrieves and dispatches
       exactly one, not more, posted message from the queue.
@@ -172,29 +170,35 @@ type
       Output parameter ReceivedQuitMessage is set to true when WM_QUIT message
       is retrived from the queue, otherwise it is always false.
       Note that WM_QUIT message is never dispatched.
+  }
+    procedure ProcessMessage(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean); overload; virtual;
+    procedure ProcessMessage(WaitForMessage: Boolean = False); overload; virtual;
+  {
+    ProcessMessages
 
-      Return value is set to true when at least one sent or posted message is
-      dispatched, otherwise it is false.
+      Works exactly the same as ProcessMessage, but it will try to retrieve and
+      dispatch all pending posted messages, not just one.
+
+      Note it is possible that not all messages will be retrived. This is
+      because the retrieving can be aborted by calling BreakProcessing or when
+      WM_QUIT message is encountered.
+
+      Returns true when all incoming messages were processed (which might
+      actually be none), false when the processing was interrupted before
+      all messages could be processed.
   }
     Function ProcessMessages(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean): Boolean; overload; virtual;
     Function ProcessMessages(WaitForMessage: Boolean = False): Boolean; overload; virtual;
   {
     ContinuousProcessMessages
 
-      Repeatedly calls ProcessMessages as long as that method returns true
-      (ie. it is actually processing something).
-      After each call it also checks whether WM_QUIT message was received or
-      whether the processing was not terminated by a call to method
-      BreakProcessing. If either of these is true, it returns.
+      Repeatedly waits for incoming messages and dispatches them as they arrive.
 
-      When WaitForMessage is set to true, this method will not return until
-      WM_QUIT is received or the processing is cancelled using BreakProcessing.
-
-      When set to false, the function will return after processing all pending
-      sent messages and all posted messages or after receiving WM_QUIT
-      or breaking processing using BreakProcessing.
+      This method does not return until WM_QUIT message is delivered (in which
+      case the result is set to True) or the processing is interrupted by
+      calling BreakProcessing (result set to False).
   }
-    procedure ContinuousProcessMessages(WaitForMessage: Boolean = False); virtual;
+    Function ContinuousProcessMessages: Boolean; virtual;
     property WindowHandle: HWND read fWindowHandle;
     property OnMessage: TMulticastMessageEvent read fOnMessage;
   end;
@@ -293,7 +297,6 @@ procedure TUtilityWindow.WndProc(var Msg: TMessage);
 var
   Handled:  Boolean;
 begin
-fMessageProcessed := True;
 Handled := False;
 fOnMessage.Call(Msg,Handled,InSendMessage);
 If not Handled then
@@ -302,12 +305,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TUtilityWindow.ProcessMessagesInternal(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean): Boolean;
-var
-  Msg:    TMsg;
-  GetRes: Integer;
+Function TUtilityWindow.ProcessMessageInternal(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean): Boolean;
+type
+  TGetMsgResult = (gmrMessage,gmrQuit,gmrFailure);
 
-  Function GetMessageWrapper(out IntResult: Integer): Boolean;
+  Function GetMessageWrapper(var Msg: TMsg): TGetMsgResult;
   begin
   {
     GetMessage can return 0, -1 or other non-zero value.
@@ -316,10 +318,16 @@ var
       - when WM_QUIT was received, it returns 0
       - on error it will return -1
   }
-    IntResult := Integer(GetMessage(Msg,fWindowHandle,0,0));
-    Result := IntResult <> 0;
+    case Integer(GetMessage(Msg,fWindowHandle,0,0)) of
+      -1: Result := gmrFailure;
+       0: Result := gmrQuit;
+    else
+      Result := gmrMessage;
+    end;
   end;
 
+var
+  Msg:  TMsg;
 begin
 {
   GetMessage does not return until some message is placed in the message queue,
@@ -333,38 +341,34 @@ begin
   This means the thread cannot respond to sent messages unless it calls
   PeekMessage or is currently waiting on GetMessage.
 }
-FillChar(Addr(Msg)^,SizeOf(TMsg),0);
+Result := True;
 ReceivedQuitMessage := False;
-fMessageProcessed := False;
-If fContinue then
+FillChar(Addr(Msg)^,SizeOf(TMsg),0);
+If WaitForMessage then
   begin
-    If WaitForMessage then
+    case GetMessageWrapper(Msg) of
+      gmrMessage: begin
+                    TranslateMessage(Msg);
+                    DispatchMessage(Msg);
+                  end;
+      gmrQuit:    ReceivedQuitMessage := True;
+      gmrFailure: raise EUWSystemEror.CreateFmt('TUtilityWindow.ProcessMessageInternal:' +
+                    ' Failed to retrieve a message (%d).',[GetLastError]);
+    end;
+  end
+else
+  begin
+    If PeekMessage(Msg,fWindowHandle,0,0,PM_REMOVE) then
       begin
-        If GetMessageWrapper(GetRes) then
+        If Msg.message <> WM_QUIT then
           begin
-            If GetRes <> -1 then
-              begin
-                TranslateMessage(Msg);
-                DispatchMessage(Msg);
-              end
-            else raise EUWException.CreateFmt('TUtilityWindow.ProcessMessages: Failed to retrieve a message (0x%.8x).',[GetLastError]);
+            TranslateMessage(Msg);
+            DispatchMessage(Msg);
           end
         else ReceivedQuitMessage := True;
       end
-    else
-      begin
-        If PeekMessage(Msg,fWindowHandle,0,0,PM_REMOVE) then
-          begin
-            If Msg.message <> WM_QUIT then
-              begin
-                TranslateMessage(Msg);
-                DispatchMessage(Msg);
-              end
-            else ReceivedQuitMessage := True;
-          end;
-      end;
+    else Result := False;
   end;
-Result := fMessageProcessed;
 end;
 
 {-------------------------------------------------------------------------------
@@ -391,36 +395,65 @@ end;
 
 procedure TUtilityWindow.BreakProcessing;
 begin
-fContinue := False;
+fContinueProcessing := False;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TUtilityWindow.ProcessMessage(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean);
+begin
+ProcessMessageInternal(WaitForMessage,ReceivedQuitMessage);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure TUtilityWindow.ProcessMessage(WaitForMessage: Boolean = False);
+var
+  ReceivedQuitMessage:  Boolean;
+begin
+ProcessMessage(WaitForMessage,ReceivedQuitMessage);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TUtilityWindow.ProcessMessages(WaitForMessage: Boolean; out ReceivedQuitMessage: Boolean): Boolean;
 begin
-fContinue := True;
-Result := ProcessMessagesInternal(WaitForMessage,ReceivedQuitMessage);
+Result := True;
+fContinueProcessing := True;
+If ProcessMessageInternal(WaitForMessage,ReceivedQuitMessage) then
+  begin
+    If not ReceivedQuitMessage and fContinueProcessing then
+      begin
+        while ProcessMessageInternal(False,ReceivedQuitMessage) do  // peek remaining messages
+          If ReceivedQuitMessage or not fContinueProcessing then
+            begin
+              Result := False;
+              Break{while};
+            end;
+      end
+    else Result := False;
+  end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function TUtilityWindow.ProcessMessages(WaitForMessage: Boolean = False): Boolean;
 var
-  QuitReceived: Boolean;
+  ReceivedQuitMessage:  Boolean;
 begin
-fContinue := True;
-Result := ProcessMessagesInternal(WaitForMessage,QuitReceived);
+Result := ProcessMessages(WaitForMessage,ReceivedQuitMessage);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TUtilityWindow.ContinuousProcessMessages(WaitForMessage: Boolean = False);
+Function TUtilityWindow.ContinuousProcessMessages: Boolean;
 var
-  QuitReceived: Boolean;
+  ReceivedQuitMessage:  Boolean;
 begin
-fContinue := True;
-while ProcessMessagesInternal(WaitForMessage,QuitReceived) do
-  If not fContinue or QuitReceived then Break{while...};
+fContinueProcessing := True;
+while ProcessMessageInternal(True,ReceivedQuitMessage) do
+  If ReceivedQuitMessage or not fContinueProcessing then Break{while};
+Result := ReceivedQuitMessage;
 end;
 
 end.
