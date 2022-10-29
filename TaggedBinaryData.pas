@@ -63,9 +63,9 @@
 
       All metadata (signature, context ID) are written with little endianess.
 
-  Version 1.0 (2021-11-01)
+  Version 1.0.1 (2022-10-26)
 
-  Last change 2022-09-14
+  Last change 2022-10-26
 
   ©2022 František Milt
 
@@ -384,7 +384,8 @@ end;
 
 procedure TTaggedBinaryDataWriter.Finalize;
 begin
-WriteClose;
+If Assigned(fDestination) then
+  WriteClose;
 fActions := [];
 fDestination := nil;
 end;

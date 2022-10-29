@@ -43,7 +43,7 @@
 
   Version 1.0 alpha 2 (requires extensive testing) (2022-10-20)
 
-  Last change 2022-10-20
+  Last change 2022-10-26
 
   ©2022 František Milt
 
@@ -327,7 +327,6 @@ type
   {$IFDEF Windows}
     fClientSyncs:           TSMClientSynchonizers;
   {$ENDIF}
-    fFullyInitialized:      Boolean;
     fOnMessageEvent:        TSMMessageEvent;
     fOnMessageCallback:     TSMMessageCallback;
     // geting item pointers
@@ -1435,6 +1434,7 @@ try
         end;
     end;
   // add self to the client array
+  fClientID := CLIENTID_BROADCAST;  
   fClientMap := TBitVectorStatic.Create(fShMemClientMap,MaxClients);
   MapFreeIdx := fClientMap.FirstClean;
   If fClientMap.CheckIndex(MapFreeIdx) then
@@ -1468,7 +1468,7 @@ try
 {$IFDEF Windows}
   // client synchronizers (make sure they are properly initialized)
   SetLength(fClientSyncs,MaxClients);
-  For j := LowClientIndex to HighClientIndex do
+  For j := Low(fClientSyncs) to High(fClientSyncs) do
     If j <> Integer(fClientID) then
       begin
         fClientSyncs[j].Assigned := False;
@@ -1488,7 +1488,6 @@ try
 finally
   fSharedMemory.Unlock;
 end;
-fFullyInitialized := True;
 end;
 
 //------------------------------------------------------------------------------
@@ -1501,22 +1500,25 @@ If Assigned(fSharedMemory) then
   begin
     fSharedMemory.Lock;
     try
-      If fFullyInitialized then
+      If Assigned(fFetchedSentMessages) and Assigned(fFetchedPostedMessages) then
         begin
           // get and release all sent messages (also remove the posted ones)
           FetchMessages;
-          For i := fFetchedSentMessages.LowIndex to fFetchedSentMessages.HighIndex do   
+          For i := fFetchedSentMessages.LowIndex to fFetchedSentMessages.HighIndex do
             If fFetchedSentMessages[i].Flags and SM_MSGFLAG_BROADCAST <> 0 then
               ReleaseSentMessage(fFetchedSentMessages[i].MasterMsg,False,0)
             else
               ReleaseSentMessage(fFetchedSentMessages[i].Index,False,0);
-        {$IFDEF Windows}
-          // free synchronizers (do not use Low/HighClientIndex)
-          For i := LowClientIndex to HighClientIndex do
-            If fClientSyncs[i].Assigned and (i <> Integer(fClientID)) then
-              fClientSyncs[i].Synchronizer.Free;
-        {$ENDIF}
-          // remove self from clients
+         end;
+    {$IFDEF Windows}
+      // free synchronizers (do not use Low/HighClientIndex)
+      For i := Low(fClientSyncs) to High(fClientSyncs) do
+        If fClientSyncs[i].Assigned and (i <> Integer(fClientID)) then
+          fClientSyncs[i].Synchronizer.Free;
+    {$ENDIF}
+      // remove self from clients
+      If Assigned(fShMemClient) and (fClientID <> CLIENTID_BROADCAST) then
+        begin
           fShMemClient^.Flags := 0;  // to be sure
           fClientMap[Integer(fClientID)] := False;
           Dec(fShMemHead^.Clients.Count);

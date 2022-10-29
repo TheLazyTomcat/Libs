@@ -25,9 +25,9 @@
     further operation if is is too high. But note that the counter does not
     have any inherent meaning assigned, it is on you how to interpret it.
 
-  Version 1.0 (2022-05-16)
+  Version 1.0.1 (2022-10-25)
 
-  Last change 2022-05-16
+  Last change 2022-10-25
 
   ©2022 František Milt
 
@@ -342,18 +342,21 @@ procedure TInstanceControl.Finalize;
 var
   SharedDataPtr:  PICSharedData;
 begin
-fSection.Lock;
-try
-  SharedDataPtr := fSection.Memory;
-  If fProcCounter then
-    begin
-      Dec(SharedDataPtr^.InstanceCount);
-      If SharedDataPtr^.CreatorPID = CurrentProcessID then
-        SharedDataPtr^.CreatorPID := UInt32(-1);
+If Assigned(fSection) then
+  begin
+    fSection.Lock;
+    try
+      SharedDataPtr := fSection.Memory;
+      If fProcCounter then
+        begin
+          Dec(SharedDataPtr^.InstanceCount);
+          If SharedDataPtr^.CreatorPID = CurrentProcessID then
+            SharedDataPtr^.CreatorPID := UInt32(-1);
+        end;
+    finally
+      fSection.Unlock;
     end;
-finally
-  fSection.Unlock;
-end;
+  end;
 fSection.Free;
 end;
 

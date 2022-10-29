@@ -11,9 +11,9 @@
 
     Utility classes for data (de)compression build on zlib library.
 
-  Version 1.0.8 (2021-03-22)
+  Version 1.0.9 (2022-10-26)
 
-  Last change 2022-09-24
+  Last change 2022-10-26
 
   ©2018-2022 František Milt
 
@@ -1379,7 +1379,8 @@ end;
 
 procedure TZCompressionBuffer.Final;
 begin
-fCompressor.Final;
+If Assigned(fCompressor) then
+  fCompressor.Final;
 fCompressor.Free;
 BufferRealloc(fResult,fTotalCompressed);
 end;
@@ -1532,7 +1533,8 @@ end;
 
 procedure TZDecompressionBuffer.Final;
 begin
-fDecompressor.Final;
+If Assigned(fDecompressor) then
+  fDecompressor.Final;
 fDecompressor.Free;
 BufferRealloc(fResult,fTotalUncompressed);
 end;

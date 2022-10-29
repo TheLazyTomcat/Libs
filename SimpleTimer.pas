@@ -27,9 +27,9 @@
     In non-main thread, you are responsible to call this method - so the
     behavior is technically the same as in Windows OS.
 
-  Version 1.2 (2021-11-28)
+  Version 1.2.1 (2022-10-26)
 
-  Last change 2022-09-14
+  Last change 2022-10-26
 
   ©2015-2022 František Milt
 
@@ -116,6 +116,7 @@ type
   {$ELSE}
     fTimerExpired:    Boolean;  // only for internal use
     fInMainThread:    Boolean;  // -//-
+    fTimerCreated:    Boolean;
   {$ENDIF}
     fTimerID:         PtrUInt;
     fInterval:        UInt32;
@@ -340,9 +341,11 @@ SignalEvent.sigev_value.sigval_ptr := Pointer(Self);
 SignalEvent.sigev_signo := SignalNumber;
 SignalEvent.sigev_notify := SIGEV_SIGNAL;
 If timer_create(CLOCK_MONOTONIC,@SignalEvent,@NewTimerID) = 0 then
-  fTimerID:= PtrUInt(NewTimerID)
-else
-  raise ESTTimerCreationError.CreateFmt('TSimpleTimer.Initialize: Failed to create timer (%d).',[errno_ptr^]);
+  begin
+    fTimerID := PtrUInt(NewTimerID);
+    fTimerCreated := True;
+  end
+else raise ESTTimerCreationError.CreateFmt('TSimpleTimer.Initialize: Failed to create timer (%d).',[errno_ptr^]);
 {$ENDIF}
 fInterval := 1000;
 fEnabled := False;
@@ -353,15 +356,22 @@ end;
 procedure TSimpleTimer.Finalize;
 begin
 fEnabled := False;
-SetupTimer;
 {$IFDEF Windows}
-If fOwnsWindow then
-  fWindow.Free
-else
-  fWindow.OnMessage.Remove(MessagesHandler);
+If Assigned(fWindow) then
+  begin
+    SetupTimer;
+    If fOwnsWindow then
+      fWindow.Free
+    else
+      fWindow.OnMessage.Remove(MessagesHandler);
+  end;
 {$ELSE}
-If timer_delete(timer_t(fTimerID)) <> 0 then
-  raise ESTTimerDeletionError.CreateFmt('Finalize.Initialize: Failed to delete timer (%d).',[errno_ptr^]);
+If fTimerCreated then
+  begin
+    SetupTimer;
+    If timer_delete(timer_t(fTimerID)) <> 0 then
+      raise ESTTimerDeletionError.CreateFmt('Finalize.Initialize: Failed to delete timer (%d).',[errno_ptr^]);
+  end;
 {
   Note that signal handler stays assigned, but it should pose no problem as
   the timer is destroyed and will not invoke the signal handler anymore.
@@ -401,8 +411,8 @@ If (fInterval > 0) and fEnabled then
     If timer_settime(timer_t(fTimerID),0,@TimerTime,nil) <> 0 then
       raise ESTTimerSetupError.CreateFmt('TSimpleTimer.SetupTimer: Failed to arm timer (%d).',[errno_ptr^]);
   {$IFDEF LCL}
-  If fInMainThread then
-    Application.AddOnIdleHandler(OnAppIdleHandler,False);
+    If fInMainThread then
+      Application.AddOnIdleHandler(OnAppIdleHandler,False);
   {$ENDIF}
   end;
 {$ENDIF}
@@ -483,7 +493,7 @@ end;
 procedure TSimpleTimer.ProcessMassages;
 begin
 {$IFDEF Windows}
-fWindow.ContinuousProcessMessages(False);
+fWindow.ProcessMessages(False);
 {$ELSE}
 If fTimerExpired then
   begin

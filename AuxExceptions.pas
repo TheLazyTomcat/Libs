@@ -31,11 +31,11 @@
 
         The stored register values are NOT the same as when the exception was
         raised, they are obtained inside of EAEExtendedException constructor
-        and are threfore heavily polluted.
+        and are therefore heavily polluted.
         There is, as far as I know, no general way of obtaining the values
         before the exception class is instantiated (well, there is, but it
-        works only in 32bit Windows, so let's ignore it for now). I you of any
-        way on how to do that, please let me know.
+        works only in 32bit Windows, so let's ignore it for now). I you are
+        aware of any way on how to do that, please let me know.
 
       Stack trace:
 
@@ -59,7 +59,7 @@
 
   Version 1.1 (2022-09-30)
 
-  Last change 2022-09-30
+  Last change 2022-10-25
 
   ©2019-2022 František Milt
 

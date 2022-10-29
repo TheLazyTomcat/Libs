@@ -22,9 +22,9 @@
     to be inherited from in a descendant class that implements vector for a
     specific item type. An integer vector is implemented as an example.
 
-  Version 1.2 (2020-05-20)
+  Version 1.2.1 (2022-10-26)
 
-  Last change 2022-09-24
+  Last change 2022-10-26
 
   ©2016-2022 František Milt
 
@@ -461,7 +461,13 @@ If fOwnsMemory then
         If Value < fCount then
           For i := Value to HighIndex do
             ItemFinal(GetItemPtr(i));
-        ReallocMem(fMemory,TMemSize(Value) * fItemSize);
+        If fCount <= 0 then
+          begin
+            // there is no item, so we do not need to copy existing data
+            FreeMem(fMemory,TMemSize(fCapacity) * fItemSize);
+            fMemory := AllocMem(TMemSize(Value) * fItemSize);
+          end
+        else ReallocMem(fMemory,TMemSize(Value) * fItemSize);
         fCapacity := Value;
         If Value < fCount then
           begin

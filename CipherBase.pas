@@ -14,9 +14,9 @@
     At this moment, only base class for symmetric block cipher is implemented
     (used for Rijndael/AES), more will probably be implemented later.
 
-  Version 1.0.4 (2021-04-05)
+  Version 1.0.5 (2022-10-25)
 
-  Last change 2022-09-13
+  Last change 2022-10-25
 
   ©2021-2022 František Milt
 
@@ -1634,20 +1634,20 @@ end;
 
 procedure TBlockCipher.Finalize;
 begin
-If fBlockBytes > 0 then
+If fBlockBytes <> 0 then
   begin
     If Assigned(fInitVector) then
       FreeMem(fInitVector,fBlockBytes);
-    If Assigned(fInTransferData) and (fInTransferSize <> 0) then
-      FreeMem(fInTransferData,fInTransferSize);
-    If Assigned(fOutTransferData) and (fOutTransferSize <> 0) then
-      FreeMem(fOutTransferData,fOutTransferSize);
     If Assigned(fTempBlock) then
       FreeMem(fTempBlock,fBlockBytes);
-    If Assigned(fOutBuffer) and (fOutBufferSize <> 0) then
-      FreeMem(fOutBuffer,fOutBufferSize);
   end;
-If Assigned(fKey) and (fKeyBytes > 0) then
+If Assigned(fInTransferData) and (fInTransferSize <> 0) then
+  FreeMem(fInTransferData,fInTransferSize);
+If Assigned(fOutTransferData) and (fOutTransferSize <> 0) then
+  FreeMem(fOutTransferData,fOutTransferSize);
+If Assigned(fOutBuffer) and (fOutBufferSize <> 0) then
+  FreeMem(fOutBuffer,fOutBufferSize);
+If Assigned(fKey) and (fKeyBytes <> 0) then
   FreeMem(fKey,fKeyBytes);
 inherited;
 end;

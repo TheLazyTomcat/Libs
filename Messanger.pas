@@ -41,9 +41,9 @@
     handlers - the endpoint will be dispatching all received messages to the
     handler for processing.
 
-  Version 2.0.2 (2022-10-20)
+  Version 2.0.3 (2022-10-26)
 
-  Last change 2022-10-20
+  Last change 2022-10-26
 
   ©2016-2022 František Milt
 
@@ -166,8 +166,8 @@ type
   end;
 
 {
-  TMsgrMessageOut is used in sending of messages, where user passes can pass
-  this structure in place of number of individual parameters.
+  TMsgrMessageOut is used in sending of messages, where user can pass this
+  structure in place of number of individual parameters.
 }
   TMsgrMessageOut = record
     Recipient:  TMsgrEndpointID;
@@ -383,6 +383,7 @@ type
     fReceivedPostedMessages:  TMsgrMessageVector;
     fBufferedMessages:        TMsgrBufferedMessageVector;
     fUndeliveredMessages:     TMsgrMessageVector;   // stores undelivered buffered messages
+    fVectorsReady:            Boolean;              // used to indicate successful creation
     // events
     fOnMessageEvent:          TMsgrMessageInEvent;
     fOnMessageCallback:       TMsgrMessageInCallback;
@@ -1428,6 +1429,7 @@ end;
 
 procedure TMessangerEndpoint.Initialize(EndpointID: TMsgrEndpointID; Messanger: TObject);
 begin
+fVectorsReady := False;
 fWorkingThread := 0;
 fMessanger := Messanger;
 fEndpointID := EndpointID;
@@ -1447,6 +1449,7 @@ fReceivedSentMessages := TMsgrMessageVector.Create;
 fReceivedPostedMessages := TMsgrMessageVector.Create;
 fBufferedMessages := TMsgrBufferedMessageVector.Create;
 fUndeliveredMessages := TMsgrMessageVector.Create;
+fVectorsReady := True;
 // events
 fOnMessageEvent := nil;
 fOnMessageCallback := nil;
@@ -1463,15 +1466,19 @@ begin
 // prevent sending of new messages
 fSendBlocked := True;
 // remove self from messanger (prevents receiving of new messages)
-TMessanger(fMessanger).RemoveEndpoint(fEndpointID);
-// fetch messages and give user a chance to process them
-FetchMessages;
-DispatchMessages; // clears the messages if handler is not assigned
-// dispatch buffered messages as undelivered
-fUndeliveredMessages.Assign(fBufferedMessages);
-fBufferedMessages.Clear;
-UndeliveredDispatch;
-// call destoring event
+If Assigned(fMessanger) then
+  TMessanger(fMessanger).RemoveEndpoint(fEndpointID);
+If fVectorsReady then
+  begin
+    // fetch messages and give user a chance to process them
+    FetchMessages;
+    DispatchMessages; // clears the messages if handler is not assigned
+    // dispatch buffered messages as undelivered
+    fUndeliveredMessages.Assign(fBufferedMessages);
+    fBufferedMessages.Clear;
+    UndeliveredDispatch;
+  end;
+// call destroying event
 DoDestroying;
 // free vectors
 fUndeliveredMessages.Free;

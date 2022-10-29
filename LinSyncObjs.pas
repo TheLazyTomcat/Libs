@@ -30,9 +30,9 @@
              problems. Use them with caution and if you find any bugs, please
              report them.
 
-  Version 1.0.2 (2022-08-13)
+  Version 1.0.4 (2022-10-28)
 
-  Last change 2022-09-13
+  Last change 2022-10-29
 
   ©2022 František Milt
 
@@ -131,7 +131,8 @@ type
 type
   TCriticalSection = class(TCustomRefCountedObject)
   protected
-    fMutex: pthread_mutex_t;
+    fMutex:         pthread_mutex_t;
+    fLockComplete:  Boolean;
     procedure Initialize; virtual;
     procedure Finalize; virtual;
   public
@@ -212,12 +213,13 @@ type
 type
   TLinSyncObject = class(TCustomObject)
   protected
-    fLastError:       Integer;
-    fName:            String;
-    fProcessShared:   Boolean;
-    fNamedSharedItem: TNamedSharedItem;   // unused in thread-shared mode
-    fSharedData:      Pointer;
-    fLockPtr:         Pointer;
+    fLastError:         Integer;
+    fName:              String;
+    fProcessShared:     Boolean;
+    fNamedSharedItem:   TNamedSharedItem;   // unused in thread-shared mode
+    fSharedData:        Pointer;
+    fLockPtr:           Pointer;
+    fLockPrepComplete:  Boolean;
     // getters, setters
     Function GetSharedUserDataPtr: PLSOSharedUserData; virtual;
     Function GetSharedUserData: TLSOSharedUserData; virtual;
@@ -226,8 +228,8 @@ type
     class Function GetLockType: TLSOLockType; virtual; abstract;
     procedure CheckAndSetLockType; virtual;
     procedure ResolveLockPtr; virtual; abstract;
-    procedure InitializeLock(InitializingData: PtrUInt); virtual; abstract;
-    procedure FinalizeLock; virtual; abstract;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); virtual;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); virtual; abstract;
     // object initialization/finalization
     procedure Initialize(const Name: String; InitializingData: PtrUInt); overload; virtual;
     // following overload can be used only to open existing process-shared objects
@@ -308,8 +310,8 @@ type
   protected
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     procedure SignalStrict; virtual;
     Function Signal: Boolean; virtual;
@@ -329,9 +331,9 @@ type
 type
   TSimpleEventBase = class(TImplementorLinSyncObject)
   protected
-    procedure FinalizeLock; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
     class Function WakeCount: Integer; virtual; abstract;
   public
     procedure LockStrict; virtual;
@@ -462,8 +464,8 @@ type
   protected
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     constructor Create(const Name: String; ManualReset,InitialState: Boolean); overload; virtual;
     constructor Create(ManualReset,InitialState: Boolean); overload; virtual;
@@ -508,8 +510,8 @@ type
   protected
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     procedure LockStrict; virtual;
     Function Lock: Boolean; virtual;
@@ -532,8 +534,8 @@ type
   protected
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     procedure LockStrict; virtual;
     Function Lock: Boolean; virtual;
@@ -558,8 +560,8 @@ type
     fInitialValue:  cUnsigned;
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     constructor Create(const Name: String; InitialValue: cUnsigned); overload; virtual;
     constructor Create(InitialValue: cUnsigned); overload; virtual;
@@ -589,8 +591,8 @@ type
   protected
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     procedure ReadLockStrict; virtual;
     Function ReadLock: Boolean; virtual;
@@ -640,8 +642,8 @@ type
     // inherited methods
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     procedure WaitStrict(DataLock: ppthread_mutex_t); overload; virtual;
     procedure WaitStrict(DataLock: TMutex); overload; virtual;
@@ -680,8 +682,8 @@ type
     fDataLockPtr: Pointer;
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     procedure LockStrict; virtual;
     Function Lock: Boolean; virtual;
@@ -707,8 +709,8 @@ type
   protected
     class Function GetLockType: TLSOLockType; override;
     procedure ResolveLockPtr; override;
-    procedure InitializeLock(InitializingData: PtrUInt); override;
-    procedure FinalizeLock; override;
+    procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
+    procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
     constructor Create(const Name: String; Count: cUnsigned); overload; virtual;
     constructor Create(Count: cUnsigned); overload; virtual;
@@ -845,6 +847,7 @@ procedure TCriticalSection.Initialize;
 var
   MutexAttr:  pthread_mutexattr_t;
 begin
+fLockComplete := False;
 If CheckResErr(pthread_mutexattr_init(@MutexAttr)) then
   try
     If not CheckResErr(pthread_mutexattr_settype(@MutexAttr,PTHREAD_MUTEX_RECURSIVE)) then
@@ -853,6 +856,7 @@ If CheckResErr(pthread_mutexattr_init(@MutexAttr)) then
     If not CheckResErr(pthread_mutex_init(@fMutex,@MutexAttr)) then
       raise ELSOSysInitError.CreateFmt('TCriticalSection.Initialize: ' +
         'Failed to initialize mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    fLockComplete := True;
   finally
     If not CheckResErr(pthread_mutexattr_destroy(@MutexAttr)) then
       raise ELSOSysFinalError.CreateFmt('TCriticalSection.Initialize: ' +
@@ -866,9 +870,10 @@ end;
 
 procedure TCriticalSection.Finalize;
 begin
-If not CheckResErr(pthread_mutex_destroy(@fMutex)) then
-  raise ELSOSysFinalError.CreateFmt('TCriticalSection.Finalize: ' +
-    'Failed to destroy mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If fLockComplete then
+  If not CheckResErr(pthread_mutex_destroy(@fMutex)) then
+    raise ELSOSysFinalError.CreateFmt('TCriticalSection.Finalize: ' +
+      'Failed to destroy mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -958,6 +963,10 @@ type
       ltBarrier:          (Barrier:     pthread_barrier_t);
   end;
   PLSOSharedData = ^TLSOSharedData;
+
+var
+  // used for data integrity when creating/destroying thread-shared locks
+  LSO_SHAREDDATA_THREADLOCK:  TCriticalSection;
 
 //------------------------------------------------------------------------------
 
@@ -1060,32 +1069,77 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TLinSyncObject.Initialize(const Name: String; InitializingData: PtrUInt);
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+procedure TLinSyncObject.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 begin
+CompleteStage := 0;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure TLinSyncObject.Initialize(const Name: String; InitializingData: PtrUInt);
+var
+  CompleteStage:  Integer;
+begin
+CompleteStage := 0;
 fLastError := 0;
 fName := Name;
 fProcessShared := Length(fName) > 0;
 // create/open shared data
 If fProcessShared then
   begin
-    fNamedSharedItem := TNamedSharedItem.Create(fName,SizeOf(TLSOSharedData),LSO_SHARED_NAMESPACE);
-    fSharedData := fNamedSharedItem.Memory;
-    fNamedSharedItem.GlobalLock;
     try
-      CheckAndSetLockType;
-      Inc(PLSOSharedData(fSharedData)^.RefCount);
-      If PLSOSharedData(fSharedData)^.RefCount <= 1 then
-        InitializeLock(InitializingData);
-    finally
-      fNamedSharedItem.GlobalUnlock;
+      fNamedSharedItem := TNamedSharedItem.Create(fName,SizeOf(TLSOSharedData),LSO_SHARED_NAMESPACE);
+      fSharedData := fNamedSharedItem.Memory;
+      fNamedSharedItem.GlobalLock;
+      try
+        Inc(PLSOSharedData(fSharedData)^.RefCount);
+        try
+          If PLSOSharedData(fSharedData)^.RefCount <= 1 then
+            begin
+              // creating new object
+              PLSOSharedData(fSharedData)^.RefCount := 1;
+              CheckAndSetLockType;
+              InitializeLock(InitializingData,CompleteStage);
+            end
+          // opening existing object
+          else CheckAndSetLockType;
+          fLockPrepComplete := True;
+        except
+          FinalizeLock(CompleteStage);
+          Dec(PLSOSharedData(fSharedData)^.RefCount);
+          raise;
+        end;
+      finally
+        fNamedSharedItem.GlobalUnlock;
+      end;
+    except
+      // rollback
+      fSharedData := nil;
+      FreeAndnil(fNamedSharedItem); // succeeds even if fNamedSharedItem is nil
+      raise;
     end;
   end
 else
   begin
-    fSharedData := AllocMem(SizeOf(TLSOSharedData));
-    CheckAndSetLockType;
-    InterlockedStore(PLSOSharedData(fSharedData)^.RefCount,1);
-    InitializeLock(InitializingData);
+    LSO_SHAREDDATA_THREADLOCK.Enter;
+    try
+      fSharedData := AllocMem(SizeOf(TLSOSharedData));
+      try
+        PLSOSharedData(fSharedData)^.RefCount := 1;
+        CheckAndSetLockType;
+        InitializeLock(InitializingData,CompleteStage);
+        fLockPrepComplete := True;
+      except
+        FinalizeLock(CompleteStage);
+        FreeMem(fSharedData);
+        fSharedData := nil;
+        raise;
+      end;
+    finally
+      LSO_SHAREDDATA_THREADLOCK.Leave;
+    end;
   end;
 ResolveLockPtr;
 end;
@@ -1099,19 +1153,32 @@ If Length(Name) > 0 then
     fLastError := 0;
     fName := Name;
     fProcessShared := True;
-    fNamedSharedItem := TNamedSharedItem.Create(fName,SizeOf(TLSOSharedData),LSO_SHARED_NAMESPACE);
-    fSharedData := fNamedSharedItem.Memory;
-    fNamedSharedItem.GlobalLock;
     try
-      CheckAndSetLockType;
-      If PLSOSharedData(fSharedData)^.RefCount > 0 then
-        Inc(PLSOSharedData(fSharedData)^.RefCount)
-      else
-        raise ELSOOpenError.Create('TLinSyncObject.Initialize: Cannot open uninitialized object.');
-    finally
-      fNamedSharedItem.GlobalUnlock;
+      fNamedSharedItem := TNamedSharedItem.Create(fName,SizeOf(TLSOSharedData),LSO_SHARED_NAMESPACE);
+      fSharedData := fNamedSharedItem.Memory;
+      fNamedSharedItem.GlobalLock;
+      try
+        Inc(PLSOSharedData(fSharedData)^.RefCount);
+        try
+          If PLSOSharedData(fSharedData)^.RefCount > 1 then
+            begin
+              CheckAndSetLockType;
+              ResolveLockPtr;
+              fLockPrepComplete := True;
+            end
+          else raise ELSOOpenError.Create('TLinSyncObject.Initialize: Cannot open uninitialized object.');
+        except
+          Dec(PLSOSharedData(fSharedData)^.RefCount);
+          raise;
+        end;
+      finally
+        fNamedSharedItem.GlobalUnlock;
+      end;
+    except
+      fSharedData := nil;
+      FreeAndnil(fNamedSharedItem);
+      raise;
     end;
-    ResolveLockPtr;
   end
 else raise ELSOOpenError.Create('TLinSyncObject.Initialize: Cannot open unnamed object.');
 end;
@@ -1120,37 +1187,44 @@ end;
 
 procedure TLinSyncObject.Finalize;
 begin
-If Assigned(fSharedData) then
+If fProcessShared then
   begin
-    If fProcessShared then
+    // following should be all true or all false, but meh...
+    If Assigned(fNamedSharedItem) and Assigned(fSharedData) and fLockPrepComplete then
       begin
         fNamedSharedItem.GlobalLock;
         try
-          If PLSOSharedData(fSharedData)^.RefCount > 0 then
+          Dec(PLSOSharedData(fSharedData)^.RefCount);
+          If PLSOSharedData(fSharedData)^.RefCount <= 0 then
             begin
-              Dec(PLSOSharedData(fSharedData)^.RefCount);
-              If PLSOSharedData(fSharedData)^.RefCount <= 0 then
-                begin
-                  FinalizeLock;
-                  PLSOSharedData(fSharedData)^.RefCount := 0;
-                end;
+              FinalizeLock;
+              PLSOSharedData(fSharedData)^.RefCount := 0;
             end;
         finally
           fNamedSharedItem.GlobalUnlock;
         end;
         FreeAndNil(fNamedSharedItem);
       end
-    else
+  end
+else
+  begin
+    If Assigned(fSharedData) and fLockPrepComplete then
       begin
-        If InterlockedDecrement(PLSOSharedData(fSharedData)^.RefCount) <= 0 then
-          begin
-            FinalizeLock;
-            FreeMem(fSharedData,SizeOf(TLSOSharedData));
-          end;
+        LSO_SHAREDDATA_THREADLOCK.Enter;
+        try
+          Dec(PLSOSharedData(fSharedData)^.RefCount);
+          If PLSOSharedData(fSharedData)^.RefCount <= 0 then
+            begin
+              FinalizeLock;
+              FreeMem(fSharedData,SizeOf(TLSOSharedData));
+            end;
+        finally
+          LSO_SHAREDDATA_THREADLOCK.Leave;
+        end;
       end;
-    fSharedData := nil;
-    fLockPtr := nil;
   end;
+fSharedData := nil;
+fLockPtr := nil;
 end;
 
 {-------------------------------------------------------------------------------
@@ -1194,21 +1268,34 @@ If SourceObject is Self.ClassType then
   begin
     If not SourceObject.ProcessShared then
       begin
+        fLastError := 0;
+        fName := '';
         fProcessShared := False;
-      {
-        Increase reference counter. If it is above 1, all is good and continue.
-        But if it is below or equal to 1, it means the source was probably
-        (being) destroyed - raise an exception.
-      }
-        If InterlockedIncrement(PLSOSharedData(SourceObject.fSharedData)^.RefCount) > 1 then
-          begin
-            fLastError := 0;
-            fName := '';
-            fSharedData := SourceObject.fSharedData;
-            ResolveLockPtr; // normally called from Initialize
-          end
-        else raise ELSOInvalidObject.Create('TLinSyncObject.DuplicateFrom: ' +
-               'Source object is in an inconsistent state.');
+        LSO_SHAREDDATA_THREADLOCK.Enter;
+        try
+          fSharedData := SourceObject.fSharedData;
+        {
+          Increase reference counter. If it is above 1, all is good and
+          continue. But if it is below or equal to 1, it means the source was
+          probably (being) destroyed - raise an exception.
+        }
+          Inc(PLSOSharedData(fSharedData)^.RefCount);
+          try
+            If PLSOSharedData(fSharedData)^.RefCount > 1 then
+              begin
+                CheckAndSetLockType;
+                ResolveLockPtr;
+                fLockPrepComplete := True;
+              end
+            else raise ELSOInvalidObject.Create('TLinSyncObject.DuplicateFrom: ' +
+                   'Source object is in an inconsistent state.');
+          except
+            Dec(PLSOSharedData(fSharedData)^.RefCount);
+            raise;
+          end;
+        finally
+          LSO_SHAREDDATA_THREADLOCK.Leave;
+        end;
       end
     else Initialize(SourceObject.Name); // corresponds to open constructor
   end
@@ -1350,21 +1437,24 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TStatelessEvent.InitializeLock(InitializingData: PtrUInt);
+procedure TStatelessEvent.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 begin
+inherited;
 If not CheckResErr(event_stateless_init(Addr(PLSOSharedData(fSharedData)^.SimpleEvent.Event))) then
   raise ELSOSysInitError.CreateFmt('TStatelessEvent.InitializeLock: ' +
     'Failed to initialize stateless event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+Inc(CompleteStage);
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-procedure TStatelessEvent.FinalizeLock;
+procedure TStatelessEvent.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(event_stateless_destroy(Addr(PLSOSharedData(fSharedData)^.SimpleEvent.Event))) then
-  raise ELSOSysFinalError.CreateFmt('TStatelessEvent.FinalizeLock: ' +
-    'Failed to destroy stateless event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(event_stateless_destroy(Addr(PLSOSharedData(fSharedData)^.SimpleEvent.Event))) then
+    raise ELSOSysFinalError.CreateFmt('TStatelessEvent.FinalizeLock: ' +
+      'Failed to destroy stateless event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -1497,21 +1587,24 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TSimpleEventBase.InitializeLock(InitializingData: PtrUInt);
+procedure TSimpleEventBase.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 begin
+inherited;
 If not CheckResErr(_event_simplebase_init(Addr(PLSOSharedData(fSharedData)^.SimpleEvent.Event))) then
   raise ELSOSysInitError.CreateFmt('TSimpleEventBase.InitializeLock: ' +
     'Failed to initialize simple event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+Inc(CompleteStage);
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleEventBase.FinalizeLock;
+procedure TSimpleEventBase.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(_event_simplebase_destroy(Addr(PLSOSharedData(fSharedData)^.SimpleEvent.Event))) then
-  raise ELSOSysFinalError.CreateFmt('TSimpleEventBase.FinalizeLock: ' +
-    'Failed to destroy stateless event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(_event_simplebase_destroy(Addr(PLSOSharedData(fSharedData)^.SimpleEvent.Event))) then
+    raise ELSOSysFinalError.CreateFmt('TSimpleEventBase.FinalizeLock: ' +
+      'Failed to destroy stateless event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -1951,6 +2044,7 @@ type
     procedure Finalize; override;
   public
     constructor Create;
+    // do not create destructor, Finalize is called from inherited destructor
     Function GetFreeSlotIndex(out SlotIndex: TLSOMultiWaitSlotIndex): Boolean; virtual;
     procedure InvalidateSlot(SlotIndex: TLSOMultiWaitSlotIndex); virtual;
     Function CheckIndex(SlotIndex: TLSOMultiWaitSlotIndex): Boolean; virtual;
@@ -2438,21 +2532,24 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TEvent.InitializeLock(InitializingData: PtrUInt);
+procedure TEvent.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 begin
+inherited;
 If not CheckResErr(event_init(Addr(PLSOSharedData(fSharedData)^.Event),
   BT(InitializingData,LSO_EVENT_IDB_MANRESET),BT(InitializingData,LSO_EVENT_IDB_STATE))) then
   raise ELSOSysInitError.CreateFmt('TEvent.InitializeLock: ' +
     'Failed to initialize event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+Inc(CompleteStage);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TEvent.FinalizeLock;
+procedure TEvent.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(event_destroy(Addr(PLSOSharedData(fSharedData)^.Event))) then
-  raise ELSOSysFinalError.CreateFmt('TEvent.FinalizeLock: ' +
-    'Failed to destroy event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(event_destroy(Addr(PLSOSharedData(fSharedData)^.Event))) then
+    raise ELSOSysFinalError.CreateFmt('TEvent.FinalizeLock: ' +
+      'Failed to destroy event (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -2621,10 +2718,11 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TSpinLock.InitializeLock(InitializingData: PtrUInt);
+procedure TSpinLock.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 var
   ProcShared: cInt;
 begin
+inherited;
 If fProcessShared then
   ProcShared := PTHREAD_PROCESS_SHARED
 else
@@ -2632,16 +2730,18 @@ else
 If not CheckResErr(pthread_spin_init(Addr(PLSOSharedData(fSharedData)^.SpinLock),ProcShared)) then
   raise ELSOSysInitError.CreateFmt('TSpinLock.InitializeLock: ' +
     'Failed to initialize spinlock (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+Inc(CompleteStage);
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-procedure TSpinLock.FinalizeLock;
+procedure TSpinLock.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(pthread_spin_destroy(Addr(PLSOSharedData(fSharedData)^.SpinLock))) then
-  raise ELSOSysFinalError.CreateFmt('TSpinLock.FinalizeLock: ' +
-    'Failed to destroy spinlock (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(pthread_spin_destroy(Addr(PLSOSharedData(fSharedData)^.SpinLock))) then
+    raise ELSOSysFinalError.CreateFmt('TSpinLock.FinalizeLock: ' +
+      'Failed to destroy spinlock (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -2732,10 +2832,11 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TMutex.InitializeLock(InitializingData: PtrUInt);
+procedure TMutex.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 var
   MutexAttr:  pthread_mutexattr_t;
 begin
+inherited;
 If CheckResErr(pthread_mutexattr_init(@MutexAttr)) then
   try
     If not CheckResErr(pthread_mutexattr_settype(@MutexAttr,PTHREAD_MUTEX_RECURSIVE)) then
@@ -2748,6 +2849,7 @@ If CheckResErr(pthread_mutexattr_init(@MutexAttr)) then
     If not CheckResErr(pthread_mutex_init(Addr(PLSOSharedData(fSharedData)^.Mutex),@MutexAttr)) then
       raise ELSOSysInitError.CreateFmt('TMutex.InitializeLock: ' +
         'Failed to initialize mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Inc(CompleteStage);
   finally
     If not CheckResErr(pthread_mutexattr_destroy(@MutexAttr)) then
       raise ELSOSysFinalError.CreateFmt('TMutex.InitializeLock: ' +
@@ -2760,11 +2862,12 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TMutex.FinalizeLock;
+procedure TMutex.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(pthread_mutex_destroy(Addr(PLSOSharedData(fSharedData)^.Mutex))) then
-  raise ELSOSysFinalError.CreateFmt('TMutex.FinalizeLock: ' +
-    'Failed to destroy mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(pthread_mutex_destroy(Addr(PLSOSharedData(fSharedData)^.Mutex))) then
+    raise ELSOSysFinalError.CreateFmt('TMutex.FinalizeLock: ' +
+      'Failed to destroy mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -2884,20 +2987,23 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSemaphore.InitializeLock(InitializingData: PtrUInt);
+procedure TSemaphore.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 begin
+inherited;
 If not CheckErrAlt(sem_init(Addr(PLSOSharedData(fSharedData)^.Semaphore),Ord(fProcessShared),cUnsigned(InitializingData))) then
   raise ELSOSysInitError.CreateFmt('TSemaphore.InitializeLock: ' +
     'Failed to initialize semaphore (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+Inc(CompleteStage);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSemaphore.FinalizeLock;
+procedure TSemaphore.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckErrAlt(sem_destroy(Addr(PLSOSharedData(fSharedData)^.Semaphore))) then
-  raise ELSOSysFinalError.CreateFmt('TSemaphore.FinalizeLock: ' +
-    'Failed to destroy semaphore (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckErrAlt(sem_destroy(Addr(PLSOSharedData(fSharedData)^.Semaphore))) then
+    raise ELSOSysFinalError.CreateFmt('TSemaphore.FinalizeLock: ' +
+      'Failed to destroy semaphore (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -3100,10 +3206,11 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TReadWriteLock.InitializeLock(InitializingData: PtrUInt);
+procedure TReadWriteLock.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 var
   RWLockAttr: pthread_rwlockattr_t;
 begin
+inherited;
 If CheckResErr(pthread_rwlockattr_init(@RWLockAttr)) then
   try
     If fProcessShared then
@@ -3113,6 +3220,7 @@ If CheckResErr(pthread_rwlockattr_init(@RWLockAttr)) then
     If not CheckResErr(pthread_rwlock_init(Addr(PLSOSharedData(fSharedData)^.RWLock),@RWLockAttr)) then
       raise ELSOSysInitError.CreateFmt('TReadWriteLock.InitializeLock: ' +
         'Failed to initialize rwlock (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Inc(CompleteStage);
   finally
     If not CheckResErr(pthread_rwlockattr_destroy(@RWLockAttr)) then
       raise ELSOSysFinalError.CreateFmt('TReadWriteLock.InitializeLock: ' +
@@ -3125,11 +3233,12 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TReadWriteLock.FinalizeLock;
+procedure TReadWriteLock.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(pthread_rwlock_destroy(Addr(PLSOSharedData(fSharedData)^.RWLock))) then
-  raise ELSOSysFinalError.CreateFmt('TReadWriteLock.FinalizeLock: ' +
-    'Failed to destroy rwlock (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(pthread_rwlock_destroy(Addr(PLSOSharedData(fSharedData)^.RWLock))) then
+    raise ELSOSysFinalError.CreateFmt('TReadWriteLock.FinalizeLock: ' +
+      'Failed to destroy rwlock (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -3360,10 +3469,11 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TConditionVariable.InitializeLock(InitializingData: PtrUInt);
+procedure TConditionVariable.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 var
   CondVarAttr:  pthread_condattr_t;
 begin
+inherited;
 If CheckResErr(pthread_condattr_init(@CondVarAttr)) then
   try
     If fProcessShared then
@@ -3373,6 +3483,7 @@ If CheckResErr(pthread_condattr_init(@CondVarAttr)) then
     If not CheckResErr(pthread_cond_init(Addr(PLSOSharedData(fSharedData)^.CondVar.CondVar),@CondVarAttr)) then
       raise ELSOSysInitError.CreateFmt('TConditionVariable.InitializeLock: ' +
         'Failed to initialize condvar (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Inc(CompleteStage);
   finally
     If not CheckResErr(pthread_condattr_destroy(@CondVarAttr)) then
       raise ELSOSysFinalError.CreateFmt('TConditionVariable.InitializeLock: ' +
@@ -3385,11 +3496,12 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariable.FinalizeLock;
+procedure TConditionVariable.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(pthread_cond_destroy(Addr(PLSOSharedData(fSharedData)^.CondVar.CondVar))) then
-  raise ELSOSysFinalError.CreateFmt('TConditionVariable.FinalizeLock: ' +
-    'Failed to destroy condvar (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(pthread_cond_destroy(Addr(PLSOSharedData(fSharedData)^.CondVar.CondVar))) then
+    raise ELSOSysFinalError.CreateFmt('TConditionVariable.FinalizeLock: ' +
+      'Failed to destroy condvar (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -3563,6 +3675,7 @@ begin
 AutoCycle(DataLock,INFINITE);
 end;
 
+
 {===============================================================================
 --------------------------------------------------------------------------------
                               TConditionVariableEx
@@ -3591,11 +3704,11 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TConditionVariableEx.InitializeLock(InitializingData: PtrUInt);
+procedure TConditionVariableEx.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 var
   MutexAttr:  pthread_mutexattr_t;
 begin
-inherited InitializeLock(InitializingData);
+inherited;
 // data-lock mutex
 If CheckResErr(pthread_mutexattr_init(@MutexAttr)) then
   try
@@ -3606,6 +3719,7 @@ If CheckResErr(pthread_mutexattr_init(@MutexAttr)) then
     If not CheckResErr(pthread_mutex_init(Addr(PLSOSharedData(fSharedData)^.CondVar.DataLock),@MutexAttr)) then
       raise ELSOSysInitError.CreateFmt('TConditionVariableEx.InitializeLock: ' +
         'Failed to initialize data-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Inc(CompleteStage);
   finally
     If not CheckResErr(pthread_mutexattr_destroy(@MutexAttr)) then
       raise ELSOSysFinalError.CreateFmt('TConditionVariableEx.InitializeLock: ' +
@@ -3618,11 +3732,12 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariableEx.FinalizeLock;
+procedure TConditionVariableEx.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(pthread_mutex_destroy(Addr(PLSOSharedData(fSharedData)^.CondVar.DataLock))) then
-  raise ELSOSysFinalError.CreateFmt('TConditionVariableEx.FinalizeLock: ' +
-    'Failed to destroy data-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 1 then
+  If not CheckResErr(pthread_mutex_destroy(Addr(PLSOSharedData(fSharedData)^.CondVar.DataLock))) then
+    raise ELSOSysFinalError.CreateFmt('TConditionVariableEx.FinalizeLock: ' +
+      'Failed to destroy data-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 inherited;
 end;
 
@@ -3724,10 +3839,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBarrier.InitializeLock(InitializingData: PtrUInt);
+procedure TBarrier.InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer);
 var
   BarrierAttr:  pthread_barrierattr_t;
 begin
+inherited;
 If CheckResErr(pthread_barrierattr_init(@BarrierAttr)) then
   try
     If fProcessShared then
@@ -3737,6 +3853,7 @@ If CheckResErr(pthread_barrierattr_init(@BarrierAttr)) then
     If not CheckResErr(pthread_barrier_init(Addr(PLSOSharedData(fSharedData)^.Barrier),@BarrierAttr,cUnsigned(InitializingData))) then
       raise ELSOSysInitError.CreateFmt('TBarrier.InitializeLock: ' +
         'Failed to initialize barrier (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Inc(CompleteStage);
   finally
     If not CheckResErr(pthread_barrierattr_destroy(@BarrierAttr)) then
       raise ELSOSysFinalError.CreateFmt('TBarrier.InitializeLock: ' +
@@ -3748,11 +3865,12 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBarrier.FinalizeLock;
+procedure TBarrier.FinalizeLock(CompleteStage: Integer = MAXINT);
 begin
-If not CheckResErr(pthread_barrier_destroy(Addr(PLSOSharedData(fSharedData)^.Barrier))) then
-  raise ELSOSysFinalError.CreateFmt('TBarrier.FinalizeLock: ' +
-    'Failed to destroy barrier (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+If CompleteStage > 0 then
+  If not CheckResErr(pthread_barrier_destroy(Addr(PLSOSharedData(fSharedData)^.Barrier))) then
+    raise ELSOSysFinalError.CreateFmt('TBarrier.FinalizeLock: ' +
+      'Failed to destroy barrier (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -4155,10 +4273,12 @@ end;
 ===============================================================================}
 
 initialization
+  LSO_SHAREDDATA_THREADLOCK := TCriticalSection.Create;
   InitMultiWaitSlots;
 
 finalization
   FinalMultiWaitSlots;
+  FreeAndNil(LSO_SHAREDDATA_THREADLOCK);
 
 end.
 

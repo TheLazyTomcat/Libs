@@ -15,7 +15,7 @@
 
   Version 1.1 (2022-09-30)
 
-  Last change 2022-09-30
+  Last change 2022-10-25
 
   ©2019-2022 František Milt
 
@@ -443,6 +443,7 @@ type
     MOV     EBP,  ESP
 
   (or its x64 equivalent)
+  
   For the purpose of this library, the frame is started by moving stack pointer
   to stack base register (second instruction above).
   This means the frame start (its highest address) points to pushed EBP, which
@@ -1185,7 +1186,7 @@ end;
     Registers obtaining - implementation
 ===============================================================================}
 
-{$STACKFRAMES ON} // make sure stack frame is created in RaiseSnapshot
+{$STACKFRAMES ON} // make sure stack frame is created in RegistersSnapshot
 
 {$IFDEF FPCDWM}{$PUSH}W7102{$ENDIF}
 Function RegistersSnapshot: Pointer; register; assembler;
