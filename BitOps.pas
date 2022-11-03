@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.15 (2022-07-16)
+  Version 1.16 (2022-10-31)
 
-  Last change 2022-09-24
+  Last change 2022-10-31
 
   ©2014-2022 František Milt
 
@@ -542,15 +542,24 @@ Function EndianSwap(Value: UInt16): UInt16; overload;{$IFNDEF PurePascal} regist
 Function EndianSwap(Value: UInt32): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function EndianSwap(Value: UInt64): UInt64; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
+Function SwapEndian(Value: UInt16): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SwapEndian(Value: UInt32): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SwapEndian(Value: UInt64): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
 procedure EndianSwapValue(var Value: UInt16); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure EndianSwapValue(var Value: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure EndianSwapValue(var Value: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure SwapEndianValue(var Value: UInt16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapEndianValue(var Value: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapEndianValue(var Value: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
 procedure EndianSwap(var Buffer; Size: TMemSize); overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+procedure SwapEndian(var Buffer; Size: TMemSize); overload;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -3694,6 +3703,27 @@ Int64Rec(Result).Lo := EndianSwap(Int64Rec(Value).Hi);
 end;
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
+Function SwapEndian(Value: UInt16): UInt16;
+begin
+Result := EndianSwap(Value);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SwapEndian(Value: UInt32): UInt32;
+begin
+Result := EndianSwap(Value);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SwapEndian(Value: UInt64): UInt64;
+begin
+Result := EndianSwap(Value);
+end;
+
 //==============================================================================
 
 procedure EndianSwapValue(var Value: UInt16);
@@ -3711,6 +3741,27 @@ end;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure EndianSwapValue(var Value: UInt64);
+begin
+Value := EndianSwap(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SwapEndianValue(var Value: UInt16);
+begin
+Value := EndianSwap(Value);
+end;
+ 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapEndianValue(var Value: UInt32);
+begin
+Value := EndianSwap(Value);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapEndianValue(var Value: UInt64);
 begin
 Value := EndianSwap(Value);
 end;
@@ -3797,6 +3848,13 @@ else
 end;
 end;
 {$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapEndian(var Buffer; Size: TMemSize);
+begin
+EndianSwap(Buffer,Size);
+end;
 
 {-------------------------------------------------------------------------------
 ================================================================================

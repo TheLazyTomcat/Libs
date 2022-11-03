@@ -20,7 +20,7 @@
 
   Version 1.0.3 (2021-04-05)
 
-  Last change 2022-09-13
+  Last change 2022-10-31
 
   ©2020-2022 František Milt
 
@@ -214,6 +214,7 @@ type
     procedure FromString(const Str: String); virtual; abstract;
     Function TryFromString(const Str: String): Boolean; virtual;
     procedure FromStringDef(const Str: String; const Default); virtual;
+    Function IsHashing: Boolean; virtual;
     // IO
     procedure SaveToStream(Stream: TStream; Endianness: THashEndianness = heDefault); virtual; abstract;
     procedure LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault); virtual; abstract;
@@ -753,6 +754,13 @@ begin
 // no implementation here
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function THashBase.IsHashing: Boolean;
+begin
+Result := fInitialized and not fFinalized;
+end;
 
 //------------------------------------------------------------------------------
 
