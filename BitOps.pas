@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.16 (2022-10-31)
+  Version 1.17.1 (2022-12-14)
 
-  Last change 2022-10-31
+  Last change 2022-12-14
 
   ©2014-2022 František Milt
 
@@ -1011,7 +1011,8 @@ procedure AlignMemory(var Address: Pointer; Alignment: TMemoryAlignment);{$IFDEF
 -------------------------------------------------------------------------------}
 
 type
-  TCompareMethod = (cmSizeData,cmDataSize,cmEqSizeData);
+  TCompareMethod = (cmSizeData,cmDataSize,cmEqSizeData,cmDataPadFront,
+                    cmDataPadBack);
 
 //------------------------------------------------------------------------------
 {
@@ -1057,6 +1058,21 @@ type
       byte/item in the first buffer/array is larger than in the second.
       If the sizes/lengths do not match, the function will raise an
       EBOSizeMismatch exception.
+
+    cmDataPadFront
+
+      If both buffers/arrays have the same size/length, then it behaves the
+      same as previous modes (bytes/items at corresponding positions are
+      compared). If the sizes/lengths differs, then the shorter buffer/array
+      if virtually padded at the front by a number of zero bytes so that the
+      size/length with padding is the same as for the larger/longer input.
+      This padded buffer/array is then compared with the larger/longer one
+      as if they were the same size/length.
+
+    cmDataPadBack
+
+      Works the same as cmDataPadFront. The only difference is, that the shorter
+      buffer/array is back-padded (zero bytes added at the end).
 }
 Function CompareData(const A; SizeA: TMemSize; const B; SizeB: TMemSize; CompareMethod: TCompareMethod): Integer; overload;
 Function CompareData(A,B: array of UInt8; CompareMethod: TCompareMethod): Integer; overload;
@@ -4060,10 +4076,10 @@ asm
 {$IFDEF x64}
   {$IFDEF Windows}
     AND   RDX, 63
-    BTS   dword ptr [RCX], RDX
+    BTS   qword ptr [RCX], RDX
   {$ELSE}
     AND   RSI, 63
-    BTS   dword ptr [RDI], RSI
+    BTS   qword ptr [RDI], RSI
   {$ENDIF}
 {$ELSE}
     AND   EDX, 63
@@ -4187,10 +4203,10 @@ asm
 {$IFDEF x64}
   {$IFDEF Windows}
     AND   RDX, 63
-    BTR   dword ptr [RCX], RDX
+    BTR   qword ptr [RCX], RDX
   {$ELSE}
     AND   RSI, 63
-    BTR   dword ptr [RDI], RSI
+    BTR   qword ptr [RDI], RSI
   {$ENDIF}
 {$ELSE}
     AND   EDX, 63
@@ -4314,10 +4330,10 @@ asm
 {$IFDEF x64}
   {$IFDEF Windows}
     AND   RDX, 63
-    BTC   dword ptr [RCX], RDX
+    BTC   qword ptr [RCX], RDX
   {$ELSE}
     AND   RSI, 63
-    BTC   dword ptr [RDI], RSI
+    BTC   qword ptr [RDI], RSI
   {$ENDIF}
 {$ELSE}
     AND   EDX, 63
@@ -6903,16 +6919,27 @@ end;
 
 Function CompareData(const A; SizeA: TMemSize; const B; SizeB: TMemSize; CompareMethod: TCompareMethod): Integer;
 
+  Function MemSizeMin(A,B: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
+  begin
+    If A < B then
+      Result := A
+    else
+      Result := B;
+  end;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  Function MemSizeMax(A,B: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
+  begin
+    If A > B then
+      Result := A
+    else
+      Result := B;
+  end;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
   Function CompareBytes: Integer;
-
-    Function MemSizeMin(A,B: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
-    begin
-      If A < B then
-        Result := A
-      else
-        Result := B;
-    end;
-
   var
     i:    TMemSize;
     PtrA: PByte;
@@ -6936,6 +6963,8 @@ Function CompareData(const A; SizeA: TMemSize; const B; SizeB: TMemSize; Compare
       end;
   end;
 
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
   Function CompareSizes: Integer;
   begin
     If SizeA < SizeB then
@@ -6946,20 +6975,112 @@ Function CompareData(const A; SizeA: TMemSize; const B; SizeB: TMemSize; Compare
       Result := 0;
   end;
 
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  Function ComparePadFront: Integer;
+
+    procedure DoLoadAndMove(var Pad: TMemSize; var Ptr: PByte; out Buff: Byte);
+    begin
+      If Pad > 0 then
+        begin
+          Buff := 0;
+          Dec(Pad);
+        end
+      else
+        begin
+          Buff := Ptr^;
+          Inc(Ptr);
+        end;
+    end;
+
+  var
+    i:            TMemSize;
+    PadA,PadB:    TMemSize;
+    PtrA,PtrB:    PByte;
+    BuffA,BuffB:  Byte;
+  begin
+    Result := 0;
+    If SizeA < SizeB then
+      begin
+        PadA := SizeB - SizeA;
+        PadB := 0;
+      end
+    else
+      begin
+        PadA := 0;
+        PadB := SizeA - SizeB;
+      end;
+    PtrA := @A;
+    PtrB := @B;
+    For i := 1 to MemSizeMax(SizeA,SizeB) do
+      begin
+        DoLoadAndMove(PadA,PtrA,BuffA);
+        DoLoadAndMove(PadB,PtrB,BuffB);
+        // do comparison on loaded buffers
+        If BuffA <> BuffB then
+          begin
+            If BuffA < BuffB then
+              Result := -1
+            else
+              Result := +1;
+            Exit;
+          end;
+      end;
+  end;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  Function ComparePadBack: Integer;
+  var
+    i:            TMemSize;
+    PtrA,PtrB:    PByte;
+    BuffA,BuffB:  Byte;
+  begin
+    Result := 0;
+    PtrA := @A;
+    PtrB := @B;
+    For i := 1 to MemSizeMax(SizeA,SizeB) do
+      begin
+        If i > SizeA then
+          BuffA := 0
+        else
+          BuffA := PtrA^;
+        If i > SizeB then
+          BuffB := 0
+        else
+          BuffB := PtrB^;
+        If BuffA <> BuffB then
+          begin
+            If BuffA < BuffB then
+              Result := -1
+            else
+              Result := +1;
+            Exit;
+          end;
+        Inc(PtrA);
+        Inc(PtrB);
+      end;
+  end;
+
 begin
 case CompareMethod of
-  cmDataSize:   begin
-                  Result := CompareBytes;
-                  If Result = 0 then
-                    Result := CompareSizes;
-                end;
-  cmEqSizeData: If SizeA = SizeB then
-                  begin
-                    Result := CompareSizes;
+  cmDataSize:     begin
+                    Result := CompareBytes;
                     If Result = 0 then
-                      Result := CompareBytes;
-                  end
-                else raise EBOSizeMismatch.CreateFmt('CompareData: Mismatch in data sizes (%d,%d).',[SizeA,SizeB]);
+                      Result := CompareSizes;
+                  end;
+  cmEqSizeData:   If SizeA = SizeB then
+                    Result := CompareBytes
+                  else
+                    raise EBOSizeMismatch.CreateFmt('CompareData: Mismatch in data sizes (%d,%d).',[SizeA,SizeB]);
+  cmDataPadFront: If SizeA <> SizeB then
+                    Result := ComparePadFront
+                  else
+                    Result := CompareBytes;
+  cmDataPadBack:  If SizeA <> SizeB then
+                    Result := ComparePadBack
+                  else
+                    Result := CompareBytes;
 else
  {cmSizeData}
   Result := CompareSizes;
@@ -6972,16 +7093,27 @@ end;
 
 Function CompareData(A,B: array of UInt8; CompareMethod: TCompareMethod): Integer;
 
-  Function CompareItems: Integer;
+  Function IntegerMin(A,B: Integer): Integer;{$IFDEF CanInline} inline; {$ENDIF}
+  begin
+    If A < B then
+      Result := A
+    else
+      Result := B;
+  end;
 
-    Function IntegerMin(A,B: Integer): Integer;{$IFDEF CanInline} inline; {$ENDIF}
-    begin
-      If A < B then
-        Result := A
-      else
-        Result := B;
-    end;
-    
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  
+
+  Function IntegerMax(A,B: Integer): Integer;{$IFDEF CanInline} inline; {$ENDIF}
+  begin
+    If A > B then
+      Result := A
+    else
+      Result := B;
+  end;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  Function CompareItems: Integer;
   var
     i:  Integer;
   begin
@@ -6997,6 +7129,8 @@ Function CompareData(A,B: array of UInt8; CompareMethod: TCompareMethod): Intege
         end;
   end;
 
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
   Function CompareSizes: Integer;
   begin
     If Length(A) < Length(B) then
@@ -7007,20 +7141,95 @@ Function CompareData(A,B: array of UInt8; CompareMethod: TCompareMethod): Intege
       Result := 0;
   end;
 
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  Function ComparePadFront: Integer;
+  var
+    i:            Integer;
+    OffA,OffB:    Integer;
+    BuffA,BuffB:  Byte;
+  begin
+    Result := 0;
+    If Length(A) < Length(B) then
+      begin
+        OffA := Length(B) - Length(A);
+        OffB := 0;
+      end
+    else
+      begin
+        OffA := 0;
+        OffB := Length(A) - Length(B);
+      end;
+    For i := 0 to IntegerMax(High(A),High(B)) do
+      begin
+        If i - OffA >= Low(A) then
+          BuffA := A[i - OffA]
+        else
+          BuffA := 0;
+        If i - OffB >= Low(B) then
+          BuffB := B[i - OffB]
+        else
+          BuffB := 0;
+        // do comparison on loaded buffers
+        If BuffA <> BuffB then
+          begin
+            If BuffA < BuffB then
+              Result := -1
+            else
+              Result := +1;
+            Exit;
+          end;
+      end;
+  end;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  Function ComparePadback: Integer;
+  var
+    i:            Integer;
+    BuffA,BuffB:  Byte;
+  begin
+    Result := 0;
+    For i := 0 to IntegerMax(High(A),High(B)) do
+      begin
+        If i > High(A) then
+          BuffA := 0
+        else
+          BuffA := A[i];
+        If i > High(B) then
+          BuffB := 0
+        else
+          BuffB := B[i];
+        If BuffA <> BuffB then
+          begin
+            If BuffA < BuffB then
+              Result := -1
+            else
+              Result := +1;
+            Exit;
+          end; 
+      end;
+  end;
+
 begin
 case CompareMethod of
-  cmDataSize:   begin
-                  Result := CompareItems;
-                  If Result = 0 then
-                    Result := CompareSizes;
-                end;
-  cmEqSizeData: If Length(A) = Length(B) then
-                  begin
-                    Result := CompareSizes;
+  cmDataSize:     begin
+                    Result := CompareItems;
                     If Result = 0 then
-                      Result := CompareItems;
-                  end
-                else raise EBOSizeMismatch.CreateFmt('CompareData: Mismatch in data sizes (%d,%d).',[Length(A),Length(B)]);
+                      Result := CompareSizes;
+                  end;
+  cmEqSizeData:   If Length(A) = Length(B) then
+                    Result := CompareItems
+                  else
+                    raise EBOSizeMismatch.CreateFmt('CompareData: Mismatch in data sizes (%d,%d).',[Length(A),Length(B)]);
+  cmDataPadFront: If Length(A) <> Length(B) then
+                    Result := ComparePadFront
+                  else
+                    Result := CompareItems;
+  cmDataPadBack:  If Length(A) <> Length(B) then
+                    Result := ComparePadBack
+                  else
+                    Result := CompareItems;
 else
  {cmSizeData}
   Result := CompareSizes;

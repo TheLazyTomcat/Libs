@@ -34,7 +34,7 @@
         and are therefore heavily polluted.
         There is, as far as I know, no general way of obtaining the values
         before the exception class is instantiated (well, there is, but it
-        works only in 32bit Windows, so let's ignore it for now). I you are
+        works only in 32bit Windows, so let's ignore it for now). If you are
         aware of any way on how to do that, please let me know.
 
       Stack trace:
@@ -57,9 +57,9 @@
         In Linux, this list might not be accurate as the threads can be created
         and/or destroyed during the enumeration.
 
-  Version 1.1 (2022-09-30)
+  Version 1.1.1 (2022-11-29)
 
-  Last change 2022-10-25
+  Last change 2022-11-29
 
   ©2019-2022 František Milt
 

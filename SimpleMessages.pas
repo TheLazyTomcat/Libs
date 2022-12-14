@@ -43,7 +43,7 @@
 
   Version 1.0 alpha 2 (requires extensive testing) (2022-10-20)
 
-  Last change 2022-10-26
+  Last change 2022-11-17
 
   ©2022 František Milt
 
@@ -339,7 +339,7 @@ type
     procedure RemoveMessage(MessageIndex: TSMMessageIndex); virtual;            // NL
     procedure ReleaseSentMessage(MessageIndex: TSMMessageIndex; Processed: Boolean; MsgResult: TSMMessageResult); virtual;  // NL
     procedure WakeClient(ClientIndex: Integer; SetFlags: UInt32); virtual;      // NL
-    procedure ThreadToThreasWakeupCall(ClientIndex: Integer); virtual;          // NL
+    procedure ThreadToThreadWakeupCall(ClientIndex: Integer); virtual;          // NL
     procedure WakeClientsMsgSlots; virtual;                                     // NL
     procedure WaitMessageSlots(ClientsCount: Boolean); virtual;                 // NL
     Function SendSinglecast(Recipient: TSMClientID; Param1, Param2: TSMMessageParam): TSMMessageResult; virtual;
@@ -838,7 +838,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleMessagesClient.ThreadToThreasWakeupCall(ClientIndex: Integer);
+procedure TSimpleMessagesClient.ThreadToThreadWakeupCall(ClientIndex: Integer);
 type
   TObjProc = procedure of object;
 var
@@ -955,7 +955,7 @@ If Recipient <> fClientID then
             begin  
               MessageItemPtr := GetMessageArrayItemPtr(AddMessage(TempMessage));
               WakeClient(Integer(Recipient),SM_CLIENTFLAG_RECVSMSG);
-              ThreadToThreasWakeupCall(Integer(Recipient));
+              ThreadToThreadWakeupCall(Integer(Recipient));
               // wait for message processing, also process incoming sent messages
               while MessageItemPtr^.Flags and SM_MSGFLAG_RELEASED = 0 do
                 begin
@@ -1025,7 +1025,7 @@ try
                 TempMessage.Recipient := TSMClientID(i);
                 AddMessage(TempMessage);
                 WakeClient(Integer(TempMessage.Recipient),SM_CLIENTFLAG_RECVSMSG);
-                ThreadToThreasWakeupCall(Integer(TempMessage.Recipient));
+                ThreadToThreadWakeupCall(Integer(TempMessage.Recipient));
               end;
           // wait on master message
           while MasterMessagePtr^.Flags and SM_MSGFLAG_RELEASED = 0 do

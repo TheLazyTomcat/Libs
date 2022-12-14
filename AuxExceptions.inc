@@ -13,9 +13,9 @@
     AuxExceptions library. It is stored separately to allow for classes
     rebasing.
 
-  Version 1.1 (2022-09-30)
+  Version 1.1.1 (2022-11-29)
 
-  Last change 2022-10-25
+  Last change 2022-11-29
 
   ©2019-2022 František Milt
 
@@ -437,58 +437,67 @@ type
     EAEExtendedException - public storage types - stack
 -------------------------------------------------------------------------------}
 {
-  Each function is expected to start with (if not, then all bets are off):
+  All functions are expected to start with following code or its x64 equivalent
+  (if not, then all bets are off):
 
     PUSH    EBP
     MOV     EBP,  ESP
 
-  (or its x64 equivalent)
-  
-  For the purpose of this library, the frame is started by moving stack pointer
-  to stack base register (second instruction above).
-  This means the frame start (its highest address) points to pushed EBP, which
-  in itsef is NOT part of the that frame. It also means that each frame, except
-  the last one, ends with pushed returns address of the function that owns/uses
-  that particular frame, followed by saved stack base address (start of that
-  frame). Let's use some "ASCII art" to ilustrate:
+  For the purpose of this library, the frame is started by calling a subroutine
+  (function). This means the frame start (its highest address) points just
+  above the linking information (stored return address of the caller).
+
+  Let's use some "ASCII art" to ilustrate (x86 variant):
 
                high address ---------------------     ---
                             |                   |       |
-                            |   params for B    |       |
+                            |   params for B    |       |-- stack frame of function A
                             |                   |       |
-                  call to B ---------------------       |-- stack frame of function A
+                  call to B ---------------------     ---
                             | EIP (points to A) |       |
                             ---------------------       |
-      EBP(B) points here -> |      EBP(A)       |       |
-                            ---------------------     ---
+                            |      EBP(A)       |       |
+         EBP(B) points here ---------------------       |
                             |                   |       |
-                            |  variables of B   |       |
+                            |  variables of B   |       |-- stack frame of function B
                             |                   |       |
                             ---------------------       |
                             |                   |       |
-                            |  variables of C   |       |-- stack frame of function B
+                            |  variables of C   |       |
                             |                   |       |
-                  call to C ---------------------       |
+                  call to C ---------------------     ---
                             | EIP (points to B) |       |
                             ---------------------       |
-         EBP points here -> |      EBP(B)       |       |
-                            ---------------------     ---
+                            |      EBP(B)       |       |
+            EBP points here ---------------------       |-- stack frame of function C (current function)
                             |                   |       |
-                            |  variables of C   |       |-- stack frame of function C (current function)
+                            |  variables of C   |       |
                             |                   |       |
                 low address ---------------------     ---
 }
 type
   TAEStackFrame = record
-    FrameStart:       Pointer;  // frame EBP/RBP
-    FrameSize:        TMemSize; // size of this frame in bytes
-    ReturnAddress:    Pointer;  // points inside the function owning/using this frame
-    FrameStartInDump: Pointer;  // points to frame start in memory buffer storing dumped stack
+    FrameStart:     Pointer;  // address just above the linking info
+    FrameBase:      Pointer;  // points to stored EBP/RBP
+    FrameAddress:   Pointer;  // where the stack frame starts in memory (its lowest addresss)
+    FrameSize:      TMemSize; // size of this frame in bytes
+    OwnerFunction:  Pointer;  // points inside the function owning/using this frame
+    InDump:
+      record
+        FrameStart:   Pointer;
+        FrameBase:    Pointer;
+        FrameAddress: Pointer;
+      end;
+    LinkingInfo:
+      record
+        FrameBase:      Pointer;  // stack frame base pointer of the caller
+        ReturnAddress:  Pointer;  // return address of the calling function
+      end;
   end;
 
   TAEStackTrace = record
-    StackTop:       Pointer;  // stack base, points above the first pushed value
-    StackBottom:    Pointer;  // ESP/RSP address, points to last pushed value
+    StackBottom:    Pointer;  // stack base, points above the first pushed value
+    StackTop:       Pointer;  // stack pointer, ESP/RSP address, points to the last pushed value
     StackDump:      Pointer;  // points to a buffer containing the copy of active stack area
     StackDumpSize:  TMemSize; // size of stack dump buffer
     StackFrames:    array of TAEStackFrame;
@@ -888,7 +897,7 @@ var
     Registers obtaining - thread-local storage
 ===============================================================================}
 type
-  TAERegisterStorage = packed record
+  TAERegistersStorage = packed record
     IP:           TAENativeRegister;
     // RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP, R8, R9, R10, R11, R12, R13, R14, R15
     GP:           packed array[0..AE_GPR_HIGH] of TAENativeRegister;
@@ -924,10 +933,10 @@ type
     // system registers
     MSW:          UInt16; // machine status word
   end;
-  PAERegisterStorage = ^TAERegisterStorage;
+  PAERegistersStorage = ^TAERegistersStorage;
 
 threadvar
-  RaiseSnapshotStorage: PAERegisterStorage;
+  RegistersSnapshot:  PAERegistersStorage;
 
 {===============================================================================
     Registers obtaining - internal functions
@@ -1175,11 +1184,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure RaiseSnapshot_CopyToTLS(Storage: PAERegisterStorage); register;
+procedure CreateRegistersSnapshotCopyToTLS(Storage: PAERegistersStorage); register;
 begin
-If not Assigned(RaiseSnapshotStorage) then
-  RaiseSnapshotStorage := AllocMem(SizeOf(TAERegisterStorage));
-RaiseSnapshotStorage^ := Storage^;
+If not Assigned(RegistersSnapshot) then
+  RegistersSnapshot := AllocMem(SizeOf(TAERegistersStorage));
+RegistersSnapshot^ := Storage^;
 end;
 
 {===============================================================================
@@ -1189,9 +1198,9 @@ end;
 {$STACKFRAMES ON} // make sure stack frame is created in RegistersSnapshot
 
 {$IFDEF FPCDWM}{$PUSH}W7102{$ENDIF}
-Function RegistersSnapshot: Pointer; register; assembler;
+Function CreateRegistersSnapshot: Pointer; register; assembler;
 var
-  Data: TAERegisterStorage; // allocated on stack
+  Data: TAERegistersStorage;  // allocated on stack
 asm
 {$IFDEF x64}
     // get and preserve RAX
@@ -1368,7 +1377,7 @@ asm
 {$ELSE}
     LEA     EAX, [Data]
 {$ENDIF}
-    CALL    RaiseSnapshot_CopyToTLS
+    CALL    CreateRegistersSnapshotCopyToTLS
 
 {$IFDEF x64}
     // result
@@ -1751,7 +1760,7 @@ end;
 
 procedure EAEExtendedException.InitRegisters;
 var
-  TLSRegsPtr: PAERegisterStorage;
+  TLSRegsPtr: PAERegistersStorage;
   i:          Integer;
   OldX87CW:   UInt16;
 
@@ -1770,10 +1779,10 @@ var
   end;
 
 begin
-If Assigned(RaiseSnapshotStorage) then
+If Assigned(RegistersSnapshot) then
   begin
     // prevent reapeated calls to GetTLS
-    TLSRegsPtr := RaiseSnapshotStorage;
+    TLSRegsPtr := RegistersSnapshot;
     // copy registers from TLS to this object's field
     For i := 0 to AE_GPR_HIGH do
       fRegisters.Basic.GeneralPurpose.Regs[i].Native := TLSRegsPtr^.GP[i];
@@ -1838,8 +1847,9 @@ If Assigned(RaiseSnapshotStorage) then
       end;
     // system regs
     fRegisters.System.MachineStatusWord := TLSRegsPtr^.MSW;
-    FreeMem(RaiseSnapshotStorage,SizeOf(TAERegisterStorage));
-    RaiseSnapshotStorage := nil;
+    // cleanup
+    FreeMem(RegistersSnapshot,SizeOf(TAERegistersStorage));
+    RegistersSnapshot := nil;
   end
 else fRegisters.PresentRegisters := [];
 end;
@@ -1847,6 +1857,39 @@ end;
 //------------------------------------------------------------------------------
 
 procedure EAEExtendedException.InitStackTrace;
+type
+  TAEStackLinkingInfo = packed record
+    FrameBase:      Pointer;
+    ReturnAddress:  Pointer;
+  end;
+  PAEStackLinkingInfo = ^TAEStackLinkingInfo;
+
+  Function LoadFrame(PrevFrame: TAEStackFrame; out NextFrame: TAEStackFrame): Boolean;
+  begin
+    Result := False;
+    NextFrame.FrameBase := PAEStackLinkingInfo(PrevFrame.InDump.FrameBase)^.FrameBase;
+  {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+    NextFrame.FrameStart := Pointer(PtrUInt(NextFrame.FrameBase) + PtrUInt(SizeOf(TAEStackLinkingInfo)));
+    NextFrame.FrameAddress := PrevFrame.FrameStart;
+  {
+    Start of the next frame must be both below or at the stack bottom and
+    above or at previous frame start.
+  }
+    If (PtrUInt(NextFrame.FrameStart) <= PtrUInt(fStackTrace.StackBottom)) and
+       (PtrUInt(NextFrame.FrameBase) >= PtrUInt(PrevFrame.FrameStart)) then
+      begin
+        NextFrame.FrameSize := TMemSize(PtrUInt(NextFrame.FrameStart) - PtrUInt(NextFrame.FrameAddress));
+        NextFrame.OwnerFunction := PAEStackLinkingInfo(PrevFrame.InDump.FrameBase)^.ReturnAddress;
+        NextFrame.InDump.FrameStart := Pointer(PtrUInt(PrevFrame.InDump.FrameStart) + PtrUInt(NextFrame.FrameSize));
+        NextFrame.InDump.FrameBase := Pointer(PtrUInt(PtrUInt(NextFrame.InDump.FrameStart) - PtrUInt(SizeOf(TAEStackLinkingInfo))));
+        NextFrame.InDump.FrameAddress := Pointer(PtrUInt(PrevFrame.InDump.FrameAddress) + PtrUInt(PrevFrame.FrameSize));
+        NextFrame.LinkingInfo.FrameBase := PAEStackLinkingInfo(NextFrame.InDump.FrameBase)^.FrameBase;
+        NextFrame.LinkingInfo.ReturnAddress := PAEStackLinkingInfo(NextFrame.InDump.FrameBase)^.ReturnAddress;
+        Result := True;
+      end;
+  {$IFDEF FPCDWM}{$POP}{$ENDIF}
+  end;
+
 var
   FrameCount:   Integer;
   TempFrame:    TAEStackFrame;
@@ -1859,70 +1902,56 @@ var
     Inc(FrameCount);
   end;
 
-  Function LoadFrame(PrevFrame: TAEStackFrame; out NextFrame: TAEStackFrame): Boolean;
-  type
-    TAEFrameData = packed record
-      FramePointer:       Pointer;
-      InstructionPointer: Pointer;
-    end;
-    PAEFrameData = ^TAEFrameData;
-  begin
-    Result := False;
-  {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-  {
-    First check if frame data can fit between previous frame start and the
-    stack top (stack base).
-  }
-    If (PtrUInt(PrevFrame.FrameStart) + SizeOf(TAEFrameData)) <= PtrUInt(fStackTrace.StackTop) then
-      begin
-      {
-        The frame pointer (start) of the next frame must be both below or at
-        the stack top and above or at previous frame start plus frame data.
-      }
-
-        If (PtrUInt(PAEFrameData(PrevFrame.FrameStartInDump)^.FramePointer) <= PtrUInt(fStackTrace.StackTop)) and
-          (PtrUInt(PAEFrameData(PrevFrame.FrameStartInDump)^.FramePointer) >= (PtrUInt(PrevFrame.FrameStart) + SizeOf(TAEFrameData))) then
-          begin
-            NextFrame.FrameStart := PAEFrameData(PrevFrame.FrameStartInDump)^.FramePointer;
-            NextFrame.FrameSize := TMemSize(PtrUInt(NextFrame.FrameStart) - PtrUInt(PrevFrame.FrameStart));
-            NextFrame.ReturnAddress := PAEFrameData(PrevFrame.FrameStartInDump)^.InstructionPointer;
-            NextFrame.FrameStartInDump := Pointer(PtrUInt(PrevFrame.FrameStartInDump) + PtrUInt(NextFrame.FrameSize));
-            Result := True;
-          end;
-      end;
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
-  end;
-
 begin
-TempFrame.ReturnAddress := GetInstructionPointer;
-TempFrame.FrameStart := GetFramePointer;
-// get stack info
-{$IFDEF Windows}
-fStackTrace.StackTop := GetTIB^.StackBase;
-{$ELSE}
-fStackTrace.StackTop := System.StackTop;
-{$ENDIF}
-fStackTrace.StackBottom := GetStackPointer;
+TempFrame.OwnerFunction := GetInstructionPointer;
+TempFrame.FrameBase := GetFramePointer;
+TempFrame.FrameAddress := GetStackPointer;
 {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-If PtrUInt(fStackTrace.StackTop) >= PtrUInt(fStackTrace.StackBottom) then
+TempFrame.FrameStart := Pointer(PtrUInt(TempFrame.FrameBase) + PtrUInt(SizeOf(TAEStackLinkingInfo)));
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+// get global stack info
+{$IFDEF Windows}
+fStackTrace.StackBottom := GetTIB^.StackBase;
+{$ELSE}
+{
+  NOTE - In Intel's documentation, the stack bottom is its base (ie. its
+         largest address, because it is growing down), and stack top is the the
+         current RSP/ESP (points to the last pushed value). In FPC system unit,
+         this nomenclature is reversed. We stick to Intel scheme.
+}
+fStackTrace.StackBottom := System.StackTop;
+{$ENDIF}
+fStackTrace.StackTop := TempFrame.FrameAddress;
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+// stack sanity check
+If PtrUInt(fStackTrace.StackBottom) >= PtrUInt(fStackTrace.StackTop) then
   begin
-    fStackTrace.StackDumpSize := TMemSize(PtrUInt(fStackTrace.StackTop) - PtrUInt(fStackTrace.StackBottom));
+    fStackTrace.StackDumpSize := TMemSize(PtrUInt(fStackTrace.StackBottom) - PtrUInt(fStackTrace.StackTop));
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
     // dump the stack
     GetMem(fStackTrace.StackDump,fStackTrace.StackDumpSize);
-    Move(fStackTrace.StackBottom^,fStackTrace.StackDump^,fStackTrace.StackDumpSize);
+    Move(fStackTrace.StackTop^,fStackTrace.StackDump^,fStackTrace.StackDumpSize);
     // scan the dumped stack
     SetLength(fStackTrace.StackFrames,0);
     FrameCount := 0;
-    // add current frame
+    // sanity checks of current frame
   {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-    TempFrame.FrameSize := TMemSize(PtrUInt(TempFrame.FrameStart) - PtrUInt(fStackTrace.StackBottom));
-    TempFrame.FrameStartInDump := Pointer(PtrUInt(fStackTrace.StackDump) + PtrUInt(TempFrame.FrameSize));
+    If (PtrUInt(TempFrame.FrameStart) <= PtrUInt(fStackTrace.StackBottom)) and
+       (PtrUInt(TempFrame.FrameBase) >= PtrUInt(fStackTrace.StackTop)) then
+      begin
+        // process the current frame
+        TempFrame.FrameSize := TMemSize(PtrUInt(TempFrame.FrameStart) - PtrUInt(TempFrame.FrameAddress));
+        TempFrame.InDump.FrameStart := Pointer(PtrUInt(fStackTrace.StackDump) + PtrUInt(TempFrame.FrameSize));
+        TempFrame.InDump.FrameBase := Pointer(PtrUInt(PtrUInt(TempFrame.InDump.FrameStart) - PtrUInt(SizeOf(TAEStackLinkingInfo))));
+        TempFrame.InDump.FrameAddress := fStackTrace.StackDump;
+        TempFrame.LinkingInfo.FrameBase := PAEStackLinkingInfo(TempFrame.InDump.FrameBase)^.FrameBase;
+        TempFrame.LinkingInfo.ReturnAddress := PAEStackLinkingInfo(TempFrame.InDump.FrameBase)^.ReturnAddress;
+        AddFrame(TempFrame);
+        while LoadFrame(TempFrame,TempFrame) do
+          AddFrame(TempFrame);
+        SetLength(fStackTrace.StackFrames,FrameCount);
+      end;
   {$IFDEF FPCDWM}{$POP}{$ENDIF}
-    AddFrame(TempFrame);
-    while LoadFrame(TempFrame,TempFrame) do
-      AddFrame(TempFrame);
-    SetLength(fStackTrace.StackFrames,FrameCount);
   end
 else FillChar(fStackTrace,SizeOf(TAEStackTrace),0);
 end;
@@ -2176,8 +2205,8 @@ end;
 
 constructor EAEExtendedException.CreateFmt(const Msg: String; Args: array of const);
 begin
-If not Assigned(RaiseSnapshotStorage) then
-  RegistersSnapshot;
+If not Assigned(RegistersSnapshot) then
+  CreateRegistersSnapshot;
 inherited CreateFmt(Msg,Args);
 // registers snapshot
 {$IFDEF ExtendedExceptionRegisters}
@@ -2572,8 +2601,8 @@ end;
 
 procedure UnitFinalize;
 begin
-If Assigned(RaiseSnapshotStorage) then
-  FreeMem(RaiseSnapshotStorage);
+If Assigned(RegistersSnapshot) then
+  FreeMem(RegistersSnapshot,SizeOf(TAERegistersStorage));
 end;
 
 //------------------------------------------------------------------------------
