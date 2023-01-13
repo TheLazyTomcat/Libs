@@ -10,18 +10,35 @@
   MD6 calculation
 
     Provides classes and functions for calculation of MD6 hash. All hash widths
-    are supported, as long as they are a multiple of 8 (only whole bytes,
-    arbitrary bitstreams are not supported). Also, all mandatory and optional
-    hash inputs can be varied (key, mode control, number of rounds).
+    that are a multiple of 8 are supported (meaning only whole bytes, arbitrary
+    bitstreams are not supported). Also, all mandatory and optional hash inputs
+    can be varied (key, mode control, number of rounds).
 
-    In this version, the implementation is single-thread only, parallel code
-    might be added later in some limited form.
+      Default implementation provided here (class TMD6Hash and its descendants)
+      is only single-threaded, but as the MD6 can be heavily parallelized, an
+      attemp was made to provide MD6 hashing that can use multiple execution
+      paths.
 
-  Version 1.0 (2022-11-03) - needs extensive testing and KAT tests
+      This is done in the form of TMD6HashParallel class (note that this class
+      is NOT a descendant of THashBase, but rather a standalone class).
+      The used code is purely experimental and probably bugged, but it offers a
+      full freedom in hash input values (there is a limiting factor that
+      protects against excessive memory use for combination of long messages
+      and low mode control - property MaxSequentialNodes - but it can be
+      changed as needed).
+      The only strict limit is, that the entire message must be available at
+      the start of processing, so only hashing of memory buffer or file is
+      provided.
 
-  Last change 2022-11-03
+        WARNING - The parallel code is not fully tested, use it at your own
+                  risk. Also, performance gain and scaling is uncertain, as
+                  I was not able to test the code on more than dual-core CPU.
 
-  ©2022 František Milt
+  Version 1.1 (2023-01-13)
+
+  Last change 2023-01-13
+
+  ©2022-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -38,15 +55,31 @@
       github.com/TheLazyTomcat/Lib.MD6
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses  
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
+  * BitVector          - github.com/TheLazyTomcat/Lib.BitVector
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+  * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
+    SHA1               - github.com/TheLazyTomcat/Lib.SHA1
   * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
+    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+  * UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+  * WinSyncObjs        - github.com/TheLazyTomcat/Lib.WinSyncObjs
 
-  SimpleCPUID might not be needed, see BitOps library for details.
+  Libraries UInt64Utils and WinSyncObjs are required only when compiling for
+  Windows OS.
+
+  Libraries BitVector, LinSyncObjs and SimpleFutex are required only when
+  compiling for Linux OS.
+
+  Library SimpleCPUID might not be required, depending on defined symbols in
+  InterlockedOps and BitOps libraries.
 
 ===============================================================================}
 unit MD6;
@@ -59,9 +92,18 @@ unit MD6;
   {$DEFINE CPU32bit}
 {$IFEND}
 
+{$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
+  {$DEFINE Windows}
+{$ELSEIF Defined(LINUX) and Defined(FPC)}
+  {$DEFINE Linux}
+{$ELSE}
+  {$MESSAGE FATAL 'Unsupported operating system.'}
+{$IFEND}
+
 {$IFDEF FPC}
   {$MODE ObjFPC}
   {$MODESWITCH DuplicateLocals+}
+  {$MODESWITCH ClassicProcVars+}
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ENDIF}
@@ -71,7 +113,7 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, HashBase;
+  AuxTypes, AuxClasses, HashBase, CrossSyncObjs;
 
 {===============================================================================
     Library-specific exceptions
@@ -79,13 +121,17 @@ uses
 type
   EMD6Exception = class(EHASHException);
 
-  EMD6InvalidValue        = class(EMD6Exception);
-  EMD6InvalidState        = class(EMD6Exception);
-  EMD6InvalidHashLength   = class(EMD6Exception);
-  EMD6IncompatibleClass   = class(EMD6Exception);
-  EMD6SizeMismatch        = class(EMD6Exception);
+  EMD6InvalidValue      = class(EMD6Exception);
+  EMD6InvalidState      = class(EMD6Exception);
+  EMD6InvalidHashLength = class(EMD6Exception);
+
+  EMD6IncompatibleClass = class(EMD6Exception);
+  EMD6SizeMismatch      = class(EMD6Exception);
+
   EMD6ProcessingError     = class(EMD6Exception);
   EMD6OperationNotAllowed = class(EMD6Exception);
+
+  EMD6ParallelInternal = class(EMD6Exception);
 
 {===============================================================================
     Common types and constants
@@ -164,7 +210,6 @@ type
     procedure SetRounds(Value: Integer); virtual;
     procedure SetModeControl(Value: Integer); virtual;
     // main processing
-    procedure CompressBlock(var Block: TMD6ProcessingBlock); virtual;
     procedure AddTreeLevel; virtual;
     procedure ProcessTreeNode(Level: Integer; const Data); virtual;
     procedure ProcessTreeNodeFinal(Level: Integer; PadBytes: TMemSize); virtual;
@@ -194,8 +239,8 @@ type
     procedure LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault); override;
     procedure SetKey(const Key; Size: TMemSize); overload; virtual;
   {
-    The Key  parameter is converted to UTF8 encoding and this new string is
-    then used for the actual key. If it is longer than 64 bytes. it is
+    The Key parameter is converted to UTF8 encoding and this new string is
+    then used for the actual key. If it is longer than 64 bytes, it is
     truncated.
   }
     procedure SetKey(const Key: String); overload; virtual;
@@ -338,6 +383,160 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
+                                TMD6HashParallel
+--------------------------------------------------------------------------------
+===============================================================================}
+type
+  TMD6ThreadFunction = procedure(Param: Pointer);
+
+  TMD6ThreadStartCallback = procedure(Sender: TObject; ThreadFunction: TMD6ThreadFunction; Param: Pointer);
+  TMD6ThreadStartEvent = procedure(Sender: TObject; ThreadFunction: TMD6ThreadFunction; Param: Pointer) of object;
+
+// internals
+type
+  TMD6ProcessingMode = (tmBuffer,tmFile);
+
+  PMD6CommonProcessingNode = ^TMD6CommonProcessingNode;
+  TMD6CommonProcessingNode = record
+    IsLastNode:         Boolean;
+    ParentNodePtr:      PMD6CommonProcessingNode;
+    ParentNodePutIndex: Integer;
+    Counter:            Integer;
+    LevelIndex:         Integer;
+    Index:              Int64;
+    Bytes:              TMemSize;
+    Block:              TMD6ProcessingBlock;
+  end;
+
+  TMD6CommonProcessingLevel = record
+    Index:  Integer;
+    Nodes:  array of TMD6CommonProcessingNode;
+  end;
+
+  TMD6CommonProcessingState = record
+    Levels: array of TMD6CommonProcessingLevel;
+  end;
+
+  TMD6ThreadTask = record
+    CurrentOffset:  Int64;
+    State:          TMD6ProcessingState;
+  end;
+
+{===============================================================================
+    TMD6HashParallel - class declaration
+===============================================================================}
+type
+  TMD6HashParallel = class(TCustomObject)
+  protected
+    fMD6:                   TMD6;
+  {
+    Some of the following fields are accessed from (multiple) working threads.
+    Data integrity protection mechanisms are as follows:
+
+      R - read-only field, immutable during processing, does not need to be
+          thread-protected
+      I - accessed using only interlocked functions
+      C - combined access
+  }
+    fHashSettings: record
+  {R} HashBits:             Integer;
+  {R} Key:                  TMD6Key;
+  {R} Rounds:               Integer;
+      RoundsDef:            Boolean;
+  {R} ModeControl:          Integer;
+      MaxThreads:           Integer;
+      MaxSeqNodes:          Int64;
+    end;
+    fInputMessage: record
+  {R} ProcessingMode:       TMD6ProcessingMode;
+  {R} Buffer:               Pointer;
+  {R} FileName:             String;
+  {R} Size:                 UInt64;
+    end;
+    fProcessingSettings: record
+  {R} Sequential:           Boolean;
+  {R} ThreadCount:          Integer;
+  {R} ThreadLevelCount:     Integer;
+    end;
+    fTasksSettings: record
+  {R} ChunksPerTask:        UInt64;
+  {R} BytesPerTask:         UInt64;
+    end;
+    fProcessingVariables: record
+  {I} StopCounter:          Integer;
+  {I} CurrentOffset:        UInt64;
+  {I} Terminated:           Boolean;
+    end;
+    fCommonTree: record
+  {C} State:                TMD6CommonProcessingState;
+    end;
+    fProgressTracking: record
+  {I} CurrentIntProgress:   UInt64;
+    end;
+    fProgUpdInterval:       UInt32;
+    fDoneEvent:             TEvent;
+    fProcessing:            Boolean;
+    fLastProgress:          Double;
+    // events and callbacks
+    fOnThreadStartCallback: TMD6ThreadStartCallback;
+    fOnThreadStartEvent:    TMD6ThreadStartEvent;
+    fOnProgressCallback:    TFloatCallback;
+    fOnProgressEvent:       TFloatEvent;
+    // getters setters
+    Function GetMD6: TMD6; virtual;
+    procedure SetHashBits(Value: Integer); virtual;
+    Function GetKey: TMD6Key; virtual;
+    procedure PutKey(Value: TMD6Key); virtual;
+    procedure SetRoundsDefault; virtual;
+    procedure SetRounds(Value: Integer); virtual;
+    procedure SetModeControl(Value: Integer); virtual;
+    procedure SetMaxThreads(Value: Integer); virtual;
+    procedure SetMaxSeqNodes(Value: Int64); virtual;
+    // parallel processing - all following methods are called from within the worker threads
+    Function Thread_GetTask(var ThreadTask: TMD6ThreadTask): Boolean; virtual;
+    procedure Thread_ProcessThreadNode(var ThreadTask: TMD6ThreadTask; Level: Integer; const Data); virtual;
+    procedure Thread_ProcessThreadNodeFinal(var ThreadTask: TMD6ThreadTask; Level: Integer; PadBytes: TMemSize); virtual;
+    procedure Thread_CommonNodesEntry(const ThreadTask: TMD6ThreadTask); virtual;
+    procedure Thread_ProcessCommonNode(NodePtr: PMD6CommonProcessingNode; PutIndex: Integer; const Data); virtual;
+    procedure Thread_Execute; virtual;
+    // preparation and execution of parallel processing
+    Function ParallelPossible(DataSize: UInt64): Boolean; virtual;
+    procedure ParallelPrepare; virtual;
+    Function ParallelExecute(Memory: Pointer; Size: TMemSize): Integer; overload; virtual;
+    Function ParallelExecute(const FileName: String; Size: Int64): Integer; overload; virtual;
+    Function ParallelExecute: Integer; overload; virtual;
+    procedure DoThreadStart; virtual;
+    // object init/final
+    procedure Initialize; virtual;
+    // others
+    procedure ProgressHandler(Sender: TObject; Progress: Double); virtual;
+    procedure DoProgress; virtual;
+  public
+    class Function ProcessorCount: Integer; virtual;
+    constructor Create;
+    procedure SetKey(const Key; Size: TMemSize); overload; virtual;
+    procedure SetKey(const Key: String); overload; virtual;
+    Function HashMemory(Memory: Pointer; Size: TMemSize): Integer; virtual;
+    Function HashBuffer(const Buffer; Size: TMemSize): Integer; virtual;
+    Function HashFile(const FileName: String): Integer; virtual;
+    property MD6: TMD6 read GetMD6;
+    property HashBits: Integer read fHashSettings.HashBits write SetHashBits;
+    property Key: TMD6Key read GetKey write PutKey;
+    property Rounds: Integer read fHashSettings.Rounds write SetRounds;
+    property ModeControl: Integer read fHashSettings.ModeControl write SetModeControl;
+    property MaxThreads: Integer read fHashSettings.MaxThreads write SetMaxThreads;
+    property MaxSequentialNodes: Int64 read fHashSettings.MaxSeqNodes write SetMaxSeqNodes;
+    property ProgressUpdateInterval: UInt32 read fProgUpdInterval write fProgUpdInterval;
+    property OnThreadStartCallback: TMD6ThreadStartCallback read fOnThreadStartCallback write fOnThreadStartCallback;
+    property OnThreadStartEvent: TMD6ThreadStartEvent read fOnThreadStartEvent write fOnThreadStartEvent;
+    property OnThreadStart: TMD6ThreadStartEvent read fOnThreadStartEvent write fOnThreadStartEvent;
+    property OnProgressCallback: TFloatCallback read fOnProgressCallback write fOnProgressCallback;
+    property OnProgressEvent: TFloatEvent read fOnProgressEvent write fOnProgressEvent;
+    property OnProgress: TFloatEvent read fOnProgressEvent write fOnProgressEvent;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
                               Standalone functions
 --------------------------------------------------------------------------------
 ===============================================================================}
@@ -432,14 +631,41 @@ Function MD6_Hash(const Buffer; Size: TMemSize; HashBits: Integer = MD6_BITS_DEF
 implementation
 
 uses
-  Math,
-  StrRect, BitOps;
+  {$IFDEF Windows}Windows,{$ELSE}BaseUnix,{$ENDIF} Math,
+  StrRect, BitOps, InterlockedOps, StaticMemoryStream;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
   {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
 {$ENDIF}
+
+{===============================================================================
+    General utilities
+===============================================================================}
+
+{$IFDEF Windows}
+
+procedure GetNativeSystemInfo(lpSystemInfo: PSystemInfo); stdcall; external kernel32;
+
+{$ELSE}
+
+const
+  _SC_NPROCESSORS_ONLN = 84;
+
+Function sysconf(name: cInt): cLong; cdecl; external;
+
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IF not Declared(Ceil64)}
+Function Ceil64(x: Extended): Int64;
+begin
+Result := Trunc(x);
+If Frac(x) > 0 then
+  Result := Result + 1;
+end;
+{$IFEND}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -484,7 +710,7 @@ const
 (*
 --------------------------------------------------------------------------------
   Following constants are not used anywhere in the code, they are instead
-  directly expanded into numerals where needed.
+  directly expanded into numerals where needed or calculated on-the-fly.
 --------------------------------------------------------------------------------
 {
   Round constants MD6_S can be calculated like this:
@@ -612,132 +838,30 @@ begin
 Result := (TMD6Word(LevelNumber and $FF) shl 56) or (NodeIndex and $00FFFFFFFFFFFFFF);
 end;
 
-{===============================================================================
---------------------------------------------------------------------------------
-                                    TMD6Hash
---------------------------------------------------------------------------------
-===============================================================================}
-{===============================================================================
-    TMD6Hash - class implementation
-===============================================================================}
-{-------------------------------------------------------------------------------
-    TMD6Hash - protected methods
--------------------------------------------------------------------------------}
-
-Function TMD6Hash.GetMD6: TMD6;
-begin
-Result := Copy(fMD6);
-end;
-
 //------------------------------------------------------------------------------
 
-procedure TMD6Hash.SetMD6(Value: TMD6);
+procedure InitializeBlock(out Block: TMD6ProcessingBlock; Rounds: Integer; Key: TMD6Key);
+var
+  i:  Integer;
 begin
-If not fProcessing then
+SetLength(Block,0);
+SetLength(Block,MD6_BLOCK_LEN + (Rounds * MD6_CHUNK_LEN));
+For i := Low(MD6_VEC_Q) to High(MD6_VEC_Q) do
+  Block[i] := MD6_VEC_Q[i];
+// prepare key
+If Length(Key) > 0 then
   begin
-    If (Length(Value) > 0) and (Length(Value) <= (MD6_BITS_MAX div 8)) then
-      begin
-        fMD6 := Copy(Value);
-        fHashBits := Length(Value) * 8;
-        SetRoundsDefault;
-      end
-    else raise EMD6InvalidHashLength.CreateFmt('TMD6Hash.SetMD6: Invalid hash length (%d).',[Length(Value)])
-  end
-else raise EMD6InvalidState.Create('TMD6Hash.SetMD6: Cannot change hash during processing.');
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TMD6Hash.SetHashBits(Value: Integer);
-begin
-If not fProcessing then
-  begin
-    If (Value > 0) and (Value <= MD6_BITS_MAX) and ((Value and 7) = 0) then
-      begin
-        SetLength(fMD6,0);  // to prevent copying
-        SetLength(fMD6,Value div 8);
-        fHashBits := Value;
-        SetRoundsDefault;
-      end
-    else raise EMD6InvalidValue.CreateFmt('TMD6Hash.SetHashBits: Invalid hash bits value (%d).',[Value]);
-  end
-else raise EMD6InvalidState.Create('TMD6Hash.SetHashBits: Cannot change hash bits during processing.');
-end;
-
-//------------------------------------------------------------------------------
-
-Function TMD6Hash.GetKey: TMD6Key;
-begin
-Result := Copy(fKey);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TMD6Hash.PutKey(Value: TMD6Key);
-begin
-If not fProcessing then
-  begin
-    If Length(Value) <= MD6_KEY_MAXLEN then
-      begin
-        fKey := Copy(Value);
-        SetRoundsDefault;
-      end
-    else raise EMD6InvalidValue.CreateFmt('TMD6Hash.PetKey: Invalid key length (%d).',[Length(Value)]);
-  end
-else raise EMD6InvalidState.Create('TMD6Hash.PutKey: Cannot change key during processing.');
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TMD6Hash.SetRoundsDefault;
-begin
-// just a macro function
-If fRoundsDef then
-  begin
-    If Length(fKey) > 0 then
-      fRounds := Max(80,40 + (fHashBits div 4))
-    else
-      fRounds := 40 + (fHashBits div 4);
+    Move(Key[0],Block[MD6_BLOCK_KEYSTART],Length(Key));
+  {$IFNDEF ENDIAN_BIG}
+    For i := MD6_BLOCK_KEYSTART to MD6_BLOCK_KEYEND do
+      EndianSwapValue(Block[i]);
+  {$ENDIF}
   end;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TMD6Hash.SetRounds(Value: Integer);
-begin
-If not fProcessing then
-  begin
-    If Value >= 0 then
-      begin
-        fRounds := Value;
-        fRoundsDef := False;
-      end
-    else raise EMD6InvalidValue.CreateFmt('TMD6Hash.SetRounds: Invalid number of rounds (%d).',[Value]);
-  end
-else raise EMD6InvalidState.Create('TMD6Hash.SetRounds: Cannot change number of rounds during processing.');
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TMD6Hash.SetModeControl(Value: Integer);
-begin
-If not fProcessing then
-  begin
-  {
-    Mode control must be limited to 255 because it has to fit into 8 bit
-    storage in control word.
-  }
-    If (Value >= 0) and (Value <= 255) then
-      fModeControl := Value
-    else
-      raise EMD6InvalidValue.CreateFmt('TMD6Hash.SetModeControl: Invalid mode control (%d).',[Value]);
-  end
-else raise EMD6InvalidState.Create('TMD6Hash.SetModeControl: Cannot change mode control during processing.');
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TMD6Hash.CompressBlock(var Block: TMD6ProcessingBlock);
+procedure CompressBlock(var Block: TMD6ProcessingBlock);
 var
   i:          Integer;
   RoundConst: TMD6Word;
@@ -879,29 +1003,135 @@ For i := (Length(Block) - MD6_CHUNK_LEN) to High(Block) do
 {$ENDIF}
 end;
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                                    TMD6Hash
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TMD6Hash - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TMD6Hash - protected methods
+-------------------------------------------------------------------------------}
+
+Function TMD6Hash.GetMD6: TMD6;
+begin
+Result := Copy(fMD6);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6Hash.SetMD6(Value: TMD6);
+begin
+If not fProcessing then
+  begin
+    If (Length(Value) > 0) and (Length(Value) <= (MD6_BITS_MAX div 8)) then
+      begin
+        fMD6 := Copy(Value);
+        fHashBits := Length(Value) * 8;
+        SetRoundsDefault;
+      end
+    else raise EMD6InvalidHashLength.CreateFmt('TMD6Hash.SetMD6: Invalid hash length (%d).',[Length(Value)])
+  end
+else raise EMD6InvalidState.Create('TMD6Hash.SetMD6: Cannot change hash during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6Hash.SetHashBits(Value: Integer);
+begin
+If not fProcessing then
+  begin
+    If (Value > 0) and (Value <= MD6_BITS_MAX) and ((Value and 7) = 0) then
+      begin
+        SetLength(fMD6,0);  // to prevent copying
+        SetLength(fMD6,Value div 8);
+        fHashBits := Value;
+        SetRoundsDefault;
+      end
+    else raise EMD6InvalidValue.CreateFmt('TMD6Hash.SetHashBits: Invalid hash bits value (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6Hash.SetHashBits: Cannot change hash bits during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6Hash.GetKey: TMD6Key;
+begin
+Result := Copy(fKey);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6Hash.PutKey(Value: TMD6Key);
+begin
+If not fProcessing then
+  begin
+    If Length(Value) <= MD6_KEY_MAXLEN then
+      begin
+        fKey := Copy(Value);
+        SetRoundsDefault;
+      end
+    else raise EMD6InvalidValue.CreateFmt('TMD6Hash.PetKey: Invalid key length (%d).',[Length(Value)]);
+  end
+else raise EMD6InvalidState.Create('TMD6Hash.PutKey: Cannot change key during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6Hash.SetRoundsDefault;
+begin
+// just a macro function
+If fRoundsDef then
+  begin
+    If Length(fKey) > 0 then
+      fRounds := Max(80,40 + (fHashBits div 4))
+    else
+      fRounds := 40 + (fHashBits div 4);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6Hash.SetRounds(Value: Integer);
+begin
+If not fProcessing then
+  begin
+    If Value >= 0 then
+      begin
+        fRounds := Value;
+        fRoundsDef := False;
+      end
+    else raise EMD6InvalidValue.CreateFmt('TMD6Hash.SetRounds: Invalid number of rounds (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6Hash.SetRounds: Cannot change number of rounds during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6Hash.SetModeControl(Value: Integer);
+begin
+If not fProcessing then
+  begin
+    If (Value >= 0) and (Value <= 64) then
+      fModeControl := Value
+    else
+      raise EMD6InvalidValue.CreateFmt('TMD6Hash.SetModeControl: Invalid mode control (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6Hash.SetModeControl: Cannot change mode control during processing.');
+end;
+
 //------------------------------------------------------------------------------
 
 procedure TMD6Hash.AddTreeLevel;
-var
-  i:  Integer;
 begin
 SetLength(fState.Levels,Length(fState.Levels) + 1);
 with fState.Levels[High(fState.Levels)] do
   begin
     Index := 0;
     Bytes := 0;
-    SetLength(Block,MD6_BLOCK_LEN + (fRounds * MD6_CHUNK_LEN));
-    For i := Low(MD6_VEC_Q) to High(MD6_VEC_Q) do
-      Block[i] := MD6_VEC_Q[i];
-    // prepare key
-    If Length(fKey) > 0 then
-      begin
-        Move(fKey[0],Block[MD6_BLOCK_KEYSTART],Length(fKey));
-      {$IFNDEF ENDIAN_BIG}
-        For i := MD6_BLOCK_KEYSTART to MD6_BLOCK_KEYEND do
-          EndianSwapValue(Block[i]);
-      {$ENDIF}
-      end;
+    InitializeBlock(Block,fRounds,fKey);
     // init vector for sequential processing
     If Length(fState.Levels) > fModeControl then
       Bytes := MD6_CHUNK_SIZE;  // empty chunk, SetLength intialized it to all zero
@@ -911,10 +1141,8 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TMD6Hash.ProcessTreeNode(Level: Integer; const Data);
-var
-  ChainVar: array[0..Pred(MD6_CHUNK_SIZE)] of UInt8;
 begin
-If Level <= High(fState.Levels) then
+If Level <= High(fState.Levels) then  // sanity check
   begin
   {
     Cannot use "with fState.Levels[Level] do" - the array can be reallocated
@@ -923,6 +1151,10 @@ If Level <= High(fState.Levels) then
   }
     If fState.Levels[Level].Bytes >= MD6_BLOCK_CAPACITY then
       begin
+      {
+        Block at selected level is full, compress it and pass chaining variable
+        up the tree for further processing.
+      }
         with fState.Levels[Level] do
           begin
             Block[MD6_BLOCK_IDX_U] := GetUniqueNodeIDWord(Succ(Level),Index);
@@ -930,26 +1162,34 @@ If Level <= High(fState.Levels) then
             CompressBlock(Block);
             Inc(Index);
             Bytes := 0;
-            Move(Block[Length(Block) - MD6_CHUNK_LEN],Addr(ChainVar)^,MD6_CHUNK_SIZE);
           end;
+      {
+        The succ is here because we start the level indices at 0, mode control
+        expects them to start at 1.
+      }
         If Succ(Level) <= fModeControl then
           begin
+            // not at the maximum tree hight
             If Level >= High(fState.Levels) then
-              AddTreeLevel;
-            ProcessTreeNode(Succ(Level),ChainVar);
+              AddTreeLevel; // there is no next level as of yet, add it
+            // put chaining variable into the next level block
+            with fState.Levels[Level] do
+              ProcessTreeNode(Succ(Level),Block[Length(Block) - MD6_CHUNK_LEN]);
           end
-        else
+        else with fState.Levels[Level] do
           begin
-            Move(ChainVar,fState.Levels[Level].Block[MD6_BLOCK_DATASTART],MD6_CHUNK_SIZE);
-            Inc(fState.Levels[Level].Bytes,MD6_CHUNK_SIZE);
-          end;
+          {
+            We are at the maximum tree hight, meaning current block is
+            sequential, copy chaining variable back to it.
+          }          
+            Move(Block[Length(Block) - MD6_CHUNK_LEN],Block[MD6_BLOCK_DATASTART],MD6_CHUNK_SIZE);
+            Inc(Bytes,MD6_CHUNK_SIZE);
+           end;
       end;
     // copy data to state block
     with fState.Levels[Level] do
       begin
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        Move(Data,Pointer(PtrUInt(Addr(Block[MD6_BLOCK_DATASTART])) + PtrUInt(Bytes))^,MD6_CHUNK_SIZE);
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        Move(Data,PtrAdvance(Addr(Block[MD6_BLOCK_DATASTART]),PtrInt(Bytes))^,MD6_CHUNK_SIZE);
         Inc(Bytes,MD6_CHUNK_SIZE);
       end;
   end
@@ -959,8 +1199,6 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TMD6Hash.ProcessTreeNodeFinal(Level: Integer; PadBytes: TMemSize);
-var
-  ChainVar: array[0..Pred(MD6_CHUNK_SIZE)] of UInt8;
 begin
 If Level <= High(fState.Levels) then
   begin
@@ -968,33 +1206,25 @@ If Level <= High(fState.Levels) then
       begin
         If Bytes < MD6_BLOCK_CAPACITY then
           begin
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            FillChar(Pointer(PtrUInt(Addr(Block[MD6_BLOCK_DATASTART])) + PtrUInt(Bytes))^,MD6_BLOCK_CAPACITY - Bytes,0);
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
+            // block is not full, fill the rest wit zeroes
+            FillChar(PtrAdvance(Addr(Block[MD6_BLOCK_DATASTART]),PtrInt(Bytes))^,MD6_BLOCK_CAPACITY - Bytes,0);
             Inc(PadBytes,MD6_BLOCK_CAPACITY - Bytes);
           end;
         Block[MD6_BLOCK_IDX_U] := GetUniqueNodeIDWord(Succ(Level),Index);
         Block[MD6_BLOCK_IDX_V] := GetControlWord(fRounds,fModeControl,PadBytes * 8,Length(fKey),fHashBits,Level >= High(fState.Levels));
         CompressBlock(Block);
-        Inc(Index);
-        Bytes := 0;
       end;
     If Level < High(fState.Levels) then
       begin
+        // we are not at the top-most node, pass result from current block to the next and process it
         with fState.Levels[Level] do
-          Move(Block[Length(Block) - MD6_CHUNK_LEN],Addr(ChainVar)^,MD6_CHUNK_SIZE);
-        ProcessTreeNode(Succ(Level),ChainVar);
+          ProcessTreeNode(Succ(Level),Block[Length(Block) - MD6_CHUNK_LEN]);
         ProcessTreeNodeFinal(Succ(Level),0);
       end
     else If Length(fMD6) > 0 then
+      // top-most node, copy final result
       with fState.Levels[Level] do
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        Move(Pointer({$IFDEF CPU64bit}
-          PtrUInt(Addr(Block[High(Block)])) + PtrUInt(SizeOf(TMD6Word)) - PtrUInt(Length(fMD6))
-      {$ELSE}
-          PtrUInt(Int64(PtrUInt(Addr(Block[High(Block)]))) + Int64(SizeOf(TMD6Word)) - Int64(Length(fMD6)))
-      {$ENDIF})^,fMD6[0],Length(fMD6)); // final hash
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        Move(PtrAdvance(Addr(Block[High(Block)]),PtrInt(SizeOf(TMD6Word) - Length(fMD6)))^,fMD6[0],Length(fMD6));
   end
 else raise EMD6ProcessingError.CreateFmt('TMD6Hash.ProcessTreeNodeFinal: Cannot process non-existing level (%d).',[Level]);
 end;
@@ -1027,9 +1257,7 @@ If fFirstBlock then
 If fTransCount > 0 then
   begin
     PadBytes := MD6_CHUNK_SIZE - fTransCount;
-  {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-    FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,PadBytes,0);
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
+    FillChar(PtrAdvance(fTransBlock,PtrInt(fTransCount))^,PadBytes,0);
     ProcessTreeNode(0,fTransBlock^);
   end
 else PadBytes := 0;
@@ -1275,7 +1503,7 @@ If Size <= MD6_KEY_MAXLEN then
 else
   SetLength(TempKey,MD6_KEY_MAXLEN);
 If Size > 0 then
-  Move(Key,Addr(TempKey[0])^,Size);
+  Move(Key,Addr(TempKey[0])^,Length(TempKey));
 Self.Key := TempKey; // calls full setter
 end;
 
@@ -1772,6 +2000,766 @@ begin
 inherited FromStringDef(Str,Default);
 If not TryFromString(Str) then
   Move(Default,fMD6[0],SizeOf(Default));
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                TMD6WorkerThread
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TMD6WorkerThread - class declaration
+===============================================================================}
+type
+  TMD6WorkerThread = class(TThread)
+  protected
+    fThreadFunction:  TMD6ThreadFunction;
+    fParam:           Pointer;
+    procedure Execute; override;
+  public
+    constructor Create(ThreadFunction: TMD6ThreadFunction; Param: Pointer);
+  end;
+
+{===============================================================================
+    TMD6WorkerThread - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TMD6WorkerThread - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TMD6WorkerThread.Execute;
+begin
+fThreadFunction(fParam);
+end;
+
+{-------------------------------------------------------------------------------
+    TMD6WorkerThread - public methods
+-------------------------------------------------------------------------------}
+
+constructor TMD6WorkerThread.Create(ThreadFunction: TMD6ThreadFunction; Param: Pointer);
+begin
+inherited Create(False);
+FreeOnTerminate := True;
+fThreadFunction := ThreadFunction;
+fParam := Param;
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                TMD6HashParallel
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TMD6HashParallel - thread processing
+===============================================================================}
+
+procedure ThreadFunction(ThreadsDataPtr: Pointer);
+begin
+TMD6HashParallel(ThreadsDataPtr).Thread_Execute;
+end;
+
+{===============================================================================
+    TMD6HashParallel - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TMD6HashParallel - protected methods
+-------------------------------------------------------------------------------}
+
+Function TMD6HashParallel.GetMD6: TMD6;
+begin
+Result := Copy(fMD6);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.SetHashBits(Value: Integer);
+begin
+If not fProcessing then
+  begin
+    If (Value > 0) and (Value <= MD6_BITS_MAX) and ((Value and 7) = 0) then
+      begin
+        SetLength(fMD6,0);  // prevents copying
+        SetLength(fMD6,Value div 8);
+        fHashSettings.HashBits := Value;
+        SetRoundsDefault;
+      end
+    else raise EMD6InvalidValue.CreateFmt('TMD6HashParallel.SetHashBits: Invalid hash bits value (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6HashParallel.SetHashBits: Cannot change hash bits during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6HashParallel.GetKey: TMD6Key;
+begin
+Result := Copy(fHashSettings.Key);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.PutKey(Value: TMD6Key);
+begin
+If not fProcessing then
+  begin
+    If Length(Value) <= MD6_KEY_MAXLEN then
+      begin
+        fHashSettings.Key := Copy(Value);
+        SetRoundsDefault;
+      end
+    else raise EMD6InvalidValue.CreateFmt('TMD6HashParallel.PetKey: Invalid key length (%d).',[Length(Value)]);
+  end
+else raise EMD6InvalidState.Create('TMD6HashParallel.PutKey: Cannot change key during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.SetRoundsDefault;
+begin
+If fHashSettings.RoundsDef then
+  begin
+    If Length(fHashSettings.Key) > 0 then
+      fHashSettings.Rounds := Max(80,40 + (fHashSettings.HashBits div 4))
+    else
+      fHashSettings.Rounds := 40 + (fHashSettings.HashBits div 4);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.SetRounds(Value: Integer);
+begin
+If not fProcessing then
+  begin
+    If Value >= 0 then
+      begin
+        fHashSettings.Rounds := Value;
+        fHashSettings.RoundsDef := False;
+      end
+    else raise EMD6InvalidValue.CreateFmt('TMD6HashParallel.SetRounds: Invalid number of rounds (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6HashParallel.SetRounds: Cannot change number of rounds during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.SetModeControl(Value: Integer);
+begin
+If not fProcessing then
+  begin
+    If (Value >= 0) and (Value <= 64) then
+      fHashSettings.ModeControl := Value
+    else
+      raise EMD6InvalidValue.CreateFmt('TMD6HashParallel.SetModeControl: Invalid mode control (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6HashParallel.SetModeControl: Cannot change mode control during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.SetMaxThreads(Value: Integer);
+begin
+If not fProcessing then
+  begin
+    If Value > 0 then
+      fHashSettings.MaxThreads := Value
+    else
+      raise EMD6InvalidValue.CreateFmt('TMD6HashParallel.SetMaxThreads: Invalid maximum number of threads (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6HashParallel.SetMaxThreads: Cannot change maximum number of threads during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.SetMaxSeqNodes(Value: Int64);
+begin
+If not fProcessing then
+  begin
+    If Value > 0 then
+      fHashSettings.MaxSeqNodes := Value
+    else
+      raise EMD6InvalidValue.CreateFmt('TMD6HashParallel.SetMaxSeqNodes: Invalid maximum number of sequential nodes (%d).',[Value]);
+  end
+else raise EMD6InvalidState.Create('TMD6HashParallel.SetMaxSeqNodes: Cannot change maximum number of sequential nodes during processing.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6HashParallel.Thread_GetTask(var ThreadTask: TMD6ThreadTask): Boolean;
+var
+  i:  Integer;
+begin
+If not InterlockedLoad(fProcessingVariables.Terminated) then
+  begin
+    ThreadTask.CurrentOffset := InterlockedExchangeAdd(fProcessingVariables.CurrentOffset,fTasksSettings.BytesPerTask);
+    // prepare processing state
+    // +1 ... the last level is used only to hold the chaining variable to be passed to common levels
+    SetLength(ThreadTask.State.Levels,fProcessingSettings.ThreadLevelCount + 1);
+    For i := Low(ThreadTask.State.Levels) to High(ThreadTask.State.Levels) do
+      begin
+        If i <= Low(ThreadTask.State.Levels) then
+          ThreadTask.State.Levels[i].Index := ThreadTask.CurrentOffset div MD6_BLOCK_CAPACITY
+        else If i >= High(ThreadTask.State.Levels) then
+          ThreadTask.State.Levels[i].Index := ThreadTask.State.Levels[Pred(i)].Index
+        else
+          ThreadTask.State.Levels[i].Index := ThreadTask.State.Levels[Pred(i)].Index div 4;
+        ThreadTask.State.Levels[i].Bytes := 0;
+        InitializeBlock(ThreadTask.State.Levels[i].Block,fHashSettings.Rounds,fHashSettings.Key);
+      end;
+    Result := ThreadTask.CurrentOffset < fInputMessage.Size;
+  end
+else raise EMD6ParallelInternal.Create('TMD6HashParallel.Thread_GetTask: Processing terminated.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.Thread_ProcessThreadNode(var ThreadTask: TMD6ThreadTask; Level: Integer; const Data);
+begin
+If Level <= High(ThreadTask.State.Levels) then
+  begin
+    If ThreadTask.State.Levels[Level].Bytes >= MD6_BLOCK_CAPACITY then
+      begin
+        with ThreadTask.State.Levels[Level] do
+          begin
+            Block[MD6_BLOCK_IDX_U] := GetUniqueNodeIDWord(Succ(Level),Index);
+            Block[MD6_BLOCK_IDX_V] := GetControlWord(
+              fHashSettings.Rounds,fHashSettings.ModeControl,0,
+              Length(fHashSettings.Key),fHashSettings.HashBits,False);
+            CompressBlock(Block);
+            Inc(Index);
+            Bytes := 0;
+            Thread_ProcessThreadNode(ThreadTask,Succ(Level),Block[Length(Block) - MD6_CHUNK_LEN]);
+          end; 
+      end;
+    with ThreadTask.State.Levels[Level] do
+      begin
+        Move(Data,PtrAdvance(Addr(Block[MD6_BLOCK_DATASTART]),PtrInt(Bytes))^,MD6_CHUNK_SIZE);
+        Inc(Bytes,MD6_CHUNK_SIZE);
+      end;      
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.Thread_ProcessThreadNodeFinal(var ThreadTask: TMD6ThreadTask; Level: Integer; PadBytes: TMemSize);
+begin
+// note that the last level is only used for storage
+If Level < High(ThreadTask.State.Levels) then
+  begin
+    with ThreadTask.State.Levels[Level] do
+      begin
+        If Bytes < MD6_BLOCK_CAPACITY then
+          begin
+            FillChar(PtrAdvance(Addr(Block[MD6_BLOCK_DATASTART]),PtrInt(Bytes))^,MD6_BLOCK_CAPACITY - Bytes,0);
+            Inc(PadBytes,MD6_BLOCK_CAPACITY - Bytes);
+          end;
+        Block[MD6_BLOCK_IDX_U] := GetUniqueNodeIDWord(Succ(Level),Index);
+        Block[MD6_BLOCK_IDX_V] := GetControlWord(
+          fHashSettings.Rounds,fHashSettings.ModeControl,PadBytes * 8,
+          Length(fHashSettings.Key),fHashSettings.HashBits,False);
+        CompressBlock(Block);
+        Thread_ProcessThreadNode(ThreadTask,Succ(Level),Block[Length(Block) - MD6_CHUNK_LEN]);
+        Thread_ProcessThreadNodeFinal(ThreadTask,Succ(Level),0);
+      end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.Thread_CommonNodesEntry(const ThreadTask: TMD6ThreadTask);
+var
+  BindingIndex:       Integer;
+  BindingSequential:  Boolean;
+begin
+BindingIndex := Integer(ThreadTask.State.Levels[High(ThreadTask.State.Levels)].Index);
+BindingSequential := (Length(fCommonTree.State.Levels) <= 1) and fProcessingSettings.Sequential;
+// get connected node
+with fCommonTree.State do
+  Thread_ProcessCommonNode(
+    Addr(Levels[Low(Levels)].Nodes[BindingIndex div IfThen(BindingSequential,3,4)]),
+    IfThen(BindingSequential,1 + (BindingIndex mod 3),BindingIndex mod 4),
+    ThreadTask.State.Levels[High(ThreadTask.State.Levels)].Block[MD6_BLOCK_DATASTART]);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.Thread_ProcessCommonNode(NodePtr: PMD6CommonProcessingNode; PutIndex: Integer; const Data);
+begin
+If Assigned(NodePtr) then
+  begin
+    // copy data to put index, increment bytes, decrement counter
+    Move(Data,NodePtr^.Block[MD6_BLOCK_DATASTART + (PutIndex * MD6_CHUNK_LEN)],MD6_CHUNK_SIZE);
+    InterlockedAdd(NodePtr^.Bytes,MD6_CHUNK_SIZE);
+    // if counter is at 0, we can process the block
+    If InterlockedDecrement(NodePtr^.Counter) <= 0 then
+      begin
+        ReadWriteBarrier; // make sure the move is complete
+        NodePtr^.Block[MD6_BLOCK_IDX_U] := GetUniqueNodeIDWord(NodePtr^.LevelIndex,NodePtr^.Index);
+        NodePtr^.Block[MD6_BLOCK_IDX_V] := GetControlWord(
+          fHashSettings.Rounds,fHashSettings.ModeControl,(MD6_BLOCK_CAPACITY - NodePtr^.Bytes) * 8,
+          Length(fHashSettings.Key),fHashSettings.HashBits,NodePtr^.IsLastNode);
+        CompressBlock(NodePtr^.Block);
+        // next node...
+        If Assigned(NodePtr^.ParentNodePtr) and (NodePtr^.ParentNodePutIndex >= 0) then
+          Thread_ProcessCommonNode(NodePtr^.ParentNodePtr,NodePtr^.ParentNodePutIndex,
+            NodePtr^.Block[Length(NodePtr^.Block) - MD6_CHUNK_LEN]);
+      end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.Thread_Execute;
+var
+  WorkStream: TStream;
+  ThreadTask: TMD6ThreadTask;
+  i:          Integer;
+  Buffer:     array[0..Pred(MD6_CHUNK_SIZE)] of UInt8;
+  BytesRead:  Integer;
+  PadBytes:   Integer;
+begin
+try
+  // open the input
+  If fInputMessage.ProcessingMode = tmFile then
+    WorkStream := TFileStream.Create(StrToRTL(fInputMessage.FileName),fmOpenRead or fmShareDenyWrite)
+  else
+    WorkStream := TStaticMemoryStream.Create(fInputMessage.Buffer,fInputMessage.Size);
+  try
+    ThreadTask.CurrentOffset := 0;
+    SetLength(ThreadTask.State.Levels,0);
+    while Thread_GetTask(ThreadTask) do
+      begin
+        WorkStream.Seek(ThreadTask.CurrentOffset,soBeginning);
+        i := 0;
+        PadBytes := 0;
+        repeat
+          BytesRead := WorkStream.Read(Addr(Buffer)^,SizeOf(Buffer));
+          If BytesRead > 0 then
+            begin
+              // do padding if needed
+              If BytesRead < SizeOf(Buffer) then
+                begin
+                  PadBytes := SizeOf(Buffer) - BytesRead;
+                  FillChar(Buffer[BytesRead],PadBytes,0);
+                end;
+              // pass data for processing
+              Thread_ProcessThreadNode(ThreadTask,0,Buffer);
+              InterlockedAdd(fProgressTracking.CurrentIntProgress,BytesRead);
+            end;
+          Inc(i);
+        until (i >= fTasksSettings.ChunksPerTask) or (BytesRead < SizeOf(Buffer));
+        Thread_ProcessThreadNodeFinal(ThreadTask,0,PadBytes);
+        // do sanity check before continuing to common-levels
+        If ThreadTask.State.Levels[High(ThreadTask.State.Levels)].Bytes = MD6_CHUNK_SIZE then
+          Thread_CommonNodesEntry(ThreadTask)
+        else
+          raise EMD6ParallelInternal.Create('TMD6HashParallel.Thread_Execute: processing failed at thread level.');
+      end;
+  finally
+    FreeAndNil(WorkStream);
+  end;
+except
+  // eat all exceptions
+  InterlockedStore(fProcessingVariables.Terminated,True);
+end;
+If InterlockedDecrement(fProcessingVariables.StopCounter) <= 0 then
+  fDoneEvent.Unlock;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6HashParallel.ParallelPossible(DataSize: UInt64): Boolean;
+begin
+If (DataSize > MD6_BLOCK_CAPACITY) and (fHashSettings.ModeControl > 0) and (fHashSettings.MaxThreads > 1) then
+  begin
+    // is tree level count greater than mode control?
+    If Succ(Ceil(LogN(4,Ceil64(DataSize / MD6_BLOCK_CAPACITY)))) > fHashSettings.ModeControl then
+      // check required number of sequential nodes
+      Result := fHashSettings.MaxSeqNodes >= Ceil64(Ceil64(DataSize / (UInt64(Trunc(
+        IntPower(4,Pred(fHashSettings.ModeControl)))) * MD6_BLOCK_CAPACITY)) / 3)
+    else
+      Result := True;
+  end
+else Result := False;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.ParallelPrepare;
+var
+  TreeLevelCount:   Integer;
+  CommonLevelCount: Integer;
+  TaskCount:        UInt64;
+
+  procedure PrepareTasksSettings;
+  begin
+    CommonLevelCount := TreeLevelCount - fProcessingSettings.ThreadLevelCount;
+    // task settings
+    fTasksSettings.ChunksPerTask := UInt64(Trunc(IntPower(4,Pred(fProcessingSettings.ThreadLevelCount)))) * 4;
+    fTasksSettings.BytesPerTask := fTasksSettings.ChunksPerTask * MD6_CHUNK_SIZE;
+    TaskCount := UInt64(Ceil64(fInputMessage.Size / fTasksSettings.BytesPerTask));
+  end;
+
+  procedure InitCommonTreeLevel(out Level: TMD6CommonProcessingLevel; TreeLevelIndex,SubNodeCount: Integer; Sequential: Boolean);
+  var
+    ii: Integer;
+  begin
+    SetLength(Level.Nodes,Ceil(SubNodeCount / IfThen(Sequential,3,4)));
+    For ii := Low(Level.Nodes) to High(Level.Nodes) do
+      with Level.Nodes[ii] do
+        begin
+          Sequential := Sequential;
+          IsLastNode := False;
+          ParentNodePtr := nil;
+          ParentNodePutIndex := -1;
+          If ii >= High(Level.Nodes) then
+            Counter := SubNodeCount - IfThen(Sequential,(ii * 3) - IfThen(ii > Low(Level.Nodes),1,0),(ii * 4))
+          else
+            Counter := IfThen((ii <= Low(Level.Nodes)) and Sequential,3,4);
+          LevelIndex := TreeLevelIndex;
+          Index := ii;
+          Bytes := IfThen((ii <= Low(Level.Nodes)) and Sequential,MD6_CHUNK_SIZE,0);
+          InitializeBlock(Block,fHashSettings.Rounds,fHashSettings.Key);
+        end;
+  end;
+
+var
+  MessageBlocks:    Int64;
+  SubNodeCount:     Integer;
+  i,j:              Integer;
+begin
+MessageBlocks := Ceil64(fInputMessage.Size / MD6_BLOCK_CAPACITY);
+// processing settings
+fProcessingSettings.ThreadCount := Min(Int64(fHashSettings.MaxThreads),MessageBlocks);
+// since MessageBlocks cannot be lower than 2, the fTreeLevelCount will always be 2 or more.
+TreeLevelCount := Succ(Ceil(LogN(4,MessageBlocks)));
+// will the tree degrade into sequential processing?
+If TreeLevelCount > fHashSettings.ModeControl then
+  begin
+    fProcessingSettings.Sequential := True;
+    TreeLevelCount := fHashSettings.ModeControl + 1;  // top-most node is sequential
+  end
+else fProcessingSettings.Sequential := False;
+fProcessingSettings.ThreadLevelCount := Max(1,TreeLevelCount - Ceil(LogN(4,fProcessingSettings.ThreadCount)));
+{
+  following two assignments are here for FPC, so it stops throwing nonsensical
+  warnings (nonsensical because both values are set in PrepareTasksSettings)
+}
+TaskCount := 0;
+CommonLevelCount := 0;
+PrepareTasksSettings;
+// make sure there is "way" more tasks than threads if possible (load balancing and all that)
+If (TaskCount < (fProcessingSettings.ThreadCount * 2)) and
+   (fProcessingSettings.ThreadLevelCount > 1) then
+  begin
+    Dec(fProcessingSettings.ThreadLevelCount);
+    PrepareTasksSettings;
+  end;
+// processing variables
+fProcessingVariables.StopCounter := fProcessingSettings.ThreadCount;
+fProcessingVariables.CurrentOffset := 0;
+fProcessingVariables.Terminated := False;
+// build the common tree
+SetLength(fCommonTree.State.Levels,0);  // prevent copying
+SetLength(fCommonTree.State.Levels,CommonLevelCount);
+SubNodeCount := TaskCount;
+For i := Low(fCommonTree.State.Levels) to High(fCommonTree.State.Levels) do
+  begin
+    fCommonTree.State.Levels[i].Index := Succ(fProcessingSettings.ThreadLevelCount + i);
+    InitCommonTreeLevel(fCommonTree.State.Levels[i],fCommonTree.State.Levels[i].Index,
+      SubNodeCount,(i >= High(fCommonTree.State.Levels)) and fProcessingSettings.Sequential);  
+    SubNodeCount := Length(fCommonTree.State.Levels[i].Nodes);
+  end;
+// mark last node
+with fCommonTree.State.Levels[High(fCommonTree.State.Levels)] do
+  Nodes[High(Nodes)].IsLastNode := True;
+// connect the nodes
+For i := Low(fCommonTree.State.Levels) to High(fCommonTree.State.Levels) do
+  with fCommonTree.State.Levels[i] do
+    If (i = Pred(High(fCommonTree.State.Levels))) and fProcessingSettings.Sequential then
+      begin
+        For j := Low(Nodes) to High(Nodes) do
+          begin
+            Nodes[j].ParentNodePtr := Addr(fCommonTree.State.Levels[Succ(i)].Nodes[j div 3]);
+            Nodes[j].ParentNodePutIndex := 1 + (j mod 3);
+          end;      
+      end
+    else If i < High(fCommonTree.State.Levels) then
+      begin
+        For j := Low(Nodes) to High(Nodes) do
+          begin
+            Nodes[j].ParentNodePtr := Addr(fCommonTree.State.Levels[Succ(i)].Nodes[j div 4]);
+            Nodes[j].ParentNodePutIndex := j mod 4;
+          end;
+      end
+    else If fProcessingSettings.Sequential then
+      begin
+        For j := Low(Nodes) to Pred(High(Nodes)) do
+          begin
+            Nodes[j].ParentNodePtr := Addr(Nodes[Succ(j)]);
+            Nodes[j].ParentNodePutIndex := 0;
+          end
+      end;
+fProgressTracking.CurrentIntProgress := 0;
+ReadWriteBarrier;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6HashParallel.ParallelExecute(Memory: Pointer; Size: TMemSize): Integer;
+begin
+fInputMessage.ProcessingMode := tmBuffer;
+fInputMessage.Buffer := Memory;
+fInputMessage.FileName := '';
+fInputMessage.Size := UInt64(Size);
+Result := Self.ParallelExecute;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TMD6HashParallel.ParallelExecute(const FileName: String; Size: Int64): Integer;
+begin
+fInputMessage.ProcessingMode := tmFile;
+fInputMessage.Buffer := nil;
+fInputMessage.FileName := FileName;
+UniqueString(fInputMessage.FileName);
+fInputMessage.Size := UInt64(Size);
+Result := Self.ParallelExecute;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TMD6HashParallel.ParallelExecute: Integer;
+var
+  i:  Integer;
+begin
+ParallelPrepare;
+Result := fProcessingSettings.ThreadCount;
+fLastProgress := -1.0;
+ProgressHandler(Self,0.0);
+fDoneEvent := TEvent.Create(True,False);
+try
+  // run threads and wait for them to finish
+  For i := 1 to fProcessingSettings.ThreadCount do
+    DoThreadStart;
+  If Assigned(fOnProgressEvent) or Assigned(fOnProgressCallback) then
+    begin
+      while True do
+        If fDoneEvent.Wait(250) = wrTimeout then
+          DoProgress
+        else
+          Break{while};
+    end
+  else fDoneEvent.Wait;
+finally
+  FreeAndNil(fDoneEvent);
+end;
+ReadWriteBarrier;
+ProgressHandler(Self,1.0);
+{
+  All threads should be done by this point.
+
+  If the processing ended without termination, pick up the result, otherwise
+  signal problem by raising an exception.
+}
+If not fProcessingVariables.Terminated then
+  begin
+    // get result from the common tree top node
+    If Length(fMD6) > 0 then
+      with fCommonTree.State.Levels[High(fCommonTree.State.Levels)] do
+        with Nodes[High(Nodes)] do
+          Move(PtrAdvance(Addr(Block[High(Block)]),PtrInt(SizeOf(TMD6Word) - Length(fMD6)))^,fMD6[0],Length(fMD6));
+  end
+else raise EMD6ProcessingError.Create('TMD6HashParallel.ParallelExecute: Parallel processing failed.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.DoThreadStart;
+begin
+If Assigned(fOnThreadStartEvent) then
+  fOnThreadStartEvent(Self,ThreadFunction,Pointer(Self))
+else If Assigned(fOnThreadStartCallback) then
+  fOnThreadStartCallback(Self,ThreadFunction,Pointer(Self))
+else
+  TMD6WorkerThread.Create(ThreadFunction,Pointer(Self));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.Initialize;
+begin
+Setlength(fMD6,MD6_BITS_DEFAULT div 8);
+fHashSettings.HashBits := MD6_BITS_DEFAULT;
+SetLength(fHashSettings.Key,0);
+fHashSettings.Rounds := 168;
+fHashSettings.RoundsDef := True;
+fHashSettings.ModeControl := MD6_MODE_DEFAULT;
+fHashSettings.MaxThreads := ProcessorCount;
+fHashSettings.MaxSeqNodes := 1024;
+fProgUpdInterval := 250;
+fProcessing := False;
+fLastProgress := 0.0;
+fOnThreadStartCallback := nil;
+fOnThreadStartEvent := nil;
+fOnProgressCallback := nil;
+fOnProgressEvent := nil;
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+procedure TMD6HashParallel.ProgressHandler(Sender: TObject; Progress: Double);
+begin
+If Assigned(fOnProgressEvent) then
+  fOnProgressEvent(Self,Progress)
+else If Assigned(fOnProgressCallback) then
+  fOnProgressCallback(Self,Progress)
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.DoProgress;
+var
+  Progress: Double;
+begin
+If fInputMessage.Size > 0 then
+  begin
+    Progress := InterlockedLoad(fProgressTracking.CurrentIntProgress) / fInputMessage.Size;
+    If not SameValue(Progress,fLastProgress,0.001) then
+      ProgressHandler(Self,Progress);
+  end
+else ProgressHandler(Self,0.0);
+end;
+
+{-------------------------------------------------------------------------------
+    TMD6HashParallel - public methods
+-------------------------------------------------------------------------------}
+
+class Function TMD6HashParallel.ProcessorCount: Integer;
+{$IFDEF Windows}
+var
+  SysInfo:  TSystemInfo;
+begin
+GetNativeSystemInfo(@SysInfo);
+Result := Integer(SysInfo.dwNumberOfProcessors);
+If Result < 1 then
+  Result := 1;
+end;
+{$ELSE}
+begin
+Result := sysconf(_SC_NPROCESSORS_ONLN);
+If Result < 1 then
+  Result := 1;
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+constructor TMD6HashParallel.Create;
+begin
+inherited Create;
+Initialize;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMD6HashParallel.SetKey(const Key; Size: TMemSize);
+var
+  TempKey:  TMD6Key;
+begin
+If Size <= MD6_KEY_MAXLEN then
+  SetLength(TempKey,Size)
+else
+  SetLength(TempKey,MD6_KEY_MAXLEN);
+If Size > 0 then
+  Move(Key,Addr(TempKey[0])^,Length(TempKey));
+Self.Key := TempKey;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+procedure TMD6HashParallel.SetKey(const Key: String);
+var
+  TempStr:  UTF8String;
+begin
+TempStr := StrToUTF8(Key);
+SetKey(PUTF8Char(TempStr)^,Length(TempStr) * SizeOf(UTF8Char));
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6HashParallel.HashMemory(Memory: Pointer; Size: TMemSize): Integer;
+var
+  Hash: TMD6Hash;
+begin
+fProcessing := True;
+try
+  If not ParallelPossible(UInt64(Size)) then
+    begin
+      Hash := TMD6Hash.Create;
+      try
+        Hash.HashBits := fHashSettings.HashBits;
+        Hash.Key := fHashSettings.Key;
+        Hash.Rounds := fHashSettings.Rounds;
+        Hash.ModeControl := fHashSettings.ModeControl;
+        Hash.OnProgressEvent := ProgressHandler;
+        Hash.HashMemory(Memory,Size);
+        fMD6 := Hash.MD6;
+        Result := 1;
+      finally
+        Hash.Free;
+      end;
+    end
+  else Result := ParallelExecute(Memory,Size);
+finally
+  fProcessing := False;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6HashParallel.HashBuffer(const Buffer; Size: TMemSize): Integer;
+begin
+Result := HashMemory(@Buffer,Size);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6HashParallel.HashFile(const FileName: String): Integer;
+var
+  Stream: TFileStream;
+  Hash:   TMD6Hash;
+begin
+fProcessing := True;
+try
+  Stream := TFileStream.Create(StrToRTL(FileName),fmOpenRead or fmShareDenyWrite);
+  try
+    If not ParallelPossible(UInt64(Stream.Size)) then
+      begin
+        Hash := TMD6Hash.Create;
+        try
+          Hash.HashBits := fHashSettings.HashBits;
+          Hash.Key := fHashSettings.Key;
+          Hash.Rounds := fHashSettings.Rounds;
+          Hash.ModeControl := fHashSettings.ModeControl;
+          Hash.OnProgressEvent := ProgressHandler;
+          Hash.HashFile(FileName);
+          fMD6 := Hash.MD6;
+          Result := 1;
+        finally
+          Hash.Free;
+        end;
+      end
+    else Result := ParallelExecute(FileName,Stream.Size);
+  finally
+    Stream.Free;
+  end;
+finally
+  fProcessing := False;
+end;
 end;
 
 

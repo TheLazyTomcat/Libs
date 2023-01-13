@@ -48,11 +48,11 @@
                   This can lead to a deadlocks (especially if you try to create
                   both ends in the same thread), so be careful.
 
-  Version 1.0 (2022-08-26)
+  Version 1.1.1 (2023-01-13)
 
-  Last change 2022-08-26
+  Last change 2023-01-13
 
-  ©2022 František Milt
+  ©2022-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -118,6 +118,7 @@ type
   ESPHandleDupError = class(ESPException);
 
   ESPInvalidMode = class(ESPException);
+  ESPPeekError   = class(ESPException);
   ESPReadError   = class(ESPException);
   ESPWriteError  = class(ESPException);
 
@@ -149,6 +150,7 @@ type
     procedure Finalize; virtual;
   public
     destructor Destroy; override;
+    Function PeekBytes: TMemSize; virtual;  // returns number of unread bytes in the pipe
     Function Read(out Buffer; Count: TMemSize): TMemSize; virtual;
     Function Write(const Buffer; Count: TMemSize): TMemSize; virtual;
     property IsServer: Boolean read fIsServer;
@@ -198,9 +200,9 @@ type
     procedure Initialize(IsServer: Boolean; EndpointMode: TSPEndpointMode); override;
   public
     constructor CreateReadEnd;
-    constructor CreateWriteEnd;
+    constructor CreateWriteEnd{$IFNDEF FPC}(Dummy: Integer = 0){$ENDIF};
     constructor ConnectReadEnd(ConnectionData: TSPConnectionData);
-    constructor ConnectWriteEnd(ConnectionData: TSPConnectionData);
+    constructor ConnectWriteEnd(ConnectionData: TSPConnectionData{$IFNDEF FPC}; Dummy: Integer = 0{$ENDIF});
     property ConnectionData: TSPConnectionData read fConnectionData;
   end;
 
@@ -269,6 +271,7 @@ uses
 {$IFNDEF Windows}
 const
   O_CLOEXEC = $80000;
+  FIONREAD  = $541B;
 
 type
   TFDPair = array[0..1] of cInt;
@@ -288,6 +291,8 @@ Function close(fd: cInt): cInt; cdecl; external;
 
 Function sys_read(fd: cInt; buf: Pointer; count: size_t): ssize_t; cdecl; external name 'read';
 Function sys_write(fd: cInt; buf: Pointer; count: size_t): ssize_t; cdecl; external name 'write';
+
+Function ioctl(fd: cInt; request: cULong): cInt; cdecl; external; varargs;
 
 {$ENDIF}
 
@@ -340,6 +345,29 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TPipeBase.PeekBytes: TMemSize;
+var
+  BytesInPipe:  TSPParamInt;
+begin
+If fEndpointMode = emRead then
+  begin
+  {$IFDEF Windows}
+    If PeekNamedPipe(fReadHandle,nil,0,nil,@BytesInPipe,nil) then
+      Result := TMemSize(BytesInPipe)
+    else
+      raise ESPPeekError.CreateFmt('TPipeBase.PeekBytes: Failed to peed pipe (%d).',[GetLastError]);
+  {$ELSE}
+    If ioctl(fReadHandle,FIONREAD,@BytesInPipe) = 0 then
+      Result := TMemSize(BytesInPipe)
+    else
+      raise ESPPeekError.CreateFmt('TPipeBase.PeekBytes: Failed to peed pipe (%d).',[errno_ptr^]);
+  {$ENDIF}
+  end
+else raise ESPInvalidMode.Create('TPipeBase.PeekBytes: Cannot peek from write end.');
+end;
+
+//------------------------------------------------------------------------------
+
 Function TPipeBase.Read(out Buffer; Count: TMemSize): TMemSize;
 var
   BytesRead:  TSPParamInt;
@@ -351,13 +379,13 @@ If fEndpointMode = emRead then
     If Windows.ReadFile(fReadHandle,Addr(Buffer)^,DWORD(Count),BytesRead,nil) then
       Result := TMemSize(BytesRead)
     else
-      raise ESPSystemError.CreateFmt('TPipeBase.Read: Read failed (%d).',[GetLastError]);
+      raise ESPReadError.CreateFmt('TPipeBase.Read: Read failed (%d).',[GetLastError]);
   {$ELSE}
     BytesRead := sys_read(fReadHandle,@Buffer,size_t(Count));
     If BytesRead >= 0 then
       Result := TMemSize(BytesRead)
     else
-      raise ESPSystemError.CreateFmt('TPipeBase.Read: Read failed (%d).',[errno_ptr^]);
+      raise ESPReadError.CreateFmt('TPipeBase.Read: Read failed (%d).',[errno_ptr^]);
   {$ENDIF}
   end
 else raise ESPInvalidMode.Create('TPipeBase.Read: Cannot read from write end.');
@@ -376,13 +404,13 @@ If fEndpointMode = emWrite then
     If Windows.WriteFile(fWriteHandle,Buffer,DWORD(Count),BytesWritten,nil) then
       Result := TMemSize(BytesWritten)
     else
-      raise ESPSystemError.CreateFmt('TPipeBase.Write: Write failed (%d).',[GetLastError]);
+      raise ESPWriteError.CreateFmt('TPipeBase.Write: Write failed (%d).',[GetLastError]);
   {$ELSE}
     BytesWritten := sys_write(fWriteHandle,@Buffer,size_t(Count));
     If BytesWritten >= 0 then
       Result := TMemSize(BytesWritten)
     else
-      raise ESPSystemError.CreateFmt('TPipeBase.Write: Write failed (%d).',[errno_ptr^]);
+      raise ESPWriteError.CreateFmt('TPipeBase.Write: Write failed (%d).',[errno_ptr^]);
   {$ENDIF}
   end
 else raise ESPInvalidMode.Create('TPipeBase.Write: Cannot write to read end.');
@@ -403,8 +431,13 @@ end;
 
 procedure TSimplePipe.CreatePipe;
 {$IFDEF Windows}
+var
+  SecAttr:  TSecurityAttributes;
 begin
-If not Windows.CreatePipe(fReadHandle,fWriteHandle,nil,0) then
+SecAttr.nLength := SizeOf(TSecurityAttributes);
+SecAttr.lpSecurityDescriptor := nil;
+SecAttr.bInheritHandle := True;
+If not Windows.CreatePipe(fReadHandle,fWriteHandle,@SecAttr,0) then
   raise ESPSystemError.CreateFmt('TSimplePipe.CreatePipe: Failed to create pipe (%d).',[GetLastError]);
 fConnectionDataPtr^.CreatorPID := UInt32(GetCurrentProcessID);
 {$ELSE}
@@ -449,7 +482,7 @@ procedure TSimplePipe.ConnectPipe;
     SourceProcess := OpenProcess(PROCESS_DUP_HANDLE,False,fConnectionDataPtr^.CreatorPID);
     If SourceProcess <> 0 then
       try
-        If not Windows.DuplicateHandle(SourceProcess,THandle(PtrInt(fConnectionDataPtr^.EndpointHandle)),GetCurrentProcess,@Result,0,False,DUPLICATE_SAME_ACCESS) then
+        If not Windows.DuplicateHandle(SourceProcess,THandle(PtrInt(fConnectionDataPtr^.EndpointHandle)),GetCurrentProcess,@Result,0,True,DUPLICATE_SAME_ACCESS) then
           raise ESPHandleDupError.CreateFmt('TSimplePipe.ConnectPipe.ConnectPipeInternal: Failed to duplicate handle (%d).',[GetLastError]);
       finally
         CloseHandle(SourceProcess);
@@ -523,7 +556,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-constructor TAnonymousPipe.CreateWriteEnd;
+constructor TAnonymousPipe.CreateWriteEnd{$IFNDEF FPC}(Dummy: Integer = 0){$ENDIF};
 begin
 inherited Create;
 Initialize(True,emWrite);
@@ -540,7 +573,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-constructor TAnonymousPipe.ConnectWriteEnd(ConnectionData: TSPConnectionData);
+constructor TAnonymousPipe.ConnectWriteEnd(ConnectionData: TSPConnectionData{$IFNDEF FPC}; Dummy: Integer = 0{$ENDIF});
 begin
 inherited Create;
 fConnectionData := ConnectionData;

@@ -14,11 +14,11 @@
     They are designed to be safe for use on pointers from external sources
     (libraries, OS, ...).
 
-  Version 1.1 (2021-03-12)
+  Version 1.1.1 (2023-01-13)
 
-  Last change 2022-09-24
+  Last change 2023-01-13
 
-  ©2017-2022 František Milt
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -72,11 +72,15 @@ type
 
 type
   TStaticMemoryStream = class(TCustomMemoryStream)
+  protected
+    Function GetAddress: Pointer; virtual;
+    procedure SetAddress(Value: Pointer); virtual;
   public
     constructor Create(Memory: Pointer; Size: TMemSize); overload;
     Function Write(const Buffer; Count: LongInt): LongInt; override;
     procedure LoadFromStream(Stream: TStream); virtual;
     procedure LoadFromFile(const FileName: String); virtual;
+    property Address: Pointer read GetAddress write SetAddress;
   end;
 
 {===============================================================================
@@ -121,6 +125,31 @@ uses
 {===============================================================================
     TStaticMemoryStream - implementation
 ===============================================================================}
+{-------------------------------------------------------------------------------
+    TStaticMemoryStream - protected methods
+-------------------------------------------------------------------------------}
+
+Function TStaticMemoryStream.GetAddress: Pointer;
+begin
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+Result := Pointer(PtrUInt(Memory) + PtrUInt(Position));
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TStaticMemoryStream.SetAddress(Value: Pointer);
+begin
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+If PtrUInt(Value) <= PtrUInt(Memory) then
+  Seek(0,soBeginning)
+else If PtrUInt(Value) >= (PtrUInt(Memory) + PtrUInt(Size)) then
+  Seek(0,soEnd)
+else
+  Seek(Int64(PtrUInt(Value) - PtrUInt(Memory)),soBeginning);
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+end;
+
 {-------------------------------------------------------------------------------
     TStaticMemoryStream - public methods
 -------------------------------------------------------------------------------}
