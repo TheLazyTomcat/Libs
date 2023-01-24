@@ -13,11 +13,11 @@
     AuxExceptions library. It is stored separately to allow for classes
     rebasing.
 
-  Version 1.1.1 (2022-11-29)
+  Version 1.1.2 (2023-01-20)
 
-  Last change 2022-11-29
+  Last change 2023-01-20
 
-  ©2019-2022 František Milt
+  ©2019-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -739,6 +739,7 @@ type
   protected
     fValueName: String;
     fValue:     Variant;
+    class Function VariantToStr(Value: Variant): String; virtual;
     class Function VariantArrayToStr(Value: Variant): String; virtual;
     class Function GetDefaultMessage(ValueString: Boolean): String; virtual;
   public
@@ -2447,6 +2448,16 @@ end;
     EAEValueException - protected methods
 -------------------------------------------------------------------------------}
 
+class Function EAEValueException.VariantToStr(Value: Variant): String;
+begin
+If (VarType(Value) and varArray) <> 0 then
+  Result := VariantArrayToStr(Value)
+else
+  Result := VarToStrDef(Value,'ERROR');
+end;
+
+//------------------------------------------------------------------------------
+
 class Function EAEValueException.VariantArrayToStr(Value: Variant): String;
 var
   Dimensions: Integer;
@@ -2463,9 +2474,9 @@ var
         If Dim >= Dimensions then
           begin
             If Index <> VarArrayHighBound(Value,Dim) then
-              Str := Str + VarToStrDef(VarArrayGet(Value,Indices),'ERROR') + ','
+              Str := Str + VariantToStr(VarArrayGet(Value,Indices)) + ','
             else
-              Str := Str + VarToStrDef(VarArrayGet(Value,Indices),'ERROR');
+              Str := Str + VariantToStr(VarArrayGet(Value,Indices));
           end
         else ConvertVarArrayDimension(Str,Dim + 1);
       end;
@@ -2498,10 +2509,7 @@ end;
 
 constructor EAEValueException.Create(const Msg,ValueName: String; Value: Variant; FaultObject: TObject; const FaultFunction: String);
 begin
-If (VarType(Value) and varArray) <> 0 then
-  inherited CreateFmt(Msg,[ValueName,VariantArrayToStr(Value)],FaultObject,FaultFunction)
-else
-  inherited CreateFmt(Msg,[ValueName,VarToStrDef(Value,'ERROR')],FaultObject,FaultFunction);
+inherited CreateFmt(Msg,[ValueName,VariantToStr(Value)],FaultObject,FaultFunction);
 fValue := Value;
 end;
 

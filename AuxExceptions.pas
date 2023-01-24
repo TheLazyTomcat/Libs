@@ -57,11 +57,11 @@
         In Linux, this list might not be accurate as the threads can be created
         and/or destroyed during the enumeration.
 
-  Version 1.1.1 (2022-11-29)
+  Version 1.1.2 (2023-01-20)
 
-  Last change 2022-11-29
+  Last change 2023-01-20
 
-  ©2019-2022 František Milt
+  ©2019-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com

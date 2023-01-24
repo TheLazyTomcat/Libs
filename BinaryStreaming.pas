@@ -37,6 +37,42 @@
     Buffers and array of bytes are both stored as plain byte streams, without
     explicit size.
 
+    Variants are stored in a litle more compley way - first a byte denoting
+    the type of the variant is stored (note that value of this byte do NOT
+    correspond to TVarType value), directly followed by the value itself.
+    The value is stored as if it was a normal variable (eg. for varWord variant
+    the function [Ptr/Stream]_WriteUInt16 is called).
+
+      NOTE - given the implementation, variant being written into memory
+             (function Ptr_WriteVariant) must not be larger than 2GiB-1 bytes.
+
+    For variant arrays, immediately after the type byte a dimension count is
+    stored (int32), followed by an array of indices bounds (two int32 values
+    for each dimension, first low bound followed by a high bound, ordered from
+    lowest dimension to highest). After this an array of items is stored, each
+    item stored as a separate variant. When saving the items, the right-most
+    index is incremented first.
+
+      NOTE - only standard variant types are supported, and from them only the
+             "streamable" types (boolean, integers, floats, strings) and their
+             arrays are allowed - so no empty/null vars, interfaces, objects,
+             errors, and so on.
+
+    Also, since older compilers do not support all in-here used variant types
+    (namely varUInt64 and varUString), there are some specific rules in effect
+    when saving and loading such types in programs compiled by those
+    compilers...
+
+      Unsupported types are not saved at all, simply because a variant of that
+      type cannot be even created (note that the type UInt64 is sometimes
+      declared only an alias for Int64, then it will be saved as Int64).
+
+      When loading unsupported varUInt64, it will be loaded as Int64 (with the
+      same BINARY data, ie. not necessarily the same numerical value).
+
+      When loading unsupported varUString (unicode string), it is normally
+      loaded, but the returned variant will be of type varOleStr (wide string).
+
     Parameter Advance in writing and reading functions indicates whether the
     position in stream being written to or read from (or the passed memory
     pointer) can be advanced by number of bytes written or read. When set to
@@ -47,11 +83,11 @@
     written or read. The exception to this are read functions that are directly
     returning the value being read.
 
-  Version 1.8 (2021-03-04)
+  Version 1.9 (2023-01-22)
 
-  Last change 2022-09-13
+  Last change 2023-01-22
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -68,9 +104,10 @@
       github.com/TheLazyTomcat/Lib.BinaryStreaming
 
   Dependencies:
-    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect    - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses  
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
 
 ===============================================================================}
 unit BinaryStreaming;
@@ -94,6 +131,8 @@ type
   EBSException = class(Exception);
 
   EBSIndexOutOfBounds = class(EBSException);
+
+  EBSUnsupportedVarType = class(EBSException);
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -153,6 +192,10 @@ Function StreamedSize_String(const Str: String): TMemSize;
 
 Function StreamedSize_Buffer(Size: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
 Function StreamedSize_Bytes(Count: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function StreamedSize_Variant(const Value: Variant): TMemSize;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -266,6 +309,11 @@ Function Ptr_WriteBytes(Dest: Pointer; const Value: array of UInt8): TMemSize; o
 
 Function Ptr_FillBytes(var Dest: Pointer; Count: TMemSize; Value: UInt8; Advance: Boolean): TMemSize; overload;
 Function Ptr_FillBytes(Dest: Pointer; Count: TMemSize; Value: UInt8): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function Ptr_WriteVariant(var Dest: Pointer; const Value: Variant; Advance: Boolean): TMemSize; overload;
+Function Ptr_WriteVariant(Dest: Pointer; const Value: Variant): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -424,6 +472,12 @@ Function Ptr_ReadString(Src: Pointer): String; overload;{$IFDEF CanInline} inlin
 Function Ptr_ReadBuffer(var Src: Pointer; var Buffer; Size: TMemSize; Advance: Boolean): TMemSize; overload;
 Function Ptr_ReadBuffer(Src: Pointer; var Buffer; Size: TMemSize): TMemSize; overload;
 
+//------------------------------------------------------------------------------
+
+Function Ptr_ReadVariant(var Src: Pointer; out Value: Variant; Advance: Boolean): TMemSize; overload;
+Function Ptr_ReadVariant(Src: Pointer; out Value: Variant): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function Ptr_ReadVariant(var Src: Pointer; Advance: Boolean): Variant; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function Ptr_ReadVariant(Src: Pointer): Variant; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -506,6 +560,10 @@ Function Stream_WriteBytes(Stream: TStream; const Value: array of UInt8; Advance
 //------------------------------------------------------------------------------
 
 Function Stream_FillBytes(Stream: TStream; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function Stream_WriteVariant(Stream: TStream; const Value: Variant; Advance: Boolean = True): TMemSize;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -608,6 +666,10 @@ Function Stream_ReadString(Stream: TStream; Advance: Boolean = True): String; ov
 
 Function Stream_ReadBuffer(Stream: TStream; var Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; overload;
 
+//------------------------------------------------------------------------------
+
+Function Stream_ReadVariant(Stream: TStream; out Value: Variant; Advance: Boolean = True): TMemSize; overload;
+Function Stream_ReadVariant(Stream: TStream; Advance: Boolean = True): Variant; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -615,10 +677,11 @@ Function Stream_ReadBuffer(Stream: TStream; var Buffer; Size: TMemSize; Advance:
 --------------------------------------------------------------------------------
 ===============================================================================}
 type
+  // TValueType is only used internally
   TValueType = (vtShortString,vtAnsiString,vtUTF8String,vtWideString,
                 vtUnicodeString,vtUCS4String,vtString,vtFillBytes,vtBytes,
                 vtPrimitive1B,vtPrimitive2B,vtPrimitive4B,vtPrimitive8B,
-                vtPrimitive10B);
+                vtPrimitive10B,vtVariant);
 
 {===============================================================================
     TCustomStreamer - class declaration
@@ -640,10 +703,12 @@ type
     Function GetDistance: Int64; virtual;
     Function WriteValue(Value: Pointer; Advance: Boolean; Size: TMemSize; ValueType: TValueType): TMemSize; virtual; abstract;
     Function ReadValue(Value: Pointer; Advance: Boolean; Size: TMemSize; ValueType: TValueType): TMemSize; virtual; abstract;
+    procedure Initialize; virtual;
+    procedure Finalize; virtual;
   public
+    destructor Destroy; override;
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
-    procedure Initialize; virtual;
     procedure MoveToStart; virtual;
     procedure MoveToBookmark(Index: Integer); virtual;
     procedure MoveBy(Offset: Int64); virtual;
@@ -686,6 +751,7 @@ type
     Function WriteBuffer(const Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
     Function WriteBytes(const Value: array of UInt8; Advance: Boolean = True): TMemSize; virtual;
     Function FillBytes(ByteCount: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize; virtual;
+    Function WriteVariant(const Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // read methods
     Function ReadBool(out Value: ByteBool; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadBool(Advance: Boolean = True): ByteBool; overload; virtual;
@@ -743,6 +809,8 @@ type
     Function ReadString(out Value: String; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadString(Advance: Boolean = True): String; overload; virtual;
     Function ReadBuffer(var Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; overload; virtual;
+    Function ReadVariant(out Value: Variant; Advance: Boolean = True): TMemSize; overload; virtual;
+    Function ReadVariant(Advance: Boolean = True): Variant; overload; virtual;
     // properties
     property Bookmarks[Index: Integer]: Int64 read GetBookmark write SetBookmark;
     property CurrentPosition: Int64 read GetCurrentPosition write SetCurrentPosition;
@@ -762,25 +830,18 @@ type
   TMemoryStreamer = class(TCustomStreamer)
   protected
     fCurrentPtr:  Pointer;
-    fOwnsPointer: Boolean;
-    fMemorySize:  TMemSize;
     Function GetStartPtr: Pointer; virtual;
     procedure SetBookmark(Index: Integer; Value: Int64); override;
     Function GetCurrentPosition: Int64; override;
     procedure SetCurrentPosition(NewPosition: Int64); override;
     Function WriteValue(Value: Pointer; Advance: Boolean; Size: TMemSize; ValueType: TValueType): TMemSize; override;
     Function ReadValue(Value: Pointer; Advance: Boolean; Size: TMemSize; ValueType: TValueType): TMemSize; override;
+    procedure Initialize(Memory: Pointer); reintroduce; virtual;
   public
     constructor Create(Memory: Pointer); overload;
-    constructor Create(MemorySize: TMemSize); overload;
-    destructor Destroy; override;
-    procedure Initialize(Memory: Pointer); reintroduce; overload; virtual;
-    procedure Initialize(MemorySize: TMemSize); reintroduce; overload; virtual;
     Function IndexOfBookmark(Position: Int64): Integer; override;
     Function AddBookmark(Position: Int64): Integer; override;
     Function RemoveBookmark(Position: Int64; RemoveAll: Boolean = True): Integer; override;
-    property OwnsPointer: Boolean read fOwnsPointer;
-    property MemorySize: TMemSize read fMemorySize;
     property CurrentPtr: Pointer read fCurrentPtr write fCurrentPtr;
     property StartPtr: Pointer read GetStartPtr;
   end;
@@ -801,23 +862,22 @@ type
     procedure SetCurrentPosition(NewPosition: Int64); override;
     Function WriteValue(Value: Pointer; Advance: Boolean; Size: TMemSize; ValueType: TValueType): TMemSize; override;
     Function ReadValue(Value: Pointer; Advance: Boolean; Size: TMemSize; ValueType: TValueType): TMemSize; override;
+    procedure Initialize(Target: TStream); reintroduce; virtual;
   public
     constructor Create(Target: TStream);
-    procedure Initialize(Target: TStream); reintroduce; virtual;
     property Target: TStream read fTarget;
   end;
 
 implementation
 
 uses
-  StrRect;
+  Variants,
+  StrRect, StaticMemoryStream;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable
   {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
   {$DEFINE W5058:={$WARN 5058 OFF}} // Variable "$1" does not seem to be initialized
 {$ENDIF}
 
@@ -1047,6 +1107,101 @@ end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
+                                Variant utilities
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Following constants and functions are here to strictly separate implementation
+  details from the actual streaming.
+}
+const
+  BS_VARTYPENUM_BOOLEN   = 0;
+  BS_VARTYPENUM_SHORTINT = 1;
+  BS_VARTYPENUM_SMALLINT = 2;
+  BS_VARTYPENUM_INTEGER  = 3;
+  BS_VARTYPENUM_INT64    = 4;
+  BS_VARTYPENUM_BYTE     = 5;
+  BS_VARTYPENUM_WORD     = 6;
+  BS_VARTYPENUM_LONGWORD = 7;
+  BS_VARTYPENUM_UINT64   = 8;
+  BS_VARTYPENUM_SINGLE   = 9;
+  BS_VARTYPENUM_DOUBLE   = 10;
+  BS_VARTYPENUM_CURRENCY = 11;
+  BS_VARTYPENUM_DATE     = 12;
+  BS_VARTYPENUM_OLESTR   = 13;
+  BS_VARTYPENUM_STRING   = 14;
+  BS_VARTYPENUM_USTRING  = 15;
+  BS_VARTYPENUM_VARIANT  = 16;
+
+  BS_VARTYPENUM_TYPEMASK = $3F;
+  BS_VARTYPENUM_ARRAY    = $80;
+
+//------------------------------------------------------------------------------
+
+Function VarTypeToInt(VarType: TVarType): UInt8;
+begin
+// varByRef is ignored
+case VarType and varTypeMask of
+  varBoolean:   Result := BS_VARTYPENUM_BOOLEN;
+  varShortInt:  Result := BS_VARTYPENUM_SHORTINT;
+  varSmallint:  Result := BS_VARTYPENUM_SMALLINT;
+  varInteger:   Result := BS_VARTYPENUM_INTEGER;
+  varInt64:     Result := BS_VARTYPENUM_INT64;
+  varByte:      Result := BS_VARTYPENUM_BYTE;
+  varWord:      Result := BS_VARTYPENUM_WORD;
+  varLongWord:  Result := BS_VARTYPENUM_LONGWORD;
+{$IF Declared(varUInt64)}
+  varUInt64:    Result := BS_VARTYPENUM_UINT64;
+{$IFEND}
+  varSingle:    Result := BS_VARTYPENUM_SINGLE;
+  varDouble:    Result := BS_VARTYPENUM_DOUBLE;
+  varCurrency:  Result := BS_VARTYPENUM_CURRENCY;
+  varDate:      Result := BS_VARTYPENUM_DATE;
+  varOleStr:    REsult := BS_VARTYPENUM_OLESTR;
+  varString:    Result := BS_VARTYPENUM_STRING;
+{$IF Declared(varUString)}
+  varUString:   Result := BS_VARTYPENUM_USTRING;
+{$IFEND}
+  varVariant:   Result := BS_VARTYPENUM_VARIANT;
+else
+  raise EBSUnsupportedVarType.CreateFmt('VarTypeToInt: Unsupported variant type (%d).',[VarType]);
+end;
+If VarType and varArray <> 0 then
+  Result := Result or BS_VARTYPENUM_ARRAY;
+end;
+
+//------------------------------------------------------------------------------  
+
+Function IntToVarType(Value: UInt8): TVarType;
+begin
+case Value and BS_VARTYPENUM_TYPEMASK of
+  BS_VARTYPENUM_BOOLEN:   Result := varBoolean;
+  BS_VARTYPENUM_SHORTINT: Result := varShortInt;
+  BS_VARTYPENUM_SMALLINT: Result := varSmallint;
+  BS_VARTYPENUM_INTEGER:  Result := varInteger;
+  BS_VARTYPENUM_INT64:    Result := varInt64;
+  BS_VARTYPENUM_BYTE:     Result := varByte;
+  BS_VARTYPENUM_WORD:     Result := varWord;
+  BS_VARTYPENUM_LONGWORD: Result := varLongWord;
+  BS_VARTYPENUM_UINT64:   Result := {$IF Declared(varUInt64)}varUInt64{$ELSE}varInt64{$IFEND};
+  BS_VARTYPENUM_SINGLE:   Result := varSingle;
+  BS_VARTYPENUM_DOUBLE:   Result := varDouble;
+  BS_VARTYPENUM_CURRENCY: Result := varCurrency;
+  BS_VARTYPENUM_DATE:     Result := varDate;
+  BS_VARTYPENUM_OLESTR:   Result := varOleStr;
+  BS_VARTYPENUM_STRING:   Result := varString;
+  BS_VARTYPENUM_USTRING:  Result := {$IF Declared(varUString)}varUString{$ELSE}varOleStr{$IFEND};
+  BS_VARTYPENUM_VARIANT:  Result := varVariant;
+else
+  raise EBSUnsupportedVarType.CreateFmt('IntToVarType: Unsupported variant type number (%d).',[Value]);
+end;
+If Value and BS_VARTYPENUM_ARRAY <> 0 then
+  Result := Result or varArray;
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
                                Allocation helpers
 --------------------------------------------------------------------------------
 ===============================================================================}
@@ -1236,7 +1391,10 @@ end;
 Function StreamedSize_UCS4String(const Str: UCS4String): TMemSize;
 begin
 // note that UCS4 strings contain an explicit terminating zero
-Result := StreamedSize_Int32 + TMemSize(Pred(Length(Str)) * SizeOf(UnicodeChar));
+If Length(Str) > 0 then
+  Result := StreamedSize_Int32 + TMemSize(Pred(Length(Str)) * SizeOf(UCS4Char))
+else
+  Result := StreamedSize_Int32;
 end;
 
 //------------------------------------------------------------------------------
@@ -1259,6 +1417,77 @@ Function StreamedSize_Bytes(Count: TMemSize): TMemSize;
 begin
 Result := Count;
 end;
+
+//==============================================================================
+
+Function StreamedSize_Variant(const Value: Variant): TMemSize;
+var
+  Dimensions: Integer;
+  Indices:    array of Integer;
+
+  Function StreamedSize_VarArrayDimension(Dimension: Integer): TMemSize;
+  var
+    Index:  Integer;
+  begin
+    Result := 0;
+    For Index := VarArrayLowBound(Value,Dimension) to VarArrayHighBound(Value,Dimension) do
+      begin
+        Indices[Pred(Dimension)] := Index;
+        If Dimension >= Dimensions then
+          Inc(Result,StreamedSize_Variant(VarArrayGet(Value,Indices)))
+        else
+          Inc(Result,StreamedSize_VarArrayDimension(Succ(Dimension)));
+      end;
+  end;
+
+begin
+If VarIsArray(Value) then
+  begin
+    // array, need to do complete scan to get full size
+    Dimensions := VarArrayDimCount(Value);
+    Result := 5{type (byte) + number of dimensions (int32)} +
+              (Dimensions * 8{2 * int32 (indices bounds)});
+    If Dimensions > 0 then
+      begin
+        SetLength(Indices,Dimensions);
+        Inc(Result,StreamedSize_VarArrayDimension(1));
+      end;
+  end
+else
+  begin
+    // simple type
+    If VarType(Value) <> (varVariant or varByRef) then
+      begin
+        case VarType(Value) and varTypeMask of
+          // +1 is for the variant type byte
+          varBoolean:   Result := StreamedSize_Boolean + 1;
+          varShortInt:  Result := StreamedSize_Int8 + 1;
+          varSmallint:  Result := StreamedSize_Int16 + 1;
+          varInteger:   Result := StreamedSize_Int32 + 1;
+          varInt64:     Result := StreamedSize_Int64 + 1;
+          varByte:      Result := StreamedSize_UInt8 + 1;
+          varWord:      Result := StreamedSize_UInt16 + 1;
+          varLongWord:  Result := StreamedSize_UInt32 + 1;
+        {$IF Declared(varUInt64)}
+          varUInt64:    Result := StreamedSize_UInt64 + 1;
+        {$IFEND}
+          varSingle:    Result := StreamedSize_Float32 + 1;
+          varDouble:    Result := StreamedSize_Float64 + 1;
+          varCurrency:  Result := StreamedSize_Currency + 1;
+          varDate:      Result := StreamedSize_DateTime + 1;
+          varOleStr:    Result := StreamedSize_WideString(Value) + 1;
+          varString:    Result := StreamedSize_AnsiString(AnsiString(Value)) + 1;
+        {$IF Declared(varUInt64)}
+          varUString:   Result := StreamedSize_UnicodeString(Value) + 1;
+        {$IFEND}
+        else
+          raise EBSUnsupportedVarType.CreateFmt('StreamedSize_Variant: Cannot scan variant of this type (%d).',[VarType(Value) and varTypeMask]);
+        end;
+      end
+    else Result := StreamedSize_Variant(Variant(FindVarData(Value)^));
+  end;
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1747,16 +1976,11 @@ Function Ptr_WriteShortString(var Dest: Pointer; const Str: ShortString; Advance
 var
   WorkPtr:  Pointer;
 begin
-If Assigned(Dest) then
-  begin
-    WorkPtr := Dest;
-    Result := Ptr_WriteUInt8(WorkPtr,UInt8(Length(Str)),True);
-    Inc(Result,Ptr_WriteBuffer(WorkPtr,(Addr(Str[1]))^,Length(Str),True));
-    If Advance then
-      Dest := WorkPtr;
-  end
-else
-  Result := Length(Str) + 1;
+WorkPtr := Dest;
+Result := Ptr_WriteUInt8(WorkPtr,UInt8(Length(Str)),True);
+Inc(Result,Ptr_WriteBuffer(WorkPtr,(Addr(Str[1]))^,Length(Str),True));
+If Advance then
+  Dest := WorkPtr;
 end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
@@ -1774,15 +1998,11 @@ Function Ptr_WriteAnsiString(var Dest: Pointer; const Str: AnsiString; Advance: 
 var
   WorkPtr:  Pointer;
 begin
-If Assigned(Dest) then
-  begin
-    WorkPtr := Dest;
-    Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
-    Inc(Result,Ptr_WriteBuffer(WorkPtr,PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar),True));
-    If Advance then
-      Dest := WorkPtr;
-  end
-else Result := SizeOf(Int32) + (Length(Str) * SizeOf(AnsiChar));
+WorkPtr := Dest;
+Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
+Inc(Result,Ptr_WriteBuffer(WorkPtr,PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar),True));
+If Advance then
+  Dest := WorkPtr;
 end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
@@ -1800,15 +2020,11 @@ Function Ptr_WriteUTF8String(var Dest: Pointer; const Str: UTF8String; Advance: 
 var
   WorkPtr:  Pointer;
 begin
-If Assigned(Dest) then
-  begin
-    WorkPtr := Dest;
-    Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
-    Inc(Result,Ptr_WriteBuffer(WorkPtr,PUTF8Char(Str)^,Length(Str) * SizeOf(UTF8Char),True));
-    If Advance then
-      Dest := WorkPtr;
-  end
-else Result := SizeOf(Int32) + (Length(Str) * SizeOf(UTF8Char));
+WorkPtr := Dest;
+Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
+Inc(Result,Ptr_WriteBuffer(WorkPtr,PUTF8Char(Str)^,Length(Str) * SizeOf(UTF8Char),True));
+If Advance then
+  Dest := WorkPtr;
 end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
@@ -1826,19 +2042,15 @@ Function Ptr_WriteWideString(var Dest: Pointer; const Str: WideString; Advance: 
 var
   WorkPtr:  Pointer;
 begin
-If Assigned(Dest) then
-  begin
-    WorkPtr := Dest;
-    Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
-  {$IFDEF ENDIAN_BIG}
-    Inc(Result,Ptr_WriteUTF16LE(PUInt16(WorkPtr),PUInt16(PWideChar(Str)),Length(Str)));
-  {$ELSE}
-    Inc(Result,Ptr_WriteBuffer(WorkPtr,PWideChar(Str)^,Length(Str) * SizeOf(WideChar),True));
-  {$ENDIF}
-    If Advance then
-      Dest := WorkPtr;
-  end
-else Result := SizeOf(Int32) + (Length(Str) * SizeOf(WideChar));
+WorkPtr := Dest;
+Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
+{$IFDEF ENDIAN_BIG}
+Inc(Result,Ptr_WriteUTF16LE(PUInt16(WorkPtr),PUInt16(PWideChar(Str)),Length(Str)));
+{$ELSE}
+Inc(Result,Ptr_WriteBuffer(WorkPtr,PWideChar(Str)^,Length(Str) * SizeOf(WideChar),True));
+{$ENDIF}
+If Advance then
+  Dest := WorkPtr;
 end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
@@ -1856,19 +2068,15 @@ Function Ptr_WriteUnicodeString(var Dest: Pointer; const Str: UnicodeString; Adv
 var
   WorkPtr:  Pointer;
 begin
-If Assigned(Dest) then
-  begin
-    WorkPtr := Dest;
-    Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
-  {$IFDEF ENDIAN_BIG}
-    Inc(Result,Ptr_WriteUTF16LE(PUInt16(WorkPtr),PUInt16(PUnicodeChar(Str)),Length(Str)));
-  {$ELSE}
-    Inc(Result,Ptr_WriteBuffer(WorkPtr,PUnicodeChar(Str)^,Length(Str) * SizeOf(UnicodeChar),True));
-  {$ENDIF}
-    If Advance then
-      Dest := WorkPtr;
-  end
-else Result := SizeOf(Int32) + (Length(Str) * SizeOf(UnicodeChar));
+WorkPtr := Dest;
+Result := Ptr_WriteInt32(WorkPtr,Length(Str),True);
+{$IFDEF ENDIAN_BIG}
+Inc(Result,Ptr_WriteUTF16LE(PUInt16(WorkPtr),PUInt16(PUnicodeChar(Str)),Length(Str)));
+{$ELSE}
+Inc(Result,Ptr_WriteBuffer(WorkPtr,PUnicodeChar(Str)^,Length(Str) * SizeOf(UnicodeChar),True));
+{$ENDIF}
+If Advance then
+  Dest := WorkPtr;
 end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
@@ -1886,29 +2094,19 @@ Function Ptr_WriteUCS4String(var Dest: Pointer; const Str: UCS4String; Advance: 
 var
   WorkPtr:  Pointer;
 begin
-If Assigned(Dest) then
+WorkPtr := Dest;
+If Length(Str) > 0 then
   begin
-    WorkPtr := Dest;
-    If Length(Str) > 0 then
-      begin
-        Result := Ptr_WriteInt32(WorkPtr,Pred(Length(Str)),True);
-      {$IFDEF ENDIAN_BIG}
-        Inc(Result,Ptr_WriteUCS4LE(PUInt32(WorkPtr),PUInt32(Addr(Str[0])),Pred(Length(Str))));
-      {$ELSE}
-        Inc(Result,Ptr_WriteBuffer(WorkPtr,Addr(Str[0])^,Pred(Length(Str)) * SizeOf(UCS4Char),True));
-      {$ENDIF}
-      end
-    else Result := Ptr_WriteInt32(WorkPtr,0,True);
-    If Advance then
-      Dest := WorkPtr;
+    Result := Ptr_WriteInt32(WorkPtr,Pred(Length(Str)),True);
+  {$IFDEF ENDIAN_BIG}
+    Inc(Result,Ptr_WriteUCS4LE(PUInt32(WorkPtr),PUInt32(Addr(Str[0])),Pred(Length(Str))));
+  {$ELSE}
+    Inc(Result,Ptr_WriteBuffer(WorkPtr,Addr(Str[0])^,Pred(Length(Str)) * SizeOf(UCS4Char),True));
+  {$ENDIF}
   end
-else
-  begin
-    If Length(Str) > 0 then
-      Result := SizeOf(Int32) + (Pred(Length(Str)) * SizeOf(UCS4Char))
-    else
-      Result := SizeOf(Int32);
-  end;
+else Result := Ptr_WriteInt32(WorkPtr,0,True);
+If Advance then
+  Dest := WorkPtr;
 end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
@@ -1961,15 +2159,15 @@ end;
 
 Function Ptr_WriteBytes(var Dest: Pointer; const Value: array of UInt8; Advance: Boolean): TMemSize;
 var
-  i:  Integer;
+  WorkPtr:  Pointer;
+  i:        Integer;
 begin
 Result := 0;
+WorkPtr := Dest;
 For i := Low(Value) to High(Value) do
-  Inc(Result,Ptr_WriteUInt8(Dest,Value[i],True));
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-If not Advance then
-  Dest := Pointer(PtrUInt(Dest) - Result);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+  Inc(Result,Ptr_WriteUInt8(WorkPtr,Value[i],True));
+If Advance then
+  Dest := WorkPtr;
 end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
@@ -2001,6 +2199,33 @@ begin
 Result := Ptr_FillBytes(Dest,Count,Value,False);
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//==============================================================================
+
+Function Ptr_WriteVariant(var Dest: Pointer; const Value: Variant; Advance: Boolean): TMemSize;
+var
+  Stream: TWritableStaticMemoryStream;
+begin
+Stream := TWritableStaticMemoryStream.Create(Dest,TMemSize($7FFFFFFF){2GiB - 1});
+try
+  Stream.Seek(0,SoBeginning);
+  Result := Stream_WriteVariant(Stream,Value,True);
+  If Advance then
+    Dest := Stream.Address;
+finally
+  Stream.Free;
+end;
+end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+{$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
+Function Ptr_WriteVariant(Dest: Pointer; const Value: Variant): TMemSize;
+begin
+Result := Ptr_WriteVariant(Dest,Value,False);
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -3123,6 +3348,48 @@ Result := Ptr_ReadBuffer(Src,Buffer,Size,False);
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
+//==============================================================================
+
+Function Ptr_ReadVariant(var Src: Pointer; out Value: Variant; Advance: Boolean): TMemSize;
+var
+  Stream: TStaticMemoryStream;
+begin
+Stream := TStaticMemoryStream.Create(Src,TMemSize($7FFFFFFF){2GiB - 1});
+try
+  Stream.Seek(0,SoBeginning);
+  Result := Stream_ReadVariant(Stream,Value,True);
+  If Advance then
+    Src := Stream.Address;
+finally
+  Stream.Free;
+end;
+end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+{$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
+Function Ptr_ReadVariant(Src: Pointer; out Value: Variant): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+Result := Ptr_ReadVariant(Src,Value,False);
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+Function Ptr_ReadVariant(var Src: Pointer; Advance: Boolean): Variant; overload;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+Ptr_ReadVariant(Src,Result,Advance);
+end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+{$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
+Function Ptr_ReadVariant(Src: Pointer): Variant; overload;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+Ptr_ReadVariant(Src,Result,False);
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -3502,24 +3769,126 @@ If not Advance then
   Stream.Seek(-Int64(Result),soCurrent);
 end;
 
+//==============================================================================
+
+Function Stream_WriteVariant(Stream: TStream; const Value: Variant; Advance: Boolean = True): TMemSize;
+
+  Function VarToBool: Boolean;
+  begin
+    Result := Value;
+  end;
+
+  Function VarToInt64: Int64;
+  begin
+    Result := Value;
+  end;
+
+  Function VarToUInt64: UInt64;
+  begin
+    Result := Value;
+  end;
+
+var
+  Dimensions: Integer;
+  i:          Integer;       
+  Indices:    array of Integer;
+
+  Function WriteVarArrayDimension(Dimension: Integer): TMemSize;
+  var
+    Index:  Integer;
+  begin
+    Result := 0;
+    For Index := VarArrayLowBound(Value,Dimension) to VarArrayHighBound(Value,Dimension) do
+      begin
+        Indices[Pred(Dimension)] := Index;
+        If Dimension >= Dimensions then
+          Inc(Result,Stream_WriteVariant(Stream,VarArrayGet(Value,Indices),True))
+        else
+          Inc(Result,WriteVarArrayDimension(Succ(Dimension)));
+      end;
+  end;
+
+begin
+If VarIsArray(Value) then
+  begin
+    // array type
+    Result := Stream_WriteUInt8(Stream,VarTypeToInt(VarType(Value)),True);
+    Dimensions := VarArrayDimCount(Value);
+    // write number of dimensions
+    Inc(Result,Stream_WriteInt32(Stream,Dimensions,True));
+    // write indices bounds (pairs of integers - low and high bound) for each dimension
+    For i := 1 to Dimensions do
+      begin
+        Inc(Result,Stream_WriteInt32(Stream,VarArrayLowBound(Value,i),True));
+        Inc(Result,Stream_WriteInt32(Stream,VarArrayHighBound(Value,i),True));
+      end;
+  {
+    Now (recursively :P) write data af any exist.
+
+    Btw. I know about VarArrayLock/VarArrayUnlock and pointer directly to the
+    data, but I want it to be fool proof, therefore using VarArrayGet instead
+    of direct access,
+  }
+    If Dimensions > 0 then
+      begin
+        SetLength(Indices,Dimensions);
+        Inc(Result,WriteVarArrayDimension(1));
+      end;
+  end
+else
+  begin
+    // simple type
+    If VarType(Value) <> (varVariant or varByRef) then
+      begin
+        Result := Stream_WriteUInt8(Stream,VarTypeToInt(VarType(Value)),True);
+        case VarType(Value) and varTypeMask of
+          varBoolean:   Inc(Result,Stream_WriteBool(Stream,VarToBool,True));
+          varShortInt:  Inc(Result,Stream_WriteInt8(Stream,Value,True));
+          varSmallint:  Inc(Result,Stream_WriteInt16(Stream,Value,True));
+          varInteger:   Inc(Result,Stream_WriteInt32(Stream,Value,True));
+          varInt64:     Inc(Result,Stream_WriteInt64(Stream,VarToInt64,True));
+          varByte:      Inc(Result,Stream_WriteUInt8(Stream,Value,True));
+          varWord:      Inc(Result,Stream_WriteUInt16(Stream,Value,True));
+          varLongWord:  Inc(Result,Stream_WriteUInt32(Stream,Value,True));
+        {$IF Declared(varUInt64)}
+          varUInt64:    Inc(Result,Stream_WriteUInt64(Stream,VarToUInt64,True));
+        {$IFEND}
+          varSingle:    Inc(Result,Stream_WriteFloat32(Stream,Value,True));
+          varDouble:    Inc(Result,Stream_WriteFloat64(Stream,Value,True));
+          varCurrency:  Inc(Result,Stream_WriteCurrency(Stream,Value,True));
+          varDate:      Inc(Result,Stream_WriteDateTime(Stream,Value,True));
+          varOleStr:    Inc(Result,Stream_WriteWideString(Stream,Value,True));
+          varString:    Inc(Result,Stream_WriteAnsiString(Stream,AnsiString(Value),True));
+        {$IF Declared(varUString)}
+          varUString:   Inc(Result,Stream_WriteUnicodeString(Stream,Value,True));
+        {$IFEND}
+        else
+          raise EBSUnsupportedVarType.CreateFmt('Stream_WriteVariant: Cannot write variant of this type (%d).',[VarType(Value) and varTypeMask]);
+        end;
+      end
+    else Result := Stream_WriteVariant(Stream,Variant(FindVarData(Value)^),True);
+  end;
+If not Advance then
+  Stream.Seek(-Int64(Result),soCurrent);
+end;
+
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                  Stream reading
 --------------------------------------------------------------------------------
 ===============================================================================}
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 Function Stream_ReadBool(Stream: TStream; out Value: ByteBool; Advance: Boolean = True): TMemSize;
 var
   Temp: UInt8;
 begin
-Stream.ReadBuffer(Temp,SizeOf(Temp));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(Temp));
 Result := SizeOf(Temp);
 Value := NumToBool(Temp);
 If not Advance then
   Stream.Seek(-Int64(Result),soCurrent);
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
 
@@ -4083,6 +4452,114 @@ If not Advance then
   Stream.Seek(-Int64(Result),soCurrent);
 end;
 
+//==============================================================================
+
+Function Stream_ReadVariant(Stream: TStream; out Value: Variant; Advance: Boolean = True): TMemSize;
+var
+  VariantTypeInt: UInt8;
+  Dimensions:     Integer;
+  i:              Integer;
+  IndicesBounds:  array of PtrInt;
+  Indices:        array of Integer;
+  WideStrTemp:    WideString;
+  AnsiStrTemp:    AnsiString;
+  UnicodeStrTemp: UnicodeString;
+
+  Function ReadVarArrayDimension(Dimension: Integer): TMemSize;
+  var
+    Index:    Integer;
+    TempVar:  Variant;
+  begin
+    Result := 0;
+    For Index := VarArrayLowBound(Value,Dimension) to VarArrayHighBound(Value,Dimension) do
+      begin
+        Indices[Pred(Dimension)] := Index;
+        If Dimension >= Dimensions then
+          begin
+            Inc(Result,Stream_ReadVariant(Stream,TempVar,True));
+            VarArrayPut(Value,TempVar,Indices);
+          end
+        else Inc(Result,ReadVarArrayDimension(Succ(Dimension)));
+      end;
+  end;
+
+begin
+VariantTypeInt := Stream_ReadUInt8(Stream,True);
+If VariantTypeInt and BS_VARTYPENUM_ARRAY <> 0 then
+  begin
+    // array
+    Dimensions := Stream_ReadInt32(Stream,True);
+    Result := 5 + (Dimensions * 8);
+    If Dimensions > 0 then
+      begin
+        // read indices bounds
+        SetLength(IndicesBounds,Dimensions * 2);
+        For i := Low(IndicesBounds) to High(IndicesBounds) do
+          IndicesBounds[i] := PtrInt(Stream_ReadInt32(Stream,True));
+        // create the array
+        Value := VarArrayCreate(IndicesBounds,IntToVarType(VariantTypeInt and BS_VARTYPENUM_TYPEMASK));
+        // read individual dimensions/items
+        SetLength(Indices,Dimensions);
+        Inc(Result,ReadVarArrayDimension(1));
+      end;
+  end
+else
+  begin
+    // simple type
+    TVarData(Value).vType := IntToVarType(VariantTypeInt);
+    case VariantTypeInt and BS_VARTYPENUM_TYPEMASK of
+      BS_VARTYPENUM_BOOLEN:   begin
+                                TVarData(Value).vBoolean := Stream_ReadBool(Stream,True);
+                                // +1 is for the already read variable type byte
+                                Result := StreamedSize_Bool + 1;
+                              end;
+      BS_VARTYPENUM_SHORTINT: Result := Stream_ReadInt8(Stream,TVarData(Value).vShortInt,True) + 1;
+      BS_VARTYPENUM_SMALLINT: Result := Stream_ReadInt16(Stream,TVarData(Value).vSmallInt,True) + 1;
+      BS_VARTYPENUM_INTEGER:  Result := Stream_ReadInt32(Stream,TVarData(Value).vInteger,True) + 1;
+      BS_VARTYPENUM_INT64:    Result := Stream_ReadInt64(Stream,TVarData(Value).vInt64,True) + 1;
+      BS_VARTYPENUM_BYTE:     Result := Stream_ReadUInt8(Stream,TVarData(Value).vByte,True) + 1;
+      BS_VARTYPENUM_WORD:     Result := Stream_ReadUInt16(Stream,TVarData(Value).vWord,True) + 1;
+      BS_VARTYPENUM_LONGWORD: Result := Stream_ReadUInt32(Stream,TVarData(Value).vLongWord,True) + 1;
+      BS_VARTYPENUM_UINT64: {$IF Declared(varUInt64)}
+                              Result := Stream_ReadUInt64(Stream,TVarData(Value).{$IFDEF FPC}vQWord{$ELSE}vUInt64{$ENDIF},True) + 1;
+                            {$ELSE}
+                              Result := Stream_ReadUInt64(Stream,UInt64(TVarData(Value).vInt64),True) + 1;
+                            {$IFEND}
+      BS_VARTYPENUM_SINGLE:   Result := Stream_ReadFloat32(Stream,TVarData(Value).vSingle,True) + 1;
+      BS_VARTYPENUM_DOUBLE:   Result := Stream_ReadFloat64(Stream,TVarData(Value).vDouble,True) + 1;
+      BS_VARTYPENUM_CURRENCY: Result := Stream_ReadCurrency(Stream,TVarData(Value).vCurrency,True) + 1;
+      BS_VARTYPENUM_DATE:     Result := Stream_ReadDateTime(Stream,TVarData(Value).vDate,True) + 1;
+      BS_VARTYPENUM_OLESTR:   begin
+                                Result := Stream_ReadWideString(Stream,WideStrTemp,True) + 1;
+                                Value := VarAsType(WideStrTemp,varOleStr);
+                              end;
+      BS_VARTYPENUM_STRING:   begin
+                                Result := Stream_ReadAnsiString(Stream,AnsiStrTemp,True) + 1;
+                                Value := VarAsType(AnsiStrTemp,varString);
+                              end;
+      BS_VARTYPENUM_USTRING:  begin
+                                Result := Stream_ReadUnicodeString(Stream,UnicodeStrTemp,True) + 1;
+                              {$IF Declared(varUString)}
+                                Value := VarAsType(UnicodeStrTemp,varUString);
+                              {$ELSE}
+                                Value := VarAsType(UnicodeStrTemp,varOleStr);
+                              {$IFEND}
+                              end;
+    else
+      raise EBSUnsupportedVarType.CreateFmt('Stream_ReadVariant: Cannot read variant of this type number (%d).',[VariantTypeInt and BS_VARTYPENUM_TYPEMASK]);
+    end;
+  end;
+If not Advance then
+  Stream.Seek(-Int64(Result),soCurrent);
+end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+Function Stream_ReadVariant(Stream: TStream; Advance: Boolean = True): Variant;
+begin
+Stream_ReadVariant(Stream,Result,Advance);
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -4156,9 +4633,33 @@ begin
 Result := CurrentPosition - StartPosition;
 end;
 
+//------------------------------------------------------------------------------
+
+procedure TCustomStreamer.Initialize;
+begin
+SetLength(fBookmarks,0);
+fCount := 0;
+fStartPosition := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TCustomStreamer.Finalize;
+begin
+// nothing to do
+end;
+
 {-------------------------------------------------------------------------------
     TCustomStreamer - public methods
 -------------------------------------------------------------------------------}
+
+destructor TCustomStreamer.Destroy;
+begin
+Finalize;
+inherited;
+end;
+
+//------------------------------------------------------------------------------
 
 Function TCustomStreamer.LowIndex: Integer;
 begin
@@ -4170,14 +4671,6 @@ end;
 Function TCustomStreamer.HighIndex: Integer;
 begin
 Result := Pred(fCount);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TCustomStreamer.Initialize;
-begin
-SetLength(fBookmarks,0);
-fStartPosition := 0;
 end;
 
 //------------------------------------------------------------------------------
@@ -4242,9 +4735,9 @@ Function TCustomStreamer.RemoveBookmark(Position: Int64; RemoveAll: Boolean = Tr
 begin
 repeat
   Result := IndexOfBookmark(Position);
-  If Result >= 0 then
+  If CheckIndex(Result) then
     DeleteBookMark(Result);
-until (Result < 0) or not RemoveAll;
+until not CheckIndex(Result) or not RemoveAll;
 end;
 
 //------------------------------------------------------------------------------
@@ -4500,6 +4993,13 @@ end;
 Function TCustomStreamer.FillBytes(ByteCount: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize;
 begin
 Result := WriteValue(@Value,Advance,ByteCount,vtFillBytes);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.WriteVariant(const Value: Variant; Advance: Boolean = True): TMemSize;
+begin
+Result := WriteValue(@Value,Advance,0,vtVariant);
 end;
 
 //==============================================================================
@@ -4909,6 +5409,21 @@ begin
 Result := ReadValue(@Buffer,Advance,Size,vtBytes);
 end;
 
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.ReadVariant(out Value: Variant; Advance: Boolean = True): TMemSize;
+begin
+Result := ReadValue(@Value,Advance,0,vtVariant);
+end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+Function TCustomStreamer.ReadVariant(Advance: Boolean = True): Variant;
+begin
+ReadValue(@Result,Advance,0,vtVariant)
+end;
+
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                  TMemoryStreamer
@@ -4923,8 +5438,8 @@ end;
 
 Function TMemoryStreamer.GetStartPtr: Pointer;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-Result := Pointer(fStartPosition);
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+Result := Pointer(PtrUInt(fStartPosition));
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
@@ -4942,8 +5457,8 @@ end;
 
 Function TMemoryStreamer.GetCurrentPosition: Int64;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-Result := Int64(fCurrentPtr);
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+Result := Int64(PtrUInt(fCurrentPtr));
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
@@ -4951,8 +5466,8 @@ end;
 
 procedure TMemoryStreamer.SetCurrentPosition(NewPosition: Int64);
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-fCurrentPtr := Pointer(NewPosition);
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+fCurrentPtr := Pointer(PtrUInt(NewPosition));
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
@@ -4974,6 +5489,7 @@ case ValueType of
   vtPrimitive4B:    Result := Ptr_WriteUInt32(fCurrentPtr,UInt32(Value^),Advance);
   vtPrimitive8B:    Result := Ptr_WriteUInt64(fCurrentPtr,UInt64(Value^),Advance);
   vtPrimitive10B:   Result := Ptr_WriteFloat80(fCurrentPtr,Float80(Value^),Advance);
+  vtVariant:        Result := Ptr_WriteVariant(fCurrentPtr,Variant(Value^),Advance);
 else
  {vtBytes}
   Result := Ptr_WriteBuffer(fCurrentPtr,Value^,Size,Advance);
@@ -4997,10 +5513,22 @@ case ValueType of
   vtPrimitive4B:    Result := Ptr_ReadUInt32(fCurrentPtr,UInt32(Value^),Advance);
   vtPrimitive8B:    Result := Ptr_ReadUInt64(fCurrentPtr,UInt64(Value^),Advance);
   vtPrimitive10B:   Result := Ptr_ReadFloat80(fCurrentPtr,Float80(Value^),Advance);
+  vtVariant:        Result := Ptr_ReadVariant(fCurrentPtr,Variant(Value^),Advance);
 else
  {vtFillBytes, vtBytes}
   Result := Ptr_ReadBuffer(fCurrentPtr,Value^,Size,Advance);
 end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMemoryStreamer.Initialize(Memory: Pointer);
+begin
+inherited Initialize;
+fCurrentPtr := Memory;
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+fStartPosition := Int64(PtrUInt(Memory));
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 {-------------------------------------------------------------------------------
@@ -5010,60 +5538,7 @@ end;
 constructor TMemoryStreamer.Create(Memory: Pointer);
 begin
 inherited Create;
-fOwnsPointer := False;
 Initialize(Memory);
-end;
-
-//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
-
-constructor TMemoryStreamer.Create(MemorySize: TMemSize);
-begin
-inherited Create;
-fOwnsPointer := False;
-Initialize(MemorySize);
-end;
-
-//------------------------------------------------------------------------------
-
-destructor TMemoryStreamer.Destroy;
-begin
-If fOwnsPointer then
-  FreeMem(StartPtr,fMemorySize);
-inherited;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TMemoryStreamer.Initialize(Memory: Pointer);
-begin
-inherited Initialize;
-fOwnsPointer := False;
-fMemorySize := 0;
-fCurrentPtr := Memory;
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-fStartPosition := Int64(Memory);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-end;
-
-//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
-
-procedure TMemoryStreamer.Initialize(MemorySize: TMemSize);
-var
-  TempPtr:  Pointer;
-begin
-inherited Initialize;
-If fOwnsPointer then
-  begin
-    TempPtr := StartPtr;
-    ReallocMem(TempPtr,MemorySize);
-  end
-else TempPtr := AllocMem(MemorySize);
-fOwnsPointer := True;
-fMemorySize := MemorySize;
-fCurrentPtr := TempPtr;
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-fStartPosition := Int64(TempPtr);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -5130,6 +5605,7 @@ case ValueType of
   vtPrimitive4B:    Result := Stream_WriteUInt32(fTarget,UInt32(Value^),Advance);
   vtPrimitive8B:    Result := Stream_WriteUInt64(fTarget,UInt64(Value^),Advance);
   vtPrimitive10B:   Result := Stream_WriteFloat80(fTarget,Float80(Value^),Advance);
+  vtVariant:        Result := Stream_WriteVariant(fTarget,Variant(Value^),Advance);
 else
  {vtBytes}
   Result := Stream_WriteBuffer(fTarget,Value^,Size,Advance);
@@ -5153,10 +5629,20 @@ case ValueType of
   vtPrimitive4B:    Result := Stream_ReadUInt32(fTarget,UInt32(Value^),Advance);
   vtPrimitive8B:    Result := Stream_ReadUInt64(fTarget,UInt64(Value^),Advance);
   vtPrimitive10B:   Result := Stream_ReadFloat80(fTarget,Float80(Value^),Advance);
+  vtVariant:        Result := Stream_ReadVariant(fTarget,Variant(Value^),Advance);
 else
  {vtFillBytes,vtBytes}
   Result := Stream_ReadBuffer(fTarget,Value^,Size,Advance);
 end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TStreamStreamer.Initialize(Target: TStream);
+begin
+inherited Initialize;
+fTarget := Target;
+fStartPosition := Target.Position;
 end;
 
 {-------------------------------------------------------------------------------
@@ -5167,15 +5653,6 @@ constructor TStreamStreamer.Create(Target: TStream);
 begin
 inherited Create;
 Initialize(Target);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TStreamStreamer.Initialize(Target: TStream);
-begin
-inherited Initialize;
-fTarget := Target;
-fStartPosition := Target.Position;
 end;
 
 end.
