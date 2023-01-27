@@ -9,11 +9,11 @@
 
   BitVector classes
 
-  Version 1.3.3 (2019-09-20)
+  Version 1.3.4 (2023-01-25)
 
-  Last change 2022-10-07
+  Last change 2023-01-25
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -30,11 +30,13 @@
       github.com/TheLazyTomcat/Lib.BitVector
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses  - github.com/TheLazyTomcat/Lib.AuxClasses
-    BitOps      - github.com/TheLazyTomcat/Lib.BitOps
-    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
-  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
+  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
 
     SimpleCPUID might not be needed, see BitOps library for details.
 
@@ -144,8 +146,12 @@ type
     procedure CombineXOR(Memory: Pointer; Count: Integer); overload; virtual;
     procedure CombineXOR(Vector: TBitVector); overload; virtual;
     Function IsEqual(Vector: TBitVector): Boolean; virtual;
+    procedure WriteToStream(Stream: TStream); virtual;
+    procedure ReadFromStream(Stream: TStream); virtual;
     procedure SaveToStream(Stream: TStream); virtual;
     procedure LoadFromStream(Stream: TStream); virtual;
+    procedure WriteToFile(const FileName: String); virtual;
+    procedure ReadFromFile(const FileName: String); virtual;
     procedure SaveToFile(const FileName: String); virtual;
     procedure LoadFromFile(const FileName: String); virtual;
     property Bits[Index: Integer]: Boolean read GetBit write SetBit; default;
@@ -196,7 +202,7 @@ implementation
 
 uses
   Math,
-  BitOps, StrRect;
+  BitOps, StrRect, BinaryStreaming;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -1147,15 +1153,13 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBitVector.SaveToStream(Stream: TStream);
+procedure TBitVector.WriteToStream(Stream: TStream);
 var
   TempByte: Byte;
 begin
-// write number of bits first
-Stream.WriteBuffer(UInt32(fCount),SizeOf(UInt32));
 // write whole bytes
 Stream.WriteBuffer(fMemory^,fCount shr 3);
-// prepare and write last partial byte if any
+// prepare and write last partial byte, if any
 If (fCount and 7) <> 0 then
   begin
     TempByte := SetBits(0,GetBytePtrByteIdx(fCount shr 3)^,0,Pred(fCount and 7));
@@ -1165,19 +1169,41 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TBitVector.ReadFromStream(Stream: TStream);
+begin
+If CheckMemoryEditable('LoadFromStream') then
+  begin
+    BeginChanging;  // not needed, but meh
+    try
+      // read only data
+      Stream.ReadBuffer(fMemory^,Ceil(fCount / 8));
+      ScanForPopCount;
+      DoChange;
+    finally
+      EndChanging;
+    end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TBitVector.SaveToStream(Stream: TStream);
+begin
+// write number of bits first
+Stream_WriteInt32(Stream,Int32(fCount));
+WriteToStream(Stream);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TBitVector.LoadFromStream(Stream: TStream);
-var
-  TempCount:  UInt32;
 begin
 If CheckMemoryEditable('LoadFromStream') then
   begin
     BeginChanging;
     try
       // read and set number of bits
-    {$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
-      Stream.ReadBuffer(TempCount,SizeOf(UInt32));
-    {$IFDEF FPCDWM}{$POP}{$ENDIF}
-      Self.Count := Integer(TempCount);
+      Count := Integer(Stream_ReadInt32(Stream));
       // read data
       Stream.ReadBuffer(fMemory^,Ceil(fCount / 8));
       ScanForPopCount;
@@ -1190,12 +1216,43 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TBitVector.WriteToFile(const FileName: String);
+var
+  FileStream: TFileStream;
+begin
+FileStream := TFileStream.Create(StrToRTL(FileName),fmCreate or fmShareDenyWrite);
+try
+  FileStream.Seek(0,soBeginning);
+  WriteToStream(FileStream);
+finally
+  FileStream.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TBitVector.ReadFromFile(const FileName: String);
+var
+  FileStream: TFileStream;
+begin
+FileStream := TFileStream.Create(StrToRTL(FileName),fmOpenRead or fmShareDenyWrite);
+try
+  FileStream.Seek(0,soBeginning);
+  ReadFromStream(FileStream);
+finally
+  FileStream.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TBitVector.SaveToFile(const FileName: String);
 var
   FileStream: TFileStream;
 begin
-FileStream := TFileStream.Create(StrToRTL(FileName),fmCreate or fmShareExclusive);
+FileStream := TFileStream.Create(StrToRTL(FileName),fmCreate or fmShareDenyWrite);
 try
+  FileStream.Seek(0,soBeginning);
   SaveToStream(FileStream);
 finally
   FileStream.Free;
@@ -1210,6 +1267,7 @@ var
 begin
 FileStream := TFileStream.Create(StrToRTL(FileName),fmOpenRead or fmShareDenyWrite);
 try
+  FileStream.Seek(0,soBeginning);
   LoadFromStream(FileStream);
 finally
   FileStream.Free;

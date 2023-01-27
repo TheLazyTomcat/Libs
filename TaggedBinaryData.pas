@@ -65,9 +65,9 @@
 
   Version 1.0.1 (2022-10-26)
 
-  Last change 2022-10-26
+  Last change 2023-01-26
 
-  ©2022 František Milt
+  ©2022-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -86,6 +86,7 @@
   Dependencies:
     AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
+    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
     StrRect         - github.com/TheLazyTomcat/Lib.StrRect
     BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
 

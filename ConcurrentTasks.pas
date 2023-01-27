@@ -50,9 +50,9 @@
 
   Version 1.2 (2022-09-30)
 
-  Last change 2022-09-30
+  Last change 2023-01-26
 
-  ©2017-2022 František Milt
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -71,6 +71,7 @@
   Dependencies:
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming 
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
   * BitVector          - github.com/TheLazyTomcat/Lib.BitVector
     CrossSyncObjs      - github.com/TheLazyTomcat/Lib.CrossSyncObjs
@@ -79,6 +80,7 @@
   * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
     ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
     MemVector          - github.com/TheLazyTomcat/Lib.MemVector
+    Messanger          - github.com/TheLazyTomcat/Lib.Messanger
     NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1               - github.com/TheLazyTomcat/Lib.SHA1
     SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream

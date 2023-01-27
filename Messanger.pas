@@ -43,9 +43,9 @@
 
   Version 2.0.3 (2022-10-26)
 
-  Last change 2022-10-26
+  Last change 2023-01-26
 
-  ©2016-2022 František Milt
+  ©2016-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -65,6 +65,7 @@
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming        
   * BitVector          - github.com/TheLazyTomcat/Lib.BitVector
     CrossSyncObjs      - github.com/TheLazyTomcat/Lib.CrossSyncObjs  
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase

@@ -36,7 +36,7 @@
 
   Version 1.1 (2023-01-13)
 
-  Last change 2023-01-13
+  Last change 2023-01-26
 
   ©2022-2023 František Milt
 
@@ -58,7 +58,9 @@
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
   * BitVector          - github.com/TheLazyTomcat/Lib.BitVector
+    CrossSyncObjs      - github.com/TheLazyTomcat/Lib.CrossSyncObjs
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
   * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs

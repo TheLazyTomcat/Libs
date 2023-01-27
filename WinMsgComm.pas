@@ -32,9 +32,9 @@
 
   Version 2.0 (2022-10-24)
 
-  Last change 2022-10-24
+  Last change 2023-01-26
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -53,11 +53,12 @@
   Dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     BitVector          - github.com/TheLazyTomcat/Lib.BitVector
     CRC32              - github.com/TheLazyTomcat/Lib.CRC32
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    HashBase           - github.com/TheLazyTomcat/Lib.InterlockedOps
+    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
   * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
   * ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
   * MemVector          - github.com/TheLazyTomcat/Lib.MemVector

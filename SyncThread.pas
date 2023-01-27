@@ -38,9 +38,9 @@
     
   Version 2.0 (2022-09-11)
 
-  Last change 2022-09-24
+  Last change 2023-01-26
 
-  ©2018-2022 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -59,6 +59,7 @@
   Dependencies:
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    BinaryStreaming     - github.com/TheLazyTomcat/Lib.BinaryStreaming 
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
   * BitVector          - github.com/TheLazyTomcat/Lib.BitVector
     CrossSyncObjs      - github.com/TheLazyTomcat/Lib.CrossSyncObjs  

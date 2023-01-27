@@ -43,9 +43,9 @@
 
   Version 1.0 alpha 2 (requires extensive testing) (2022-10-20)
 
-  Last change 2022-11-17
+  Last change 2023-01-26
 
-  ©2022 František Milt
+  ©2022-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -64,6 +64,7 @@
   Dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     BitVector          - github.com/TheLazyTomcat/Lib.BitVector
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase

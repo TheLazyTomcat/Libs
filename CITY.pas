@@ -37,9 +37,9 @@
 
   Version 2.1 (2021-09-16)
 
-  Last change 2022-09-24
+  Last change 2023-01-24
 
-  ©2016-2022 František Milt
+  ©2016-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -461,7 +461,7 @@ implementation
 
 uses
   SysUtils, Math,
-  BitOps, UInt64Utils;
+  UInt64Utils;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -562,7 +562,7 @@ end;
 
 Function SwapEndian(Value: TCITY32Sys): TCITY32Sys; overload;
 begin
-Result := TCITY32Sys(BitOps.EndianSwap(UInt32(Value)));
+Result := TCITY32Sys(EndianSwap(UInt32(Value)));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -804,7 +804,7 @@ end;
 
 Function SwapEndian(Value: TCITY64Sys): TCITY64Sys; overload;
 begin
-Result := TCITY64Sys(BitOps.EndianSwap(UInt64(Value)));
+Result := TCITY64Sys(EndianSwap(UInt64(Value)));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1072,8 +1072,8 @@ end;
 
 Function SwapEndian(Value: TCITY128Sys): TCITY128Sys; overload;
 begin
-Result.Low := BitOps.EndianSwap(Value.High);
-Result.High := BitOps.EndianSwap(Value.Low);
+Result.Low := EndianSwap(Value.High);
+Result.High := EndianSwap(Value.Low);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1496,10 +1496,10 @@ end;
 
 Function SwapEndian(Value: TCITY256Sys): TCITY256Sys; overload;
 begin
-Result[0] := BitOps.EndianSwap(Value[3]);
-Result[1] := BitOps.EndianSwap(Value[2]);
-Result[2] := BitOps.EndianSwap(Value[1]);
-Result[3] := BitOps.EndianSwap(Value[0]);
+Result[0] := EndianSwap(Value[3]);
+Result[1] := EndianSwap(Value[2]);
+Result[2] := EndianSwap(Value[1]);
+Result[3] := EndianSwap(Value[0]);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

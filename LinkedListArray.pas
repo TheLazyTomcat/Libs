@@ -19,11 +19,11 @@
     A specialized class (TIntegerLinkedListArray) with Integer item type is
     implemented and provided as an example.
 
-  Version 1.0.1 (2020-05-19)
+  Version 1.0.2 (2023-01-25)
 
-  Last change 2022-09-13
+  Last change 2023-01-25
 
-  ©2018-2022 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -40,10 +40,12 @@
       github.com/TheLazyTomcat/Lib.LinkedListArray
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses  - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect     - github.com/TheLazyTomcat/Lib.StrRect    
-    ListSorters - github.com/TheLazyTomcat/Lib.ListSorters
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
 
 ===============================================================================}
 (*******************************************************************************
@@ -71,6 +73,8 @@
   //procedure PayloadCopy(SrcPayload,DstPayload: PLLAPayload); override;
     Function PayloadCompare(Payload1,Payload2: PLLAPayload): Integer; override;
   //Function PayloadEquals(Payload1,Payload2: PLLAPayload): Boolean; override;
+  //procedure PayloadWrite(Payload: PLLAPayload; Stream: TStream); override;
+  //procedure PayloadRead(Payload: PLLAPayload; Stream: TStream); override;
   public
     constructor Create;
     Function First: @Type@; reintroduce;
@@ -173,6 +177,28 @@ end;
 //Function @ClassName@.PayloadEquals(Payload1,Payload2: PLLAPayload): Boolean;
 //begin
 //{$MESSAGE WARN 'Implement equality comparison to suit actual type.'}
+//end;
+
+//------------------------------------------------------------------------------
+
+// Called for each item being written to the stream.
+// Default implementation direcly writes PayloadSize bytes from the payload
+// memory to the stream, with no further processing.
+
+//procedure @ClassName@.PayloadWrite(Payload: PLLAPayload; Stream: TStream);
+//begin
+//{$MESSAGE WARN 'Implement payload write to suit actual type.'}
+//end;
+
+//------------------------------------------------------------------------------
+
+// Method called for each item being read from the stream.
+// Default implementation reads PayloadSize bytes directly to the payload
+// memory with no further processing.
+
+//procedure @ClassName@.PayloadRead(Payload: PLLAPayload; Stream: TStream);
+//begin
+//{$MESSAGE WARN 'Implement payload read to suit actual type.'}
 //end;
 
 //==============================================================================
@@ -333,6 +359,7 @@ type
     fLastFree:          TLLAArrayIndex;
     fFirstUsed:         TLLAArrayIndex;
     fLastUsed:          TLLAArrayIndex;
+    fLoading:           Boolean;
     // item flags management
     class Function GetItemFlagValue(const Item: TLLAItem; Flag: Integer): Boolean; virtual;
     class Function SetItemFlagValue(var Item: TLLAItem; Flag: Integer; NewValue: Boolean): Boolean; virtual;
@@ -362,6 +389,8 @@ type
     procedure PayloadCopy(SrcPayload,DstPayload: PLLAPayload); virtual;
     Function PayloadCompare(Payload1,Payload2: PLLAPayload): Integer; virtual;
     Function PayloadEquals(Payload1,Payload2: PLLAPayload): Boolean; virtual;
+    procedure PayloadWrite(Payload: PLLAPayload; Stream: TStream); virtual;
+    procedure PayloadRead(Payload: PLLAPayload; Stream: TStream); virtual;
     // sorting and defragmentation utilities
     Function SortCompare(ListIndex1,ListIndex2: Integer): Integer; virtual;
     procedure SortExchange(ListIndex1,ListIndex2: Integer); virtual;
@@ -373,6 +402,7 @@ type
     procedure InternalDelete(ArrayIndex: TLLAArrayIndex); virtual;
     procedure ArrayIndices(ListIndex1,ListIndex2: TLLAListIndex; out ArrayIndex1,ArrayIndex2: TLLAArrayIndex); virtual;
     procedure FinalizeAllItems; virtual;
+    procedure ReadFromStreamInternal(Stream: TStream; Buffered: Boolean); virtual;
   public
     constructor Create(PayloadSize: TMemSize);
     destructor Destroy; override;
@@ -438,10 +468,23 @@ type
     by one.
     If it is set to true, then entire data stream is constructed in the memory
     and then saved as a whole. This might not be possible in case of memory
-    shortage, that is why this parameter is by default set to false.
+    shortage, that is why this parameter is by default set to false. Also, if
+    the Stream is a descendant of TCustomMemoryStream, the buffering is not
+    done as it is assumed the writes/reads goes into memory anyway.
+
+    Read/Write methods are only saving/loading the payloads, nothing more.
+    This, among others, means you have to set count to appropriate number
+    before doing the read.
+    Load/Save methods are first storing number of items (Count) and only then
+    the payloads. When loading, the list is first cleared, then the Count is
+    set to a stored count and this number of items is then read.
   }
+    procedure WriteToStream(Stream: TStream; Buffered: Boolean = False); virtual;
+    procedure ReadFromStream(Stream: TStream; Buffered: Boolean = False); virtual;
     procedure SaveToStream(Stream: TStream; Buffered: Boolean = False); virtual;
     procedure LoadFromStream(Stream: TStream; Buffered: Boolean = False); virtual;
+    procedure WriteToFile(const FileName: String; Buffered: Boolean = False); virtual;
+    procedure ReadFromFile(const FileName: String; Buffered: Boolean = False); virtual;
     procedure SaveToFile(const FileName: String; Buffered: Boolean = False); virtual;
     procedure LoadFromFile(const FileName: String; Buffered: Boolean = False); virtual;
     // properties
@@ -467,6 +510,8 @@ type
     Function GetItem(ListIndex: TLLAListIndex): Integer; virtual;
     procedure SetItem(ListIndex: TLLAListIndex; Value: Integer); virtual;
     Function PayloadCompare(Payload1,Payload2: PLLAPayload): Integer; override;
+    procedure PayloadWrite(Payload: PLLAPayload; Stream: TStream); override;
+    procedure PayloadRead(Payload: PLLAPayload; Stream: TStream); override;
   public
     constructor Create;
     Function First: Integer; reintroduce;
@@ -486,7 +531,7 @@ implementation
 
 uses
   Math,
-  ListSorters, StrRect;
+  ListSorters, StrRect, BinaryStreaming;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -645,9 +690,10 @@ If (Value <> fCapacity) and (Value >= 0) then
           If Value < fCount then
             begin
               // some used items will be removed
-              For i := HighArrayIndex downto TLLAArrayIndex(Value) do
-                If GetItemFlagValue(GetItemPtr(i)^,LLA_FLAG_USED) then
-                  PayloadFinal(GetPayloadPtrArrayIndex(i));
+              If not fLoading then
+                For i := HighArrayIndex downto TLLAArrayIndex(Value) do
+                  If GetItemFlagValue(GetItemPtr(i)^,LLA_FLAG_USED) then
+                    PayloadFinal(GetPayloadPtrArrayIndex(i));
               ReallocMem(fMemory,TMemSize(Value) * TMemSize(fItemSize));
               fCapacity := Value;
               fCount := Value;
@@ -718,7 +764,8 @@ If (Value <> fCount) and (Value >= 0) then
         repeat
           ItemPtr := GetItemPtr(ArrayIndex);
           SetItemFlagValue(ItemPtr^,LLA_FLAG_USED,True);
-          PayloadInit(PayloadPtrFromItemPtr(ItemPtr));
+          If not fLoading then
+            PayloadInit(PayloadPtrFromItemPtr(ItemPtr));
           fLastUsed := ArrayIndex;
           ArrayIndex := ItemPtr^.Next;
           fFirstFree := ArrayIndex;
@@ -741,7 +788,8 @@ If (Value <> fCount) and (Value >= 0) then
           fFirstFree := ArrayIndex;
         repeat
           ItemPtr := GetItemPtr(ArrayIndex);
-          PayloadFinal(PayloadPtrFromItemPtr(ItemPtr));
+          If not fLoading then
+            PayloadFinal(PayloadPtrFromItemPtr(ItemPtr));
           SetItemFlagValue(ItemPtr^,LLA_FLAG_USED,False);
           TempIndex := fLastFree;
           fLastFree := ArrayIndex;
@@ -845,6 +893,20 @@ end;
 Function TLinkedListArray.PayloadEquals(Payload1,Payload2: PLLAPayload): Boolean;
 begin
 Result := PayloadCompare(Payload1,Payload2) = 0;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLinkedListArray.PayloadWrite(Payload: PLLAPayload; Stream: TStream);
+begin
+Stream.WriteBuffer(Payload^,fPayloadSize);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLinkedListArray.PayloadRead(Payload: PLLAPayload; Stream: TStream);
+begin
+Stream.ReadBuffer(Payload^,fPayloadSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1023,6 +1085,51 @@ If fCount > 0 then
     end;
 end;
 
+//------------------------------------------------------------------------------
+
+procedure TLinkedListArray.ReadFromStreamInternal(Stream: TStream; Buffered: Boolean);
+var
+  BufferStream: TMemoryStream;
+  ArrayIndex:   TLLAArrayIndex;  
+  i:            TLLAListIndex;
+  PayloadPtr:   PLLAPayload;
+begin
+If fCount > 0 then
+  begin
+    If Buffered and not (Stream is TCustomMemoryStream) then
+      begin
+        BufferStream := TMemoryStream.Create;
+        try
+          BufferStream.Size := fCount * Int64(fPayloadSize);
+          Stream.ReadBuffer(BufferStream.Memory^,BufferStream.Size);
+          BufferStream.Seek(0,soBeginning);
+          ArrayIndex := FirstArrayIndex;
+          For i := LowListIndex to HighListIndex do
+            begin
+              PayloadPtr := GetPayloadPtrArrayIndex(ArrayIndex);
+              PayloadRead(PayloadPtr,BufferStream);
+              PayloadAdded(PayloadPtr);
+              ArrayIndex := NextFromArrayIndex(ArrayIndex);
+            end;
+        finally
+          BufferStream.Free;
+        end;
+      end
+    else
+      begin
+        ArrayIndex := FirstArrayIndex;
+        For i := LowListIndex to HighListIndex do
+          begin
+            PayloadPtr := GetPayloadPtrArrayIndex(ArrayIndex);
+            PayloadRead(PayloadPtr,Stream);
+            PayloadAdded(PayloadPtr);
+            ArrayIndex := NextFromArrayIndex(ArrayIndex);
+          end;
+      end;
+  end;
+DoChange;
+end;
+
 {-------------------------------------------------------------------------------
     TLinkedListArray - public methods
 -------------------------------------------------------------------------------}
@@ -1047,6 +1154,7 @@ fFirstFree := -1;
 fLastFree := -1;
 fFirstUsed := -1;
 fLastUsed := -1;
+fLoading := False;
 end;
 
 //------------------------------------------------------------------------------
@@ -1830,7 +1938,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TLinkedListArray.SaveToStream(Stream: TStream; Buffered: Boolean = False);
+procedure TLinkedListArray.WriteToStream(Stream: TStream; Buffered: Boolean = False);
 var
   BufferStream: TMemoryStream;
   i:            TLLAListIndex;
@@ -1838,7 +1946,7 @@ var
 begin
 If fCount > 0 then
   begin
-    If Buffered then
+    If Buffered and not (Stream is TCustomMemoryStream) then
       begin
         // first buffer everything in memory, then write in one call
         BufferStream := TMemoryStream.Create;
@@ -1848,11 +1956,10 @@ If fCount > 0 then
           ArrayIndex := FirstArrayIndex;
           For i := LowListIndex to HighListIndex do
             begin
-              BufferStream.WriteBuffer(GetPayloadPtrArrayIndex(ArrayIndex)^,fPayloadSize);
+              PayloadWrite(GetPayloadPtrArrayIndex(ArrayIndex),BufferStream);
               ArrayIndex := NextFromArrayIndex(ArrayIndex);
             end;
-          BufferStream.Seek(0,soBeginning);
-          Stream.WriteBuffer(BufferStream.Memory^,BufferStream.Size);
+          Stream.WriteBuffer(BufferStream.Memory^,BufferStream.Position);
         finally
           BufferStream.Free;
         end;
@@ -1862,7 +1969,7 @@ If fCount > 0 then
         ArrayIndex := FirstArrayIndex;
         For i := LowListIndex to HighListIndex do
           begin
-            Stream.WriteBuffer(GetPayloadPtrArrayIndex(ArrayIndex)^,fPayloadSize);
+            PayloadWrite(GetPayloadPtrArrayIndex(ArrayIndex),Stream);
             ArrayIndex := NextFromArrayIndex(ArrayIndex);
           end;
       end;
@@ -1871,64 +1978,73 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TLinkedListArray.LoadFromStream(Stream: TStream; Buffered: Boolean = False);
-var
-  BufferStream: TMemoryStream;
-  i:            TLLAListIndex;
-  ArrayIndex:   TLLAArrayIndex;
-  ItemPtr:      PLLAItem;
+procedure TLinkedListArray.ReadFromStream(Stream: TStream; Buffered: Boolean = False);
 begin
-Clear;
-If Stream.Size - Stream.Position >= fPayloadSize then
-  begin
-    fCount := (Stream.Size - Stream.Position) div fPayloadSize;
-    If Capacity < fCount then
-      SetCapacity(fCount);
-    If Buffered then
-      begin
-        BufferStream := TMemoryStream.Create;
-        try
-          BufferStream.Size := fCount * Int64(fPayloadSize);
-          Stream.ReadBuffer(BufferStream.Memory^,BufferStream.Size);
-          BufferStream.Seek(0,soBeginning);
-          For i := LowListIndex to HighListIndex do
-            BufferStream.ReadBuffer(GetPayloadPtrArrayIndex(TLLAArrayIndex(i))^,fPayloadSize);
-        finally
-          BufferStream.Free;
-        end;
-      end
-    else
-      begin
-        For i := LowListIndex to HighListIndex do
-          Stream.ReadBuffer(GetPayloadPtrArrayIndex(TLLAArrayIndex(i))^,fPayloadSize);
-      end;
-    // set flags
-    For ArrayIndex := LowArrayIndex to TLLAArrayIndex(HighListIndex) do
-      begin
-        ItemPtr := GetItemPtr(ArrayIndex);
-        SetItemFlagValue(ItemPtr^,LLA_FLAG_USED,True);
-        PayloadAdded(PayloadPtrFromItemPtr(ItemPtr));
-      end;
-    If fCapacity > fCount then
-      begin
-        fFirstFree := TLLAArrayIndex(Succ(HighListIndex));
-        fLastFree := HighArrayIndex;
-      end
-    else
-      begin
-        fFirstFree := -1;
-        fLastFree := -1;
-      end;
-    fFirstUsed := LowArrayIndex;
-    fLastUsed := TLLAArrayIndex(HighListIndex);
-    If CheckArrayIndex(fFirstFree) then
-      GetItemPtr(fFirstFree)^.Prev := -1;
-    If CheckArrayIndex(fLastFree) then
-      GetItemPtr(fLastFree)^.Next := -1;
-    GetItemPtr(fFirstUsed)^.Prev := -1;
-    GetItemPtr(fLastUsed)^.Next := -1;      
+BeginUpdate;
+try
+  FinalizeAllItems;
+  ReadFromStreamInternal(Stream,Buffered);
+finally
+  EndUpdate;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLinkedListArray.SaveToStream(Stream: TStream; Buffered: Boolean = False);
+begin
+Stream_WriteInt32(Stream,Int32(fCount));
+WriteToStream(Stream,Buffered);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLinkedListArray.LoadFromStream(Stream: TStream; Buffered: Boolean = False);
+begin
+BeginUpdate;
+try
+  FinalizeAllItems;
+  // disable calling of PayloadInit and PayloadFinal from SetCount and SetCapacity
+  fLoading := True;
+  try
+    Count := Integer(Stream_ReadInt32(Stream));
+  finally
+    fLoading := False;
   end;
-DoChange;
+  ReadFromStreamInternal(Stream,Buffered);
+finally
+  EndUpdate;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLinkedListArray.WriteToFile(const FileName: String; Buffered: Boolean = False);
+var
+  FileStream: TFileStream;
+begin
+FileStream := TFileStream.Create(StrToRTL(FileName),fmCreate or fmShareExclusive);
+try
+  FileStream.Seek(0,soBeginning);
+  WriteToStream(FileStream,Buffered);
+finally
+  FileStream.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLinkedListArray.ReadFromFile(const FileName: String; Buffered: Boolean = False);
+var
+  FileStream: TFileStream;
+begin
+FileStream := TFileStream.Create(StrToRTL(FileName),fmOpenRead or fmShareDenyWrite);
+try
+  FileStream.Seek(0,soBeginning);
+  ReadFromStream(FileStream,Buffered);
+finally
+  FileStream.Free;
+end;
 end;
 
 //------------------------------------------------------------------------------
@@ -1939,6 +2055,7 @@ var
 begin
 FileStream := TFileStream.Create(StrToRTL(FileName),fmCreate or fmShareExclusive);
 try
+  FileStream.Seek(0,soBeginning);
   SaveToStream(FileStream,Buffered);
 finally
   FileStream.Free;
@@ -1953,6 +2070,7 @@ var
 begin
 FileStream := TFileStream.Create(StrToRTL(FileName),fmOpenRead or fmShareDenyWrite);
 try
+  FileStream.Seek(0,soBeginning);
   LoadFromStream(FileStream,Buffered);
 finally
   FileStream.Free;
@@ -1989,6 +2107,20 @@ end;
 Function TIntegerLinkedListArray.PayloadCompare(Payload1,Payload2: PLLAPayload): Integer;
 begin
 Result := Integer(Pointer(Payload1)^) - Integer(Pointer(Payload2)^);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TIntegerLinkedListArray.PayloadWrite(Payload: PLLAPayload; Stream: TStream);
+begin
+Stream_WriteInt32(Stream,Int32(Integer(Pointer(Payload)^)));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TIntegerLinkedListArray.PayloadRead(Payload: PLLAPayload; Stream: TStream);
+begin
+Integer(Pointer(Payload)^) := Integer(Stream_ReadInt32(Stream));
 end;
 
 {-------------------------------------------------------------------------------

@@ -42,11 +42,11 @@
     and other two each 1/4, we can achieve so when defining absolute length of
     the first stage as 2 and as 1 for the other two.
 
-  Version 2.0.1 (2020-07-27)
+  Version 2.0.2 (2023-01-24)
 
-  Last change 2022-09-24
+  Last change 2023-01-24
 
-  ©2017-2022 František Milt
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -63,11 +63,12 @@
       github.com/TheLazyTomcat/Lib.ProgressTracker
 
   Dependencies:
-    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
-    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    UInt64Utils     - github.com/TheLazyTomcat/Lib.UInt64Utils
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
 
 ===============================================================================}
 unit ProgressTracker;
@@ -347,9 +348,6 @@ type
     procedure InternalDelete(SuperStageNode: TProgressStageNode; Index: Integer); virtual;
     // utility methods
     Function ObtainStageNode(Stage: TPTStageID; AllowMaster: Boolean): TProgressStageNode; virtual;
-    // move fllowing to public section as soon as they are implemented
-    procedure SaveToIniStream(Stream: TStream); virtual;
-    procedure LoadFromIniStream(Stream: TStream); virtual;
   public
     constructor Create;
     destructor Destroy; override;
@@ -667,8 +665,8 @@ type
     procedure LoadFromStream(Stream: TStream); virtual;
     procedure SaveToFile(const FileName: String); virtual;
     procedure LoadFromFile(const FileName: String); virtual;
-    procedure LoadFromResource(const ResName: String; IsIniFile: Boolean = False); virtual;
-    procedure LoadFromResourceID(ResID: Integer; IsIniFile: Boolean = False); virtual;
+    procedure LoadFromResource(const ResName: String); virtual;
+    procedure LoadFromResourceID(ResID: Integer); virtual;
     // properties
     property Progress: Double read GetProgress;
     property ConsecutiveStages: Boolean read GetConsecutiveStages write SetConsecutiveStages;
@@ -2561,25 +2559,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TProgressTracker.SaveToIniStream(Stream: TStream);
-begin
-// implementation requires IniFileEx which is not available atm.
-raise Exception.Create('TProgressTracker.SaveToIniStream: This method is not implemented yet.');
-end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TProgressTracker.LoadFromIniStream(Stream: TStream);
-begin
-raise Exception.Create('TProgressTracker.LoadFromIniStream: This method is not implemented yet.');
-end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-
-//------------------------------------------------------------------------------
-
 procedure TProgressTracker.SaveToIniFile(const FileName: String);
 var
   Ini:            TIniFile;
@@ -2650,6 +2629,7 @@ try
     InitFormatSettings(FormatSettings);
     FormatSettings.ThousandSeparator := #0;
     FormatSettings.DecimalSeparator := '.';
+    Clear;
     ReadNode(fMasterNode,'Master');
   finally
     Ini.Free;
@@ -2744,17 +2724,14 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TProgressTracker.LoadFromResource(const ResName: String; IsIniFile: Boolean = False);
+procedure TProgressTracker.LoadFromResource(const ResName: String);
 var
   ResStream:  TResourceStream;
 begin
 ResStream := TResourceStream.Create(hInstance,StrToRTL(ResName),PChar(10){RT_RCDATA});
 try
   ResStream.Seek(0,soBeginning);
-  If IsIniFile then
-    LoadFromIniStream(ResStream)
-  else
-    LoadFromStream(ResStream);
+  LoadFromStream(ResStream);
 finally
   ResStream.Free;
 end;
@@ -2762,17 +2739,14 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TProgressTracker.LoadFromResourceID(ResID: Integer; IsIniFile: Boolean = False);
+procedure TProgressTracker.LoadFromResourceID(ResID: Integer);
 var
   ResStream:  TResourceStream;
 begin
 ResStream := TResourceStream.CreateFromID(hInstance,ResID,PChar(10){RT_RCDATA});
 try
   ResStream.Seek(0,soBeginning);
-  If IsIniFile then
-    LoadFromIniStream(ResStream)
-  else
-    LoadFromStream(ResStream);
+  LoadFromStream(ResStream);
 finally
   ResStream.Free;
 end;

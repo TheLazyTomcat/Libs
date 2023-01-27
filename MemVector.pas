@@ -22,11 +22,11 @@
     to be inherited from in a descendant class that implements vector for a
     specific item type. An integer vector is implemented as an example.
 
-  Version 1.2.1 (2022-10-26)
+  Version 1.2.2 (2023-01-24)
 
-  Last change 2022-10-26
+  Last change 2023-01-24
 
-  ©2016-2022 František Milt
+  ©2016-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -43,10 +43,12 @@
       github.com/TheLazyTomcat/Lib.MemVector
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses  - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect     - github.com/TheLazyTomcat/Lib.StrRect    
-    ListSorters - github.com/TheLazyTomcat/Lib.ListSorters
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
 
 ===============================================================================}
 (*******************************************************************************
@@ -67,11 +69,13 @@
   protected
     Function GetItem(Index: Integer): @Type@; virtual;
     procedure SetItem(Index: Integer; Value: @Type@); virtual;
-  //procedure ItemInit(ItemPtr: Pointer); override;
-  //procedure ItemFinal(ItemPtr: Pointer); override;
+  //procedure ItemInit(Item: Pointer); override;
+  //procedure ItemFinal(Item: Pointer); override;
   //procedure ItemCopy(SrcItem,DstItem: Pointer); override;           
     Function ItemCompare(Item1,Item2: Pointer): Integer; override;
   //Function ItemEquals(Item1,Item2: Pointer): Boolean; override;
+  //procedure ItemWrite(Item: Pointer; Stream: TStream); override;
+  //procedure ItemRead(Item: Pointer; Stream: TStream); override;
   public
     constructor Create; overload;
     constructor Create(Memory: Pointer; Count: Integer); overload;
@@ -106,7 +110,7 @@ end;
 // property to a higher number) added to the vector.
 // Item is filled with zeroes in default implementation.
 
-//procedure @ClassName@.ItemInit(ItemPtr: Pointer); override;
+//procedure @ClassName@.ItemInit(Item: Pointer);
 //begin
 //{$MESSAGE WARN 'Implement item initialization to suit actual type.'}
 //end;
@@ -117,7 +121,7 @@ end;
 // property to a lower number) removed from the vector.
 // No default behavior.
 
-//procedure @ClassName@.ItemFinal(ItemPtr: Pointer); override;
+//procedure @ClassName@.ItemFinal(Item: Pointer);
 //begin
 //{$MESSAGE WARN 'Implement item finalization to suit actual type.'}
 //end;
@@ -129,7 +133,7 @@ end;
 // ManagedCopy.
 // Item is copied without any further processing in default implementation.
 
-//procedure @ClassName@.ItemCopy(SrcItem,DstItem: Pointer); override;
+//procedure @ClassName@.ItemCopy(SrcItem,DstItem: Pointer);
 //begin
 //{$MESSAGE WARN 'Implement item copy to suit actual type.'}
 //end;
@@ -155,9 +159,31 @@ end;
 // In default implementation, it calls ItemCompare and when it returns zero,
 // items are considered to be equal.
 
-//Function @ClassName@.ItemEquals(Item1,Item2: Pointer): Boolean; override;
+//Function @ClassName@.ItemEquals(Item1,Item2: Pointer): Boolean;
 //begin
 //{$MESSAGE WARN 'Implement equality comparison to suit actual type.'}
+//end;
+
+//------------------------------------------------------------------------------
+
+// Method called for each item being written to the stream.
+// Default implementation direcly writes ItemSize bytes from the item memory
+// to the stream, with no further processing.
+
+//procedure @ClassName@.ItemWrite(Item: Pointer; Stream: TStream);
+//begin
+//{$MESSAGE WARN 'Implement item write to suit actual type.'}
+//end;
+
+//------------------------------------------------------------------------------
+
+// Method called for each item being read from the stream.
+// Default implementation reads ItemSize bytes directly to the item memory with
+// no further processing.
+
+//procedure @ClassName@.ItemRead(Item: Pointer; Stream: TStream);
+//begin
+//{$MESSAGE WARN 'Implement item read to suit actual type.'}
 //end;
 
 //==============================================================================
@@ -279,6 +305,7 @@ type
     fOnChangeEvent:     TNotifyEvent;
     fOnChangeCallback:  TNotifyCallback;
     fTempItem:          Pointer;
+    fLoading:           Boolean;
     // getters, setters
     Function GetItemPtr(Index: Integer): Pointer; virtual;
     procedure SetItemPtr(Index: Integer; Value: Pointer); virtual;
@@ -295,12 +322,15 @@ type
     procedure ItemCopy(SrcItem,DstItem: Pointer); virtual;
     Function ItemCompare(Item1,Item2: Pointer): Integer; virtual;
     Function ItemEquals(Item1,Item2: Pointer): Boolean; virtual;
+    procedure ItemWrite(Item: Pointer; Stream: TStream); virtual;
+    procedure ItemRead(Item: Pointer; Stream: TStream); virtual;
     // utility and macro methods
     Function CheckIndexAndRaise(Index: Integer; CallingMethod: String = 'CheckIndexAndRaise'): Boolean; virtual;
     Function GetNextItemPtr(ItemPtr: Pointer): Pointer; virtual;
     Function CompareItems(Index1,Index2: Integer): Integer; virtual;
     procedure FinalizeAllItems; virtual;
     procedure DoChange; virtual;
+    procedure ReadFromStreamInternal(Stream: TStream); virtual;
   public
     constructor Create(ItemSize: TMemSize); overload;
     constructor Create(Memory: Pointer; Count: Integer; ItemSize: TMemSize); overload;
@@ -335,8 +365,22 @@ type
     procedure Append(Data: Pointer; Count: Integer; ManagedCopy: Boolean = False); overload; virtual;
     procedure Append(Vector: TMemVector; ManagedCopy: Boolean = False); overload; virtual;
     // streaming
+  {
+    Write* methods write only the vector data, whereas Save* methods first
+    write item count and then the data.
+
+      NOTE - count is saved as a 32bit signed integer with little endianness.
+
+    When calling Read* method, current count (property Count) of items is read.
+    When Load* is called, the count is read first, the vector is reallocated to
+    that count and then the data are read.
+  }
+    procedure WriteToStream(Stream: TStream); virtual;
+    procedure ReadFromStream(Stream: TStream); virtual;
     procedure SaveToStream(Stream: TStream); virtual;
     procedure LoadFromStream(Stream: TStream); virtual;
+    procedure WriteToFile(const FileName: String); virtual;
+    procedure ReadFromFile(const FileName: String); virtual;
     procedure SaveToFile(const FileName: String); virtual;
     procedure LoadFromFile(const FileName: String); virtual;
     // properties
@@ -365,6 +409,8 @@ type
     Function GetItem(Index: Integer): Integer; virtual;
     procedure SetItem(Index: Integer; Value: Integer); virtual;
     Function ItemCompare(Item1,Item2: Pointer): Integer; override;
+    procedure ItemWrite(Item: Pointer; Stream: TStream); override;
+    procedure ItemRead(Item: Pointer; Stream: TStream); override;
   public
     constructor Create; overload;
     constructor Create(Memory: Pointer; Count: Integer); overload;
@@ -381,7 +427,7 @@ type
 implementation
 
 uses
-  StrRect, ListSorters;
+  StrRect, ListSorters, BinaryStreaming;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -458,7 +504,7 @@ If fOwnsMemory then
   begin
     If (Value <> fCapacity) and (Value >= 0) then
       begin
-        If Value < fCount then
+        If (Value < fCount) and not fLoading then
           For i := Value to HighIndex do
             ItemFinal(GetItemPtr(i));
         If fCount <= 0 then
@@ -505,13 +551,15 @@ If fOwnsMemory then
             begin
               OldCount := fCount;
               fCount := Value;
-              For i := OldCount to HighIndex do
-                ItemInit(GetItemPtr(i));
+              If not fLoading then
+                For i := OldCount to HighIndex do
+                  ItemInit(GetItemPtr(i));
             end
           else
             begin
-              For i := HighIndex downto Value do
-                ItemFinal(GetItemPtr(i));
+              If not fLoading then
+                For i := HighIndex downto Value do
+                  ItemFinal(GetItemPtr(i));
               fCount := Value;
             end;
           DoChange;
@@ -569,6 +617,20 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TMemVector.ItemWrite(Item: Pointer; Stream: TStream);
+begin
+Stream.WriteBuffer(Item^,fItemSize);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMemVector.ItemRead(Item: Pointer; Stream: TStream);
+begin
+Stream.ReadBuffer(Item^,fItemSize);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TMemVector.CheckIndexAndRaise(Index: Integer; CallingMethod: String = 'CheckIndexAndRaise'): Boolean;
 begin
 Result := CheckIndex(Index);
@@ -616,6 +678,17 @@ If (fUpdateCounter <= 0) then
   end;
 end;
 
+//------------------------------------------------------------------------------
+
+procedure TMemVector.ReadFromStreamInternal(Stream: TStream);
+var
+  i:  Integer;
+begin
+For i := LowIndex to HighIndex do
+  ItemRead(GetItemPtr(i),Stream);
+DoChange;
+end;
+
 {-------------------------------------------------------------------------------
     TMemVector - public methods
 -------------------------------------------------------------------------------}
@@ -635,6 +708,7 @@ If ItemSize > 0 then
     fOnChangeEvent := nil;
     fOnChangeCallback := nil;
     GetMem(fTempItem,fItemSize);
+    fLoading := False;
   end
 else raise EMVInvalidValue.CreateFmt('TMemVector.Create: Invalid item size (%d).',[ItemSize]);
 end;
@@ -1068,9 +1142,37 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TMemVector.WriteToStream(Stream: TStream);
+var
+  i:  Integer;
+begin
+For i := LowIndex to HighIndex do
+  ItemWrite(GetItemPtr(i),Stream);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMemVector.ReadFromStream(Stream: TStream);
+begin
+If fOwnsMemory then
+  begin
+    BeginUpdate;
+    try
+      FinalizeAllItems;
+      ReadFromStreamInternal(Stream);
+    finally
+      EndUpdate;
+    end;
+  end
+else raise EMVForeignMemory.Create('TMemVector.ReadFromStream: Operation not alloved on foreign memory.');
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TMemVector.SaveToStream(Stream: TStream);
 begin
-Stream.WriteBuffer(fMemory^,Int64(fCount) * Int64(fItemSize));
+Stream_WriteInt32(Stream,Int32(fCount));
+WriteToStream(Stream);
 end;
 
 //------------------------------------------------------------------------------
@@ -1082,16 +1184,53 @@ If fOwnsMemory then
     BeginUpdate;
     try
       FinalizeAllItems;
-      fCount := 0;
-      SetCapacity(Integer((Stream.Size - Stream.Position) div fItemSize));
-      fCount := fCapacity;
-      Stream.ReadBuffer(fMemory^,Int64(fCount) * Int64(fItemSize));
-      DoChange;
+    {
+      Following deactivates calls to ItemFinal and ItemInit for the following
+      setup of Count. Item finaliyation was done in previous step, and there
+      is no need to initialize new items as thez will be rewritten.
+    }
+      fLoading := True;
+      try
+        Count := Integer(Stream_ReadInt32(Stream));
+      finally
+        fLoading := False;
+      end;
+      ReadFromStreamInternal(Stream);
     finally
       EndUpdate;
     end;
   end
 else raise EMVForeignMemory.Create('TMemVector.LoadFromStream: Operation not alloved on foreign memory.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMemVector.WriteToFile(const FileName: String);
+var
+  FileStream: TFileStream;
+begin
+FileStream := TFileStream.Create(StrToRTL(FileName),fmCreate or fmShareExclusive);
+try
+  FileStream.Seek(0,soBeginning);
+  WriteToStream(FileStream);
+finally
+  FileStream.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TMemVector.ReadFromFile(const FileName: String);
+var
+  FileStream: TFileStream;
+begin
+FileStream := TFileStream.Create(StrToRTL(FileName),fmOpenRead or fmShareDenyWrite);
+try
+  FileStream.Seek(0,soBeginning);
+  ReadFromStream(FileStream);
+finally
+  FileStream.Free;
+end;
 end;
 
 //------------------------------------------------------------------------------
@@ -1102,6 +1241,7 @@ var
 begin
 FileStream := TFileStream.Create(StrToRTL(FileName),fmCreate or fmShareExclusive);
 try
+  FileStream.Seek(0,soBeginning);
   SaveToStream(FileStream);
 finally
   FileStream.Free;
@@ -1116,11 +1256,13 @@ var
 begin
 FileStream := TFileStream.Create(StrToRTL(FileName),fmOpenRead or fmShareDenyWrite);
 try
+  FileStream.Seek(0,soBeginning);
   LoadFromStream(FileStream);
 finally
   FileStream.Free;
 end;
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1151,6 +1293,20 @@ end;
 Function TIntegerVector.ItemCompare(Item1,Item2: Pointer): Integer;
 begin
 Result := Integer(Item1^) - Integer(Item2^);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TIntegerVector.ItemWrite(Item: Pointer; Stream: TStream);
+begin
+Stream_WriteInt32(Stream,Int32(Integer(Item^)));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TIntegerVector.ItemRead(Item: Pointer; Stream: TStream);
+begin
+Integer(Item^) := Integer(Stream_ReadInt32(Stream));
 end;
 
 {-------------------------------------------------------------------------------
