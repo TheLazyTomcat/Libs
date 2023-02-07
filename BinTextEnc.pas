@@ -20,11 +20,11 @@
       original data (a result of these encodings being block-based, these
       zeroes are block padding)
 
-  Version 2.1 (2022-08-05)
+  Version 2.1.1 (2023-02-03)
 
-  Last change 2022-09-13
+  Last change 2023-02-03
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -97,7 +97,7 @@ type
   efTrim                  encoding supports trimming
   efOutputSize            it is possible to obtain length of encoded string or
                           size of decoded data
-  efSlowOutputSize        same as efOutputSize, bot the data/string must be
+  efSlowOutputSize        same as efOutputSize, but the data/string must be
                           scanned to obtain the size, this can be slow
   efInpreciseOutputSize   reported encoded length or decoded size can be
                           inprecise (note that it will never be smaller), it is
@@ -214,8 +214,12 @@ type
   {
     HeaderPresent returns true when EncodedString starts with a substring that
     can be an encoded string header. False otherwise.
+
+    When CheckEncoding is set to true, and the string contains a pattern
+    compatible with header, the function will also check whether the header
+    contains a valid encoding number or not.
   }
-    class Function HeaderPresent(const EncodedString: String): Boolean; virtual;
+    class Function HeaderPresent(const EncodedString: String; CheckEncoding: Boolean = False): Boolean; virtual;
   {
     HeaderEncoding reads header from provided encoded string and returns which
     encoding is stored in this header.
@@ -999,12 +1003,15 @@ const
   BTE_HEADER_ENCODING_BASE32H = 7;
   BTE_HEADER_ENCODING_BASE64  = 8;
   BTE_HEADER_ENCODING_BASE85  = 9;
-  BTE_HEADER_ENCODING_BASE85A = 10;
-
+  BTE_HEADER_ENCODING_BASE85A = 10; 
   // newly added...
   BTE_HEADER_ENCODING_BASE64U = 11;
 
+  BTE_HEADER_ENCODING_MASK = $00FF;
+
   BTE_HEADER_FLAG_REVERSED = $0100;
+
+  BTE_CHAR_MASK = $7F;
 
 //------------------------------------------------------------------------------  
 
@@ -1024,6 +1031,48 @@ procedure SwapByteOrder(var Value: UInt32);
 begin
 Value := ((Value shr 24) and $FF) or ((Value shr 8) and $FF00) or
          ((Value and $FF00) shl 8) or ((Value and $FF) shl 24);
+end;
+
+//------------------------------------------------------------------------------
+
+Function EncodingToNumber(Encoding: TBTEEncoding): UInt16;
+begin
+case Encoding of
+  encBase2:       Result := BTE_HEADER_ENCODING_BASE2;
+  encBase4:       Result := BTE_HEADER_ENCODING_BASE4;
+  encBase8:       Result := BTE_HEADER_ENCODING_BASE8;
+  encBase10:      Result := BTE_HEADER_ENCODING_BASE10;
+  encBase16:      Result := BTE_HEADER_ENCODING_BASE16;
+  encBase32:      Result := BTE_HEADER_ENCODING_BASE32;
+  encBase32Hex:   Result := BTE_HEADER_ENCODING_BASE32H;
+  encBase64:      Result := BTE_HEADER_ENCODING_BASE64;
+  encBase64URL:   Result := BTE_HEADER_ENCODING_BASE64U;
+  encBase85:      Result := BTE_HEADER_ENCODING_BASE85;
+  encAscii85:     Result := BTE_HEADER_ENCODING_BASE85A;
+else
+  raise EBTEInvalidValue.CreateFmt('EncodingToNumber: Invalid encoding (%d).',[Ord(Encoding)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function NumberToEncoding(Number: UInt16): TBTEEncoding;
+begin
+case Number and BTE_HEADER_ENCODING_MASK of
+  BTE_HEADER_ENCODING_BASE2:    Result := encBase2;
+  BTE_HEADER_ENCODING_BASE4:    Result := encBase4;
+  BTE_HEADER_ENCODING_BASE8:    Result := encBase8;
+  BTE_HEADER_ENCODING_BASE10:   Result := encBase10;
+  BTE_HEADER_ENCODING_BASE16:   Result := encBase16;
+  BTE_HEADER_ENCODING_BASE32:   Result := encBase32;
+  BTE_HEADER_ENCODING_BASE32H:  Result := encBase32Hex;
+  BTE_HEADER_ENCODING_BASE64:   Result := encBase64;
+  BTE_HEADER_ENCODING_BASE64U:  Result := encBase64URL;
+  BTE_HEADER_ENCODING_BASE85:   Result := encBase85;
+  BTE_HEADER_ENCODING_BASE85A:  Result := encAscii85;
+else
+  Result := encUnknown;
+end
 end;
 
 
@@ -1302,9 +1351,10 @@ end;
 
 //------------------------------------------------------------------------------
 
-class Function TBTETranscoder.HeaderPresent(const EncodedString: String): Boolean;
+class Function TBTETranscoder.HeaderPresent(const EncodedString: String; CheckEncoding: Boolean = False): Boolean;
 var
-  i:  TStrOff;
+  i:    TStrOff;
+  Temp: Integer;
 begin
 // first check if the header can actually fit into the string (ie. the string is long enough)
 If Length(EncodedString) >= HeaderLength then
@@ -1313,13 +1363,16 @@ If Length(EncodedString) >= HeaderLength then
     If (EncodedString[1] = '#') and (EncodedString[6] = '~') then
       begin
         Result := True;
-        // and now check that the four chars between can be a hex number
+        // check that the four chars between can be a hex number
         For i := 2 to 5 do
           If not CharInSet(EncodedString[i],['0'..'9','a'..'f','A'..'F']) then
             begin
               Result := False;
-              Break{For i};
+              Exit;
             end;
+        // finally check whether the header contains a valid encoding
+        If CheckEncoding and TryStrToInt('$' + Copy(EncodedString,2,4),Temp) then
+          Result := NumberToEncoding(UInt16(Temp)) <> encUnknown;
       end
     else Result := False;
   end
@@ -1330,32 +1383,19 @@ end;
 
 class Function TBTETranscoder.HeaderEncoding(const EncodedString: String): TBTEEncoding;
 var
-  HeaderNumber: Word;
+  HeaderNumber: UInt16;
 begin
 If HeaderNumberExtract(EncodedString,HeaderNumber) then
-  case HeaderNumber and $7F of
-    BTE_HEADER_ENCODING_BASE2:    Result := encBase2;
-    BTE_HEADER_ENCODING_BASE4:    Result := encBase4;
-    BTE_HEADER_ENCODING_BASE8:    Result := encBase8;
-    BTE_HEADER_ENCODING_BASE10:   Result := encBase10;
-    BTE_HEADER_ENCODING_BASE16:   Result := encBase16;
-    BTE_HEADER_ENCODING_BASE32:   Result := encBase32;
-    BTE_HEADER_ENCODING_BASE32H:  Result := encBase32Hex;
-    BTE_HEADER_ENCODING_BASE64:   Result := encBase64;
-    BTE_HEADER_ENCODING_BASE64U:  Result := encBase64URL;
-    BTE_HEADER_ENCODING_BASE85:   Result := encBase85;
-    BTE_HEADER_ENCODING_BASE85A:  Result := encAscii85;
-  else
-    Result := encUnknown;
-  end
-else Result := encUnknown;
+  Result := NumberToEncoding(HeaderNumber)
+else
+  Result := encUnknown;
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TBTETranscoder.HeaderReversed(const EncodedString: String): Boolean;
 var
-  HeaderNumber: Word;
+  HeaderNumber: UInt16;
 begin
 If HeaderNumberExtract(EncodedString,HeaderNumber) then
   Result := (HeaderNumber and BTE_HEADER_FLAG_REVERSED) <> 0
@@ -1459,32 +1499,11 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TBTEEncoder.WriteHeader;
-
-  Function CalculateHeaderNumber: Word;
-  begin
-    // encoding number
-    case Encoding of
-      encBase2:       Result := BTE_HEADER_ENCODING_BASE2;
-      encBase4:       Result := BTE_HEADER_ENCODING_BASE4;
-      encBase8:       Result := BTE_HEADER_ENCODING_BASE8;
-      encBase10:      Result := BTE_HEADER_ENCODING_BASE10;
-      encBase16:      Result := BTE_HEADER_ENCODING_BASE16;
-      encBase32:      Result := BTE_HEADER_ENCODING_BASE32;
-      encBase32Hex:   Result := BTE_HEADER_ENCODING_BASE32H;
-      encBase64:      Result := BTE_HEADER_ENCODING_BASE64;
-      encBase64URL:   Result := BTE_HEADER_ENCODING_BASE64U;
-      encBase85:      Result := BTE_HEADER_ENCODING_BASE85;
-      encAscii85:     Result := BTE_HEADER_ENCODING_BASE85A;
-    else
-      raise EBTEInvalidValue.CreateFmt('TBTEEncoder.WriteHeader.CalculateHeaderNumber: Invalid encoding (%d).',[Ord(Encoding)]);
-    end;
-    // flags
-    If fReversed and (efReversible in EncodingFeatures) then
-      Result := Result or BTE_HEADER_FLAG_REVERSED;
-  end;
-
 begin
-fEncodedString := Format('#%.4x~',[CalculateHeaderNumber]);
+If fReversed and (efReversible in EncodingFeatures) then
+  fEncodedString := Format('#%.4x~',[EncodingToNumber(Encoding) or BTE_HEADER_FLAG_REVERSED])
+else
+  fEncodedString := Format('#%.4x~',[EncodingToNumber(Encoding)]);
 fEncodedStringPos := Succ(HeaderLength);
 end;
 
@@ -1734,7 +1753,7 @@ Function TBTEDecoder.ResolveChar(C: Char): Byte;
 begin
 If Ord(C) <= 127 then
   begin
-    Result := fDecodingTable[Ord(C) and $7F];
+    Result := fDecodingTable[Ord(C) and BTE_CHAR_MASK];
     If Result = Byte(-1) then
       raise EBTEProcessingError.CreateFmt('TBTEDecoder.ResolveChar: Unknown character (#%d).',[Ord(C)]);
   end
@@ -1789,7 +1808,7 @@ If EncodingTableIsValid(EncodingTable) then
   begin
     FillChar(fDecodingTable,SizeOf(TBTEDecodingTable),Byte(-1));
     For i := Low(EncodingTable) to High(EncodingTable) do
-      fDecodingTable[Ord(EncodingTable[i]) and $7F] := i;
+      fDecodingTable[Ord(EncodingTable[i]) and BTE_CHAR_MASK] := i;
   end
 else raise EBTEInvalidValue.Create('TBTEDecoder.ConstructDecodingTable: Invalid encoding table.');
 end;
