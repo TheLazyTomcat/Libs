@@ -9,83 +9,162 @@
 
   Simple Command Line Parser
 
-    In current implementation, three basic objects are parsed from the command
-    line - short command, long command and general object.
+    Provides a class (TSimpleCmdLineParser) that can parse and split a command
+    line string into individial commands, each possibly with arguments, and
+    other textual parameters.
 
-    Special characters
+    You can either give the command line string explicitly as a textual
+    parameter, or you can use parameter-less methods (Create, Parse) that will
+    obtain and parse command line string of the current process/program.
 
-      command introduction character - dash (-)
-      termination character          - semicolon (;)
-      arguments delimiter character  - comma (,)
-      quotation character            - double quotes (")
+    When getting the command line string from the system, it is necessary to
+    remember how this works in different operating systems...
 
-      WARNING - in linux, all double quotes are removed from the command line
-                by the system, to ensure they are preserved for parsing,
-                prepend each of them with a backslash (\)
+      In Windows, it is possible to obtain the string directly and unaltered,
+      so not much problem there.
 
-    Short command
+      But in Linux, there is, AFAIK, no way how to obtain the original string.
+      The command line is processed by the used shell and only already split
+      and processed (eg. escaping is resolved, quoting is removed, ...)
+      parameters are given to the program.
+      This library tries to reconstruct the full command line in Linux by
+      joining the parameters back together. Each parameter is also scanned and
+      altered so it can be later correctly parsed again (eg. text containing
+      white spaces is enclosed in quotes, backslashes are doubled, ...), but
+      some information might be lost by this point, so full reconstruction is
+      not always possible.
+      To mitigate the biggest problems, it is usually enought to observe all
+      rules of currently configured shell (quoting, escaping, ...) when writing
+      the line and making sure the shell produces something this library could
+      work with. Only one thing cannot be corrected this way - if the string
+      contains a parameter that is indistinguishable from a commnad, but is not
+      a command (eg. is quoted), then it must be prepared so that it is not
+      seen as a command when obtained from arguments vector - enclose it in
+      quotes that guarantee the content is not resolved (usually single quotes
+      - consult documentation of your shell) and prepend it with a single
+      backslash.
 
-      - starts with a single command intro char
-      - exactly one character long
-      - only lower and upper case letters (a..z, A..Z)
-      - case sensitive (a is NOT the same as A)
-      - cannot be enclosed in quote chars
-      - can be compounded (several short commands merged into one block)
-      - can have arguments, first is separated by a white space, subsequent are
-        delimited by a delimiter character (in counpound commands, only the
-        last command can have an argument)
 
-      Short command examples:
+    Now for the parsing...
 
-        -v                             simple short command
-        -vbT                           compound command (commands v, b and T)
-        -f file1.txt, "file 2.txt"     simple with two arguments
-        -Tzf "file.dat"                compound, last command (f) with one argument
+      Special characters:
 
-    Long command
+        command introduction character - dash (-)
+        escape character               - backslash (\)
+        quotation characters           - double quotes (") and single quotes (')
 
-      - starts with two command intro chars
-      - length is not explicitly limited
-      - only lower and upper case letters (a..z, A..Z), numbers (0..9),
-        underscore (_) and dash (-)
-      - case insensitive (FOO is the same as Foo)
-      - cannot start with a dash
-      - cannot contain white-space characters
-      - cannot be enclosed in quote chars
-      - cannot be compounded
-      - can have arguments, first argument is separated by a white space,
-        subsequent are delimited by a delimiter character
+    Objects (commands, texts) are delimited (separated) by a white space,
+    unless that white space is enclosed in quotes (both double and single
+    quotes are allowed, but they cannot be mixed).
+    Backslash is used as escape character - whatever follows it is preserved
+    in the final parameter text as is. This way, you can put quotes or escape
+    character in the parameters.
+    That being said - if you are giving the string explicitly, it is necessary
+    to double all backslash (\) characters if they are to be preserved (eg. in
+    file paths) - use class method CommandLinePreprocess for that purpose.
 
-      Long command examples:
+    In current implementation, three basic objects are recognized in the
+    command line - short command, long command and general object.
 
-        --show_warnings                       simple long command
-        --input_file "file1.txt"              simple with one argument
-        --files "file1.dat", "files2.dat"     simple with two arguments
+      Short command
 
-    General object
+        - starts with a single command intro char
+        - exactly one character long
+        - only lower and upper case letters (a..z, A..Z)
+        - case sensitive (a is NOT the same as A)
+        - cannot be enclosed in quote chars
+        - can be compounded (several short commands merged into one block)
+        - can have arguments delimited by a white space
 
-      - any text that is not a command, delimiter, dash or termination char
-      - cannot contain whitespaces, delimiter, quotation or command intro
-        character...
-      - ...unless it is enclosed in quote chars
-      - to add one quote char, escape it with another one
-      - if general object has to appear after a command (normally, it would be
-        parsed as a command argument), add command termination character after
-        the command and before the text
-      - if first parsed object from a command line is a general object, it is
-        assumed to be the image path
+        Short command examples:
 
-      General object examples:
+          -v                             simple short command
+          -vbT                           compound command (commands v, b and T)
+          -f file1.txt "file 2.txt"      simple with two arguments
+          -Tzf "file.dat"                compound, last command (f) with one
+                                         argument
 
-        this_is_simple_general_text
-        "quoted text with ""whitespaces"" and quote chars"
-        "special characters: - -- , """   
+      Long command
 
-  Version 1.2.1 (2020-07-27)
+        - starts with two command intro chars
+        - length is not explicitly limited
+        - only lower and upper case letters (a..z, A..Z), numbers (0..9),
+          underscore (_) and dash (-)
+        - case insensitive (FOO is the same as Foo)
+        - cannot start with a dash
+        - cannot contain escape character
+        - cannot be enclosed in quote chars
+        - cannot be compounded
+        - can have arguments delimited by a white space
 
-  Last change 2022-09-24
+        Long command examples:
 
-  ©2017-2022 František Milt
+          --show_warnings                       simple long command
+          --input_file "file1.txt"              long command with one argument
+          --files "file1.dat" "files2.dat"      long command with two arguments
+
+      General object
+
+        - any text that is not a command
+        - if it contains white spaces, it must be enclosed in quotes (as
+          objects are delimited by white spaces) - both single (') and double
+          (") quotes are allowed (but they cannot be mixed)
+        - backslash is an escape character, meaning anything following it is
+          preserved as is (including quotes or another escape char), while the
+          escaping character itself is removed
+        - any general object appearing after a command is also added as an
+          argument of that command
+        - if first parsed object from a command line is a general object, it is
+          assumed to be the image path
+
+        General object examples:
+
+          this_is_simple_general_text
+          "quoted text with \"whitespaces\" and quote chars"
+          "special characters: - -- \\ \" \'"
+
+
+    Now let's have some example command lines to see how they will be parsed...
+
+    First a Windows-style example:
+
+      "c:\test.exe" -sab 1 15 9 --test "output file.txt"
+
+          c:\test.exe       general object (image path)
+          s                 short command
+          a                 short command
+          b                 short command with three arguments:
+                                1
+                                15
+                                9
+          1                 general object
+          15                general object
+          9                 general object
+          test              long command with one argument:
+                                output file.txt
+          output file.txt   general object
+
+    And now something more Linux-like:
+
+      .\test --test -u 999 0 \-t 'string'"'"'string'
+
+          .\test            general object (image path)
+          test              long command
+          u                 short command with four arguments:
+                                999
+                                0
+                                -t
+                                string'string
+          999               general object
+          0                 general object
+          -t                general object
+          string'string     general object
+
+  Version 2.0.1 (2023-03-23)
+
+  Last change 2023-03-23
+
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -145,11 +224,12 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                                  TSCLPParser                                  
+                              TSimpleCmdLineParser
 --------------------------------------------------------------------------------
 ===============================================================================}
 type
-  TSCLPParamType = (ptShortCommand,ptLongCommand,ptGeneral);
+  // note that ptCommandBoth is only used when returning command data
+  TSCLPParamType = (ptGeneral,ptCommandShort,ptCommandLong,ptCommandBoth);
 
   TSCLPParameter = record
     ParamType:  TSCLPParamType;
@@ -157,64 +237,45 @@ type
     Arguments:  array of String;
   end;
 
-  TSCLPParserState = (psInitial,psCommand,psArgument,psGeneral);
-
 {===============================================================================
-    TSCLPParser - class declaration
+    TSimpleCmdLineParser - class declaration
 ===============================================================================}
 type
-  TSCLPParser = class(TCustomListObject)
+  TSimpleCmdLineParser = class(TCustomListObject)
   protected
-    // lexing settings
-    fCommandIntroChar:  Char;
-    fQuoteChar:         Char;
-    fDelimiterChar:     Char;
-    fTerminatorChar:    Char;
     // data
-    fCommandLine:       String;
-    fImagePath:         String;
-    fParameters:        array of TSCLPParameter;
-    fCount:             Integer;
-    // parsing variables
-    fLexer:             TObject;
-    fState:             TSCLPParserState;
-    fTokenIndex:        Integer;
-    fCurrentParam:      TSCLPParameter;
+    fCommandLine:   String;
+    fImagePath:     String;
+    fParameters:    array of TSCLPParameter;
+    fCount:         Integer;
+    fCommandCount:  Integer;
     Function GetParameter(Index: Integer): TSCLPParameter; virtual;
     // list methods
     Function GetCapacity: Integer; override;
     procedure SetCapacity(Value: Integer); override;
     Function GetCount: Integer; override;
     procedure SetCount(Value: Integer); override;
-    // list manipulation
-    procedure AddParam(Data: TSCLPParameter); overload; virtual;
-    procedure AddParam(ParamType: TSCLPParamType; const Str: String); overload; virtual;
-    // parsing
-    procedure Process_Initial; virtual;
-    procedure Process_Command; virtual;
-    procedure Process_Argument; virtual;
-    procedure Process_General; virtual;
-    // utility
-    procedure SetCurrentParam(ParamType: TSCLPParamType); virtual;
-    procedure AddParamArgument(var Param: TSCLPParameter; const Arg: String); virtual;
+    // parameter list manipulation
+    Function AddParam(ParamType: TSCLPParamType; const Str: String): Integer; virtual;
+    class procedure AddParamArgument(var Param: TSCLPParameter; const Arg: String); overload; virtual;
+    procedure AddParamArgument(Index: Integer; const Arg: String); overload; virtual;
+    // init/final
+    procedure Initialize; virtual;
+    procedure Finalize; virtual;
   public
-    class Function GetSysCmdLine: String; virtual;
+    class Function CommandLinePreprocess(const CommandLine: String): String; virtual;
+    class Function ArgumentPreprocess(const Argument: String): String; virtual;
+    class Function GetCommandLine: String; virtual;
     constructor CreateEmpty;
     constructor Create(const CommandLine: String); overload;
-    constructor Create{$IFNDEF FPC}(Dummy: Integer = 0){$ENDIF}; overload;  // parses command line of current module
+    // following overload parses command line of the current program
+    constructor Create{$IFNDEF FPC}(Dummy: Integer = 0){$ENDIF}; overload;
     destructor Destroy; override;
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
     Function First: TSCLPParameter; virtual;
     Function Last: TSCLPParameter; virtual;
     Function IndexOf(const Str: String; CaseSensitive: Boolean): Integer; virtual;
-  {
-    CommandCount
-
-    Returns number of commands (both long and short) in parameter list, as
-    opposed to property Count, which indicates number of all parameters.
-  }
-    Function CommandCount: Integer; virtual;
   {
     CommandPresentShort
 
@@ -242,7 +303,7 @@ type
     Returns true when selected short form command is present, false otherwise.
 
     When successfull, CommandData is set to selected short form string and
-    type is set to short command. It will also contain arguments from all
+    type is set to ptCommandShort. It will also contain arguments from all
     occurences of selected command, in the order they appear in the command
     line.
     When not successfull, content of CommandData is undefined.
@@ -254,7 +315,7 @@ type
     Returns true when selected long form command is present, false otherwise.
 
     When successfull, CommandData is set to selected long form string and
-    type is set to long command. It will also contain arguments from all
+    type is set to ptCommandLong. It will also contain arguments from all
     occurences of selected command, in the order they appear in the command
     line.
     When not successfull, content of CommandData is undefined.
@@ -269,30 +330,44 @@ type
     When successfull, CommandData will also contain arguments from all
     occurences of selected command, in the order they appear in the command
     line. Type and string is set to short form when only short form is present,
-    to long form in other situations.
+    to long form when only long form is present. When both forms are present,
+    then the string is set to a long form and type is set to ptCommandBoth.
     When not successfull, content of CommandData is undefined.
   }
     Function CommandData(ShortForm: Char; const LongForm: String; out CommandData: TSCLPParameter): Boolean; virtual;
     procedure Clear; virtual;
     procedure Parse(const CommandLine: String); overload; virtual;
-    procedure Parse; overload; virtual; // parses command line of current module
-    procedure ReParse; virtual;         // parses whatever is currently in the CommandLine
-    property CommandIntroChar: Char read fCommandIntroChar write fCommandIntroChar;
-    property QuoteChar: Char read fQuoteChar write fQuoteChar;
-    property DelimiterChar: Char read fDelimiterChar write fDelimiterChar;
-    property TerminatorChar: Char read fTerminatorChar write fTerminatorChar;
+    // following overload parses command line of the current program
+    procedure Parse; overload; virtual;
     property CommandLine: String read fCommandLine;
     property ImagePath: String read fImagePath;
     property Parameters[Index: Integer]: TSCLPParameter read GetParameter; default;
+  {
+    CommandCount
+
+    Returns number of commands (both long and short) in parameter list, as
+    opposed to property Count, which indicates number of all parameters.
+
+    DO NOT use this number to iterate trough property Parameters.
+  }
+    property CommandCount: Integer read fCommandCount;
   end;
+
+{===============================================================================
+    TSimpleCmdLineParser - class aliases
+===============================================================================}
+type
+  TSimpleCommandLineParser = TSimpleCmdLineParser;
+
+  TSCLPParser = TSimpleCmdLineParser; // for backward compatibility
+  TSCLParser  = TSimpleCmdLineParser;
 
 implementation
 
-{$IFDEF Windows}
+
 uses
-  Windows,
-  StrRect;
-{$ENDIF}
+  {$IFDEF Windows}Windows,{$ENDIF} Math,
+  AuxTypes{$IFDEF Windows}, StrRect{$ENDIF};
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -328,30 +403,31 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 type
-  TSCLPLexerTokenType = (lttShortCommand,lttLongCommand,lttDelimiter,
-                         lttTerminator,lttGeneral);
+  TSCLPLexerTokenType = (lttGeneral,lttCommandShort,lttCommandLong);
 
   TSCLPLexerToken = record
-    TokenType:  TSCLPLexerTokenType;
-    Str:        String;   // text of the token
-    Position:   Integer;  // position of the token in lexed string
+    TokenType:    TSCLPLexerTokenType;
+    OriginalStr:  String;   // unprocessed string, as it appears in the command line
+    Position:     Integer;  // position of the token in command line string
+    Str:          String;   // processed text of the token
   end;
 
-  TSCLPLexerCharType = (lctWhiteSpace,lctCommandIntro,lctQuote,lctDelimiter,
-                        lctTerminator,lctOther);
+  TSCLPLexerCharType = (lctWhiteSpace,lctCommandIntro,lctQuoteSingle,
+                        lctQuoteDouble,lctEscape,lctOther);
 
-  TSCLPLexerState = (lsStart,lsTraverse,lsText,lsQuoted,lsShortCommand,
-                     lsLongCommandStart,lsLongCommand);
+  TSCLPLexerState = (lsStart,lsWhiteSpace,lsCommandIntro,lsCommandIntroDouble,
+                     lsCommandShort,lsCommandLong,lsQuotedSingle,lsQuotedDouble,
+                     lsEscape,lsEscapeQuotedSingle,lsEscapeQuotedDouble,lsText);
 
 const
-  SCLP_CHAR_CMDINTRO   = '-';
-  SCLP_CHAR_QUOTE      = '"';
-  SCLP_CHAR_DELIMITER  = ',';
-  SCLP_CHAR_TERMINATOR = ';';
+  SCLP_CHAR_CMDINTRO    = '-';
+  SCLP_CHAR_QUOTESINGLE = '''';
+  SCLP_CHAR_QUOTEDOUBLE = '"';
+  SCLP_CHAR_ESCAPE      = '\';
 
-  SCLP_CHARS_SHORTCOMMAND = ['a'..'z','A'..'Z'];
-  SCLP_CHARS_LONGCOMMAND  = ['a'..'z','A'..'Z','0'..'9','_','-'];
   SCLP_CHARS_WHITESPACE   = [#0..#32];
+  SCLP_CHARS_COMMANDSHORT = ['a'..'z','A'..'Z'];
+  SCLP_CHARS_COMMANDLONG  = ['a'..'z','A'..'Z','0'..'9','_','-'];
 
 {===============================================================================
     TSCLPLexer - class declaration
@@ -359,39 +435,41 @@ const
 type
   TSCLPLexer = class(TCustomListObject)
   protected
-    // settings
-    fCommandIntroChar:  Char;
-    fQuoteChar:         Char;
-    fDelimiterChar:     Char;
-    fTerminatorChar:    Char;
     // data
-    fCommandLine:       String;
-    fTokens:            array of TSCLPLexerToken;
-    fCount:             Integer;
+    fCommandLine: String;
+    fTokens:      array of TSCLPLexerToken;
+    fCount:       Integer;
     // lexing variables
-    fState:             TSCLPLexerState;
-    fPosition:          Integer;
-    fTokenStart:        Integer;
-    fTokenLength:       Integer;
+    fState:       TSCLPLexerState;
+    fPosition:    TStrOff;
+    fTokenStart:  TStrOff;
+    fTokenLength: TStrSize;
+    // getters, setters
     Function GetToken(Index: Integer): TSCLPLexerToken; virtual;
     // inherited list methods
     Function GetCapacity: Integer; override;
     procedure SetCapacity(Value: Integer); override;
     Function GetCount: Integer; override;
     procedure SetCount(Value: Integer); override;
-    // list manipulation
-    procedure AddToken(TokenType: TSCLPLexerTokenType; const Str: String; Position: Integer); virtual;
     // lexing
-    Function IsAhead(aChar: Char): Boolean; virtual;
     Function CurrCharType: TSCLPLexerCharType; virtual;
-    procedure Process_Common(TokenType: TSCLPLexerTokenType); virtual;
+    procedure ChangeStateAndAdvance(NewState: TSCLPLexerState); virtual;
+    procedure AddToken(TokenType: TSCLPLexerTokenType); virtual;
     procedure Process_Start; virtual;
-    procedure Process_Traverse; virtual;
+    procedure Process_WhiteSpace; virtual;
+    procedure Process_CommandIntro; virtual;
+    procedure Process_CommandIntroDouble; virtual;
+    procedure Process_CommandShort; virtual;
+    procedure Process_CommandLong; virtual;
+    procedure Process_QuotedSingle; virtual;
+    procedure Process_QuotedDouble; virtual;
+    procedure Process_Escape; virtual;
+    procedure Process_EscapeQuotedSingle; virtual;
+    procedure Process_EscapeQuotedDouble; virtual;
     procedure Process_Text; virtual;
-    procedure Process_Quoted; virtual;
-    procedure Process_ShortCommand; virtual;
-    procedure Process_LongCommandStart; virtual;
-    procedure Process_LongCommand; virtual;
+    // init/final
+    procedure Initialize; virtual;
+    procedure Finalize; virtual;
   public
     constructor Create;
     destructor Destroy; override;
@@ -400,10 +478,6 @@ type
     procedure Analyze(const CommandLine: String); virtual;
     procedure Clear; virtual;
     property Tokens[Index: Integer]: TSCLPLexerToken read GetToken; default;
-    property CommandIntroChar: Char read fCommandIntroChar write fCommandIntroChar;
-    property QuoteChar: Char read fQuoteChar write fQuoteChar;
-    property DelimiterChar: Char read fDelimiterChar write fDelimiterChar;
-    property TerminatorChar: Char read fTerminatorChar write fTerminatorChar;
     property CommandLine: String read fCommandLine;
   end;
 
@@ -464,127 +538,142 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPLexer.AddToken(TokenType: TSCLPLexerTokenType; const Str: String; Position: Integer);
-var
-  i,OutPos: Integer;
-  TempStr:  String;
-  LastChar: Char;
-begin
-If (TokenType = lttShortCommand) and (Length(Str) > 1) then
-  begin
-    // split compound short commands
-    For i := 1 to Length(Str) do
-      AddToken(lttShortCommand,Str[i],Position + Pred(i));
-  end
-else
-  begin
-    // replace any double quotes with single quote
-    If TokenType = lttGeneral then
-      begin
-        SetLength(TempStr,Length(Str));
-        OutPos := 0;
-        LastChar := #0;
-        For i := 1 to Length(Str) do
-          If not((Str[i] = fQuoteChar) and (LastChar = fQuoteChar)) then
-            begin
-              Inc(OutPos);
-              TempStr[OutPos] := Str[i]; 
-              LastChar := Str[i];
-            end
-          else LastChar := #0;
-        SetLength(TempStr,OutPos);
-      end
-    else TempStr := Str;
-    // store token data
-    If Length(TempStr) > 0 then
-      begin
-        Grow;
-        fTokens[fCount].TokenType := TokenType;
-        fTokens[fCount].Str := TempStr;
-        fTokens[fCount].Position := Position;
-        Inc(fCount);
-      end;
-  end;
-fTokenLength := 0;
-end;
-
-//------------------------------------------------------------------------------
-
-Function TSCLPLexer.IsAhead(aChar: Char): Boolean;
-begin
-If fPosition < Length(fCommandLine) then
-  Result := fCommandLine[fPosition + 1] = aChar
-else
-  Result := False;
-end;
-
-//------------------------------------------------------------------------------
-
 Function TSCLPLexer.CurrCharType: TSCLPLexerCharType;
 begin
 If CharInSet(fCommandLine[fPosition],SCLP_CHARS_WHITESPACE) then
   Result := lctWhiteSpace
-else If fCommandLine[fPosition] = fCommandIntroChar then
+else If fCommandLine[fPosition] = SCLP_CHAR_CMDINTRO then
   Result := lctCommandIntro
-else If fCommandLine[fPosition] = fQuoteChar then
-  Result := lctQuote
-else If fCommandLine[fPosition] = fDelimiterChar then
-  Result := lctDelimiter
-else If fCommandLine[fPosition] = fTerminatorChar then
-  Result := lctTerminator
+else If fCommandLine[fPosition] = SCLP_CHAR_QUOTESINGLE then
+  Result := lctQuoteSingle
+else If fCommandLine[fPosition] = SCLP_CHAR_QUOTEDOUBLE then
+  Result := lctQuoteDouble
+else If fCommandLine[fPosition] = SCLP_CHAR_ESCAPE then
+  Result := lctEscape
 else
   Result := lctOther;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPLexer.Process_Common(TokenType: TSCLPLexerTokenType);
+procedure TSCLPLexer.ChangeStateAndAdvance(NewState: TSCLPLexerState);
 begin
-case CurrCharType of
-  lctWhiteSpace:    begin
-                      If fTokenLength > 0 then
-                        AddToken(TokenType,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-                      fState := lsTraverse;
-                    end;
-  lctCommandIntro:  begin
-                      If fTokenLength > 0 then
-                        AddToken(TokenType,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-                      If IsAhead(fCommandIntroChar) then
-                        begin
-                          fState := lsLongCommandStart;
-                          Inc(fPosition);
-                        end
-                      else fState := lsShortCommand;
-                      fTokenStart := fPosition + 1;
-                      fTokenLength := 0;                      
-                    end;
-  lctQuote:         begin
-                      If fTokenLength > 0 then
-                        AddToken(TokenType,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-                      fState := lsQuoted;
-                      fTokenStart := fPosition + 1;
-                      fTokenLength := 0;
-                    end;
-  lctDelimiter:     begin
-                      If fTokenLength > 0 then
-                        AddToken(TokenType,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-                      AddToken(lttDelimiter,fCommandLine[fPosition],fPosition);
-                      fState := lsTraverse;
-                    end;
-  lctTerminator:    begin
-                      If fTokenLength > 0 then
-                        AddToken(TokenType,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-                      AddToken(lttTerminator,fCommandLine[fPosition],fPosition);
-                      fState := lsTraverse;
-                    end;
+fState := NewState;
+Inc(fTokenLength);
 end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.AddToken(TokenType: TSCLPLexerTokenType);
+
+  Function PostprocessTokenString(const Str: String): String;
+  type
+    TQuoteState = (qsNone,qsSingle,qsDouble,qsEscape,qsEscapeSingle,qsEscapeDouble);
+  var
+    QuoteState: TQuoteState;
+    StrPos:     TStrOff;
+    ResPos:     TStrOff;
+
+    procedure CopyChar(NewQuoteState: TQuoteState);
+    begin
+      QuoteState := NewQuoteState;
+      Result[ResPos] := Str[StrPos];
+      Inc(StrPos);
+      Inc(ResPos);
+    end;
+
+    procedure ChageState(NewQuoteState: TQuoteState);
+    begin
+      QuoteState := NewQuoteState;
+      Inc(StrPos);
+    end;
+
+  begin
+    // note the resulting string will never be longer than the original
+    SetLength(Result,Length(Str));
+    QuoteState := qsNone;
+    StrPos := 1;
+    ResPos := 1;
+    while StrPos <= Length(Str) do
+      begin
+        case QuoteState of
+          qsNone:         case Str[StrPos] of
+                            SCLP_CHAR_QUOTESINGLE:  ChageState(qsSingle);
+                            SCLP_CHAR_QUOTEDOUBLE:  ChageState(qsDouble);
+                            SCLP_CHAR_ESCAPE:       ChageState(qsEscape);
+                          else
+                            CopyChar(qsNone);
+                          end;
+          qsSingle:       case Str[StrPos] of
+                            SCLP_CHAR_QUOTESINGLE:  ChageState(qsNone);
+                            SCLP_CHAR_ESCAPE:       ChageState(qsEscapeSingle);
+                          else
+                            CopyChar(qsSingle);
+                          end;
+          qsDouble:       case Str[StrPos] of
+                            SCLP_CHAR_QUOTEDOUBLE:  ChageState(qsNone);
+                            SCLP_CHAR_ESCAPE:       ChageState(qsEscapeDouble);
+                          else
+                            CopyChar(qsDouble);
+                          end;
+          qsEscape:       CopyChar(qsNone);
+          qsEscapeSingle: CopyChar(qsSingle);
+          qsEscapeDouble: CopyChar(qsDouble);
+        end;
+      end;
+    If QuoteState in [qsEscape,qsEscapeSingle,qsEscapeDouble] then
+      begin
+        Result[ResPos] := SCLP_CHAR_ESCAPE;
+        SetLength(Result,ResPos);
+      end
+    else SetLength(Result,Pred(ResPos));
+  end;
+
+var
+  i:  Integer;
+begin
+If (TokenType = lttCommandShort) and (fTokenLength > 2) then
+  begin
+    // split compound short commands (eg. -abc -> -a -b -c)
+    Grow(Pred(fTokenLength));
+    For i := 0 to (fTokenLength - 2) do
+      begin
+        fTokens[fCount + i].TokenType := lttCommandShort;
+        If i <= 0 then
+          begin
+            fTokens[fCount + i].OriginalStr := Copy(fCommandLine,fTokenStart,2);
+            fTokens[fCount + i].Str := fCommandLine[fTokenStart + i + 1];
+          end
+        else
+          begin
+            fTokens[fCount + i].OriginalStr := fCommandLine[fTokenStart + i + 1];
+            fTokens[fCount + i].Str := fTokens[fCount + i].OriginalStr
+          end;
+        fTokens[fCount + i].Position := fTokenStart + i + 1;
+      end;
+    Inc(fCount,Pred(fTokenLength));
+  end
+else
+  begin
+    Grow;
+    fTokens[fCount].TokenType := TokenType;
+    fTokens[fCount].OriginalStr := Copy(fCommandLine,fTokenStart,fTokenLength);
+    fTokens[fCount].Position := fTokenStart;
+    case TokenType of
+      lttGeneral:       fTokens[fCount].Str := PostprocessTokenString(fTokens[fCount].OriginalStr);
+      lttCommandShort:  fTokens[fCount].Str := fCommandLine[fTokenStart + 1];
+      lttCommandLong:   fTokens[fCount].Str := Copy(fCommandLine,fTokenStart + 2,fTokenLength - 2);
+    end;
+    Inc(fCount);
+  end;
+fTokenLength := 0;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSCLPLexer.Process_Start;
 begin
-fState := lsTraverse;
+fState := lsWhiteSpace;
 fPosition := 0;
 fTokenStart := 0;
 fTokenLength := 0;
@@ -592,27 +681,30 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPLexer.Process_Traverse;
+procedure TSCLPLexer.Process_WhiteSpace;
 begin
 case CurrCharType of
   lctWhiteSpace:;   // just continue
   lctCommandIntro:  begin
-                      If IsAhead(fCommandIntroChar) then
-                        begin
-                          fState := lsLongCommandStart;
-                          Inc(fPosition);
-                        end
-                      else fState := lsShortCommand;
-                      fTokenStart := fPosition + 1;
-                      fTokenLength := 0;
+                      fState := lsCommandIntro;
+                      fTokenStart := fPosition;
+                      fTokenLength := 1;
                     end;
-  lctQuote:         begin
-                      fState := lsQuoted;
-                      fTokenStart := fPosition + 1;
-                      fTokenLength := 0;
+  lctQuoteSingle:   begin
+                      fState := lsQuotedSingle;
+                      fTokenStart := fPosition;
+                      fTokenLength := 1;
                     end;
-  lctDelimiter:     AddToken(lttDelimiter,fCommandLine[fPosition],fPosition);
-  lctTerminator:    AddToken(lttTerminator,fCommandLine[fPosition],fPosition);
+  lctQuoteDouble:   begin
+                      fState := lsQuotedDouble;
+                      fTokenStart := fPosition;
+                      fTokenLength := 1;
+                    end;
+  lctEscape:        begin
+                      fState := lsEscape;
+                      fTokenStart := fPosition;
+                      fTokenLength := 1;
+                    end;
   lctOther:         begin
                       fState := lsText;
                       fTokenStart := fPosition;
@@ -623,80 +715,172 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TSCLPLexer.Process_CommandIntro;
+begin
+case CurrCharType of
+  lctWhiteSpace:    begin
+                      AddToken(lttGeneral);
+                      fState := lsWhiteSpace;
+                    end;
+  lctCommandIntro:  ChangeStateAndAdvance(lsCommandIntroDouble);
+  lctQuoteSingle:   ChangeStateAndAdvance(lsQuotedSingle);
+  lctQuoteDouble:   ChangeStateAndAdvance(lsQuotedDouble);
+  lctEscape:        ChangeStateAndAdvance(lsEscape);
+  lctOther:         begin
+                      If CharInSet(fCommandLine[fPosition],SCLP_CHARS_COMMANDSHORT) then
+                        fState := lsCommandShort
+                      else
+                        fState := lsText;
+                      Inc(fTokenLength);
+                    end;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_CommandIntroDouble;
+begin
+case CurrCharType of
+  lctWhiteSpace:    begin
+                      AddToken(lttGeneral);
+                      fState := lsWhiteSpace;
+                    end;
+  lctCommandIntro:  ChangeStateAndAdvance(lsText);
+  lctQuoteSingle:   ChangeStateAndAdvance(lsQuotedSingle);
+  lctQuoteDouble:   ChangeStateAndAdvance(lsQuotedDouble);
+  lctEscape:        ChangeStateAndAdvance(lsEscape);
+  lctOther:         begin
+                      If CharInSet(fCommandLine[fPosition],SCLP_CHARS_COMMANDLONG) then
+                        fState := lsCommandLong
+                      else
+                        fState := lsText;
+                      Inc(fTokenLength);
+                    end;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_CommandShort;
+begin
+case CurrCharType of
+  lctWhiteSpace:    begin
+                      AddToken(lttCommandShort);
+                      fState := lsWhiteSpace;
+                    end;
+  lctCommandIntro:  ChangeStateAndAdvance(lsText);
+  lctQuoteSingle:   ChangeStateAndAdvance(lsQuotedSingle);
+  lctQuoteDouble:   ChangeStateAndAdvance(lsQuotedDouble);
+  lctEscape:        ChangeStateAndAdvance(lsEscape);
+
+  lctOther:         begin
+                      If not CharInSet(fCommandLine[fPosition],SCLP_CHARS_COMMANDSHORT) then
+                        fState := lsText;
+                      Inc(fTokenLength);
+                    end;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_CommandLong;
+begin
+case CurrCharType of
+  lctWhiteSpace:    begin
+                      AddToken(lttCommandLong);
+                      fState := lsWhiteSpace;
+                    end;
+  lctQuoteSingle:   ChangeStateAndAdvance(lsQuotedSingle);
+  lctQuoteDouble:   ChangeStateAndAdvance(lsQuotedDouble);
+  lctEscape:        ChangeStateAndAdvance(lsEscape);
+  lctCommandIntro,
+  lctOther:         begin
+                      If not CharInSet(fCommandLine[fPosition],SCLP_CHARS_COMMANDLONG) then
+                        fState := lsText;
+                      Inc(fTokenLength);
+                    end;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_QuotedSingle;
+begin
+case CurrCharType of
+  lctQuoteSingle: ChangeStateAndAdvance(lsText);
+  lctEscape:      ChangeStateAndAdvance(lsEscapeQuotedSingle);
+else
+ {lctWhiteSpace,lctCommandIntro,lctQuoteDouble,lctOther}
+  Inc(fTokenLength);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_QuotedDouble;
+begin
+case CurrCharType of
+  lctQuoteDouble: ChangeStateAndAdvance(lsText);
+  lctEscape:      ChangeStateAndAdvance(lsEscapeQuotedDouble);
+else
+ {lctWhiteSpace,lctCommandIntro,lctQuoteSingle,lctOther}
+  Inc(fTokenLength);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_Escape;
+begin
+ChangeStateAndAdvance(lsText);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_EscapeQuotedSingle;
+begin
+ChangeStateAndAdvance(lsQuotedSingle);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSCLPLexer.Process_EscapeQuotedDouble;
+begin
+ChangeStateAndAdvance(lsQuotedDouble);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TSCLPLexer.Process_Text;
 begin
-If CurrCharType = lctOther then
-  Inc(fTokenLength)
+case CurrCharType of
+  lctWhiteSpace:    begin
+                      AddToken(lttGeneral);
+                      fState := lsWhiteSpace;
+                    end;
+  lctQuoteSingle:   ChangeStateAndAdvance(lsQuotedSingle);
+  lctQuoteDouble:   ChangeStateAndAdvance(lsQuotedDouble);
+  lctEscape:        ChangeStateAndAdvance(lsEscape)
 else
-  Process_Common(lttGeneral);
+ {lctCommandIntro,lctOther}
+  Inc(fTokenLength);
+end;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPLexer.Process_Quoted;
+procedure TSCLPLexer.Initialize;
 begin
-If CurrCharType = lctQuote then
-  begin
-    If IsAhead(fQuoteChar) then
-      begin
-        Inc(fPosition);
-        Inc(fTokenLength,2);
-      end
-    else
-      begin
-        If fTokenLength > 0 then
-          AddToken(lttGeneral,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-        fState := lsTraverse;
-      end;
-  end
-else Inc(fTokenLength);
+fCommandLine := '';
+SetLength(fTokens,0);
+fCount := 0;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPLexer.Process_ShortCommand;
+procedure TSCLPLexer.Finalize;
 begin
-If CurrCharType = lctOther then
-  begin
-    If not CharInSet(fCommandLine[fPosition],SCLP_CHARS_SHORTCOMMAND) then
-      begin
-        If fTokenLength > 0 then
-          AddToken(lttShortCommand,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-        Dec(fPosition);
-        fState := lsTraverse;
-      end
-    else Inc(fTokenLength);
-  end
-else Process_Common(lttShortCommand);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPLexer.Process_LongCommandStart;
-begin
-If CurrCharType = lctCommandIntro then
-  fState := lsTraverse
-else
-  fState := lsLongCommand;
-Dec(fPosition);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPLexer.Process_LongCommand;
-begin
-If (CurrCharType = lctOther) or ((CurrCharType = lctCommandIntro) and not IsAhead(SCLP_CHAR_CMDINTRO)) then
-  begin
-    If not CharInSet(fCommandLine[fPosition],SCLP_CHARS_LONGCOMMAND) then
-      begin
-        If fTokenLength > 0 then
-          AddToken(lttLongCommand,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-        Dec(fPosition);
-        fState := lsTraverse;
-      end
-    else Inc(fTokenLength);
-  end
-else Process_Common(lttLongCommand);
+Clear;
 end;
 
 {-------------------------------------------------------------------------------
@@ -706,20 +890,14 @@ end;
 constructor TSCLPLexer.Create;
 begin
 inherited;
-fCommandIntroChar := SCLP_CHAR_CMDINTRO;
-fQuoteChar := SCLP_CHAR_QUOTE;
-fDelimiterChar := SCLP_CHAR_DELIMITER;
-fTerminatorChar := SCLP_CHAR_TERMINATOR;
-fCommandLine := '';
-SetLength(fTokens,0);
-fCount := 0;
+Initialize;
 end;
 
 //------------------------------------------------------------------------------
 
 destructor TSCLPLexer.Destroy;
 begin
-Clear;
+Finalize;
 inherited;
 end;
 
@@ -748,25 +926,35 @@ fPosition := 0;
 while fPosition <= Length(fCommandLine) do
   begin
     case fState of
-      lsStart:            Process_Start;
-      lsTraverse:         Process_Traverse;
-      lsText:             Process_Text;
-      lsQuoted:           Process_Quoted;
-      lsShortCommand:     Process_ShortCommand;
-      lsLongCommandStart: Process_LongCommandStart;      
-      lsLongCommand:      Process_LongCommand;
+      lsStart:              Process_Start;
+      lsWhiteSpace:         Process_WhiteSpace;
+      lsCommandIntro:       Process_CommandIntro;
+      lsCommandIntroDouble: Process_CommandIntroDouble;
+      lsCommandShort:       Process_CommandShort;
+      lsCommandLong:        Process_CommandLong;
+      lsQuotedSingle:       Process_QuotedSingle;
+      lsQuotedDouble:       Process_QuotedDouble;
+      lsEscape:             Process_Escape;
+      lsEscapeQuotedSingle: Process_EscapeQuotedSingle;
+      lsEscapeQuotedDouble: Process_EscapeQuotedDouble;
+      lsText:               Process_Text;
     else
       raise ESCLPInvalidState.CreateFmt('TSCLPLexer.Analyze: Invalid lexer state (%d).',[Ord(fState)]);
     end;
     Inc(fPosition);
   end;
-If fTokenLength > 0 then
-  case fState of
-    lsText,
-    lsQuoted:       AddToken(lttGeneral,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-    lsShortCommand: AddToken(lttShortCommand,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-    lsLongCommand:  AddToken(lttLongCommand,Copy(fCommandLine,fTokenStart,fTokenLength),fTokenStart);
-  end;
+case fState of
+  lsCommandShort:       AddToken(lttCommandShort);
+  lsCommandLong:        AddToken(lttCommandLong);
+  lsCommandIntro,
+  lsCommandIntroDouble,
+  lsQuotedSingle,
+  lsQuotedDouble,
+  lsEscape,
+  lsEscapeQuotedSingle,
+  lsEscapeQuotedDouble,
+  lsText:               AddToken(lttGeneral);
+end;
 end;
 
 //------------------------------------------------------------------------------
@@ -781,34 +969,34 @@ end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                                  TSCLPParser                                  
+                              TSimpleCmdLineParser
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TSCLPParser - class implementation
+    TSimpleCmdLineParser - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TSCLPParser - protected methods
+    TSimpleCmdLineParser - protected methods
 -------------------------------------------------------------------------------}
 
-Function TSCLPParser.GetParameter(Index: Integer): TSCLPParameter;
+Function TSimpleCmdLineParser.GetParameter(Index: Integer): TSCLPParameter;
 begin
 If CheckIndex(Index) then
   Result := fParameters[Index]
 else
-  raise ESCLPIndexOutOfBounds.CreateFmt('TSCLPParser.GetParameter: Index (%d) out of bounds.',[Index]);
+  raise ESCLPIndexOutOfBounds.CreateFmt('TSimpleCmdLineParser.GetParameter: Index (%d) out of bounds.',[Index]);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.GetCapacity: Integer;
+Function TSimpleCmdLineParser.GetCapacity: Integer;
 begin
 Result := Length(fParameters);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPParser.SetCapacity(Value: Integer);
+procedure TSimpleCmdLineParser.SetCapacity(Value: Integer);
 begin
 If Value >= 0 then
   begin
@@ -819,12 +1007,12 @@ If Value >= 0 then
           fCount := Value;
       end;
   end
-else raise ESCLPInvalidValue.CreateFmt('TSCLPParser.SetCapacity: Invalid capacity (%d).',[Value]);
+else raise ESCLPInvalidValue.CreateFmt('TSimpleCmdLineParser.SetCapacity: Invalid capacity (%d).',[Value]);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.GetCount: Integer;
+Function TSimpleCmdLineParser.GetCount: Integer;
 begin
 Result := fCount;
 end;
@@ -832,7 +1020,7 @@ end;
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TSCLPParser.SetCount(Value: Integer);
+procedure TSimpleCmdLineParser.SetCount(Value: Integer);
 begin
 // do nothing
 end;
@@ -840,158 +1028,187 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPParser.AddParam(Data: TSCLPParameter);
+Function TSimpleCmdLineParser.AddParam(ParamType: TSCLPParamType; const Str: String): Integer;
 begin
-// do not check for duplicitites
 Grow;
-fParameters[fCount] := Data;
+Result := fCount;
+fParameters[Result].ParamType := ParamType;
+fParameters[Result].Str := Str;
+SetLength(fParameters[Result].Arguments,0);
 Inc(fCount);
+If ParamType <> ptGeneral then
+  Inc(fCommandCount);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPParser.AddParam(ParamType: TSCLPParamType; const Str: String);
-var
-  Temp: TSCLPParameter;
-begin
-Temp.ParamType := ParamType;
-Temp.Str := Str;
-SetLength(Temp.Arguments,0);
-AddParam(Temp);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPParser.Process_Initial;
-begin
-case TSCLPLexer(fLexer)[fTokenIndex].TokenType of
-  lttShortCommand:  begin
-                      SetCurrentParam(ptShortCommand);
-                      fState := psCommand;
-                    end;
-  lttLongCommand:   begin
-                      SetCurrentParam(ptLongCommand);
-                      fState := psCommand;
-                    end;
-  lttDelimiter,
-  lttTerminator:    fState := psGeneral;
-  lttGeneral:       begin
-                      fImagePath := TSCLPLexer(fLexer)[fTokenIndex].Str;
-                      AddParam(ptGeneral,TSCLPLexer(fLexer)[fTokenIndex].Str);
-                      fState := psGeneral;
-                    end;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPParser.Process_Command;
-begin
-case TSCLPLexer(fLexer)[fTokenIndex].TokenType of
-  lttShortCommand:  begin
-                      AddParam(fCurrentParam);
-                      SetCurrentParam(ptShortCommand);
-                      fState := psCommand;
-                    end;
-  lttLongCommand:   begin
-                      AddParam(fCurrentParam);
-                      SetCurrentParam(ptLongCommand);
-                      fState := psCommand;
-                    end;
-  lttDelimiter:     fState := psGeneral;
-  lttTerminator:    begin
-                      AddParam(fCurrentParam);
-                      fState := psGeneral;
-                    end;
-  lttGeneral:       begin
-                      AddParamArgument(fCurrentParam,TSCLPLexer(fLexer)[fTokenIndex].Str);
-                      fState := psArgument;
-                    end;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPParser.Process_Argument;
-begin
-case TSCLPLexer(fLexer)[fTokenIndex].TokenType of
-  lttShortCommand:  begin
-                      AddParam(fCurrentParam);
-                      SetCurrentParam(ptShortCommand);
-                      fState := psCommand;
-                    end;
-  lttLongCommand:   begin
-                      AddParam(fCurrentParam);
-                      SetCurrentParam(ptLongCommand);
-                      fState := psCommand;
-                    end;
-  lttDelimiter:     fState := psCommand;
-  lttTerminator:    begin
-                      AddParam(fCurrentParam);
-                      fState := psGeneral;
-                    end;
-  lttGeneral:       begin
-                      AddParam(fCurrentParam);
-                      AddParam(ptGeneral,TSCLPLexer(fLexer)[fTokenIndex].Str);
-                      fState := psGeneral;
-                    end;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPParser.Process_General;
-begin
-case TSCLPLexer(fLexer)[fTokenIndex].TokenType of
-  lttShortCommand:  begin
-                      SetCurrentParam(ptShortCommand);
-                      fState := psCommand;
-                    end;
-  lttLongCommand:   begin
-                      SetCurrentParam(ptLongCommand);
-                      fState := psCommand;
-                    end;
-  lttDelimiter,
-  lttTerminator:    fState := psGeneral;
-  lttGeneral:       begin
-                      AddParam(ptGeneral,TSCLPLexer(fLexer)[fTokenIndex].Str);
-                      fState := psGeneral;
-                    end;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPParser.SetCurrentParam(ParamType: TSCLPParamType);
-begin
-fCurrentParam.ParamType := ParamType;
-fCurrentParam.Str := TSCLPLexer(fLexer)[fTokenIndex].Str;
-SetLength(fCurrentParam.Arguments,0);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPParser.AddParamArgument(var Param: TSCLPParameter; const Arg: String);
+class procedure TSimpleCmdLineParser.AddParamArgument(var Param: TSCLPParameter; const Arg: String);
 begin
 SetLength(Param.Arguments,Length(Param.Arguments) + 1);
 Param.Arguments[High(Param.Arguments)] := Arg;
 end;
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure TSimpleCmdLineParser.AddParamArgument(Index: Integer; const Arg: String);
+begin
+If CheckIndex(Index) then
+  AddParamArgument(fParameters[Index],Arg)
+else
+  raise ESCLPIndexOutOfBounds.CreateFmt('TSimpleCmdLineParser.AddParamArgument: Index (%d) out of bounds.',[Index]);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleCmdLineParser.Initialize;
+begin
+fCommandLine := '';
+fImagePath := '';
+SetLength(fParameters,0);
+fCommandCount := 0;
+fCount := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleCmdLineParser.Finalize;
+begin
+Clear;
+end;
+
 {-------------------------------------------------------------------------------
-    TSCLPParser - public methods
+    TSimpleCmdLineParser - public methods
 -------------------------------------------------------------------------------}
 
-class Function TSCLPParser.GetSysCmdLine: String;
+class Function TSimpleCmdLineParser.CommandLinePreprocess(const CommandLine: String): String;
+var
+  i:      TStrOff;
+  Cntr:   TStrSize;
+  ResPos: TStrOff;
+begin
+// double all escape characters (backslash)
+Cntr := 0;
+For i := 1 to Length(CommandLine) do
+  If CommandLine[i] = SCLP_CHAR_ESCAPE then
+    Inc(Cntr);
+SetLength(Result,Length(CommandLine) + Cntr);
+ResPos := 1;
+For i := 1 to Length(CommandLine) do
+  begin
+    If CommandLine[i] = SCLP_CHAR_ESCAPE then
+      begin
+        Result[ResPos] := SCLP_CHAR_ESCAPE;
+        Inc(ResPos);
+      end;
+    Result[ResPos] := CommandLine[i];
+    Inc(ResPos);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TSimpleCmdLineParser.ArgumentPreprocess(const Argument: String): String;
+var
+  i,ResPos:   TStrOff;
+  CanBeCmd:   Boolean;
+  AddQuote:   Boolean;
+  EscapeCnt:  Integer;
+begin
+{
+  - double all escape characters (backslash)
+  - enclose non-command strings to single quotes when necessary (when it
+    contains white space)
+  - prepend all quotes (both single and double) with escape character
+  - if string starts with a command intro char and is not a command, prepend
+    first command intro char with escape character
+}
+If Length(Argument) > 0 then
+  begin
+    // first check whether the argument can be a command
+    If (Length(Argument) > 1) and (Argument[1] = SCLP_CHAR_CMDINTRO) then
+      begin
+        CanBeCmd := True;
+        // can it be a long command?
+        If (Length(Argument) > 2) and (Argument[2] = SCLP_CHAR_CMDINTRO) then
+          begin
+            If Argument[3] <> SCLP_CHAR_CMDINTRO then
+              begin
+                For i := 3 to Length(Argument) do
+                  If not CharInSet(Argument[i],SCLP_CHARS_COMMANDLONG) then
+                    begin
+                      CanBeCmd := False;
+                      Break{For i};
+                    end;
+              end
+            else CanBeCmd := False;
+          end
+        else
+          begin
+            For i := 2 to Length(Argument) do
+              If not CharInSet(Argument[i],SCLP_CHARS_COMMANDSHORT) then
+                begin
+                  CanBeCmd := False;
+                  Break{For i};
+                end;
+          end;
+      end
+    else CanBeCmd := False;
+    // count escapements and look whether to add quotes
+    AddQuote := False;
+    EscapeCnt := 0;
+    // if it can be a command, then there is nothing to be escaped or quoted
+    If not CanBeCmd then
+      For i := 1 to Length(Argument) do
+        begin
+          If CharInSet(Argument[i],SCLP_CHARS_WHITESPACE) then
+            AddQuote := True
+          else If CharInSet(Argument[i],[SCLP_CHAR_ESCAPE,SCLP_CHAR_QUOTESINGLE,SCLP_CHAR_QUOTEDOUBLE]) then
+            Inc(EscapeCnt);
+        end;
+    If (Argument[1] = SCLP_CHAR_CMDINTRO) and not CanBeCmd then
+      Inc(EscapeCnt);
+    // prepare result
+    SetLength(Result,Length(Argument) + EscapeCnt + IfThen(AddQuote,2,0));
+    // construct result
+    If AddQuote then
+      begin
+        Result[1] := SCLP_CHAR_QUOTESINGLE;
+        Result[Length(Result)] := SCLP_CHAR_QUOTESINGLE;
+        ResPos := 2;
+      end
+    else ResPos := 1;
+    If (Argument[1] = SCLP_CHAR_CMDINTRO) and not CanBeCmd then
+      begin
+        Result[ResPos] := SCLP_CHAR_ESCAPE;
+        Inc(ResPos);
+      end;
+    For i := 1 to Length(Argument) do
+      begin
+        If CharInSet(Argument[i],[SCLP_CHAR_ESCAPE,SCLP_CHAR_QUOTESINGLE,SCLP_CHAR_QUOTEDOUBLE]) then
+          begin
+            Result[ResPos] := SCLP_CHAR_ESCAPE;
+            Inc(ResPos);
+          end;
+        Result[ResPos] := Argument[i];
+        Inc(ResPos);
+      end;
+  end
+else Result := StringOfChar(SCLP_CHAR_QUOTESINGLE,2);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TSimpleCmdLineParser.GetCommandLine: String;
 {$IFDEF Windows}
 var
   CmdLine:  PChar;
 begin
-// the assignment could be done directly, but to be sure
-CmdLine := GetCommandLine;
+CmdLine := Windows.GetCommandLine;
 If Assigned(CmdLine) then
-  Result := WinToStr(CmdLine)
+  Result := CommandLinePreprocess(WinToStr(CmdLine))
 else
   Result := '';
+end;
 {$ELSE}
 var
   Arguments:  PPointer;
@@ -1006,38 +1223,28 @@ If (argc > 0) and Assigned(argv) then
       If Assigned(Arguments^) then
         begin
           If Length(Result) > 0 then
-            Result := Result + ' ' + PPChar(Arguments)^
+            Result := Result + ' ' + ArgumentPreprocess(PPChar(Arguments)^)
           else
-            Result := PPChar(Arguments)^;
+            Result := ArgumentPreprocess(PPChar(Arguments)^);
           Inc(Arguments);
         end
       else Break{For i};
   end
 else Result := '';
-{$ENDIF}
 end;
+{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-constructor TSCLPParser.CreateEmpty;
+constructor TSimpleCmdLineParser.CreateEmpty;
 begin
 inherited;
-fCommandIntroChar := SCLP_CHAR_CMDINTRO;
-fQuoteChar := SCLP_CHAR_QUOTE;
-fDelimiterChar := SCLP_CHAR_DELIMITER;
-fTerminatorChar := SCLP_CHAR_TERMINATOR;
-fCommandLine := '';
-fImagePath := '';
-SetLength(fParameters,0);
-fCount := 0;
-fLexer := TSCLPLexer.Create;
-fState := psInitial;
-fTokenIndex := -1;
+Initialize;
 end;
 
 //------------------------------------------------------------------------------
 
-constructor TSCLPParser.Create(const CommandLine: String);
+constructor TSimpleCmdLineParser.Create(const CommandLine: String);
 begin
 CreateEmpty;
 Parse(CommandLine);
@@ -1045,55 +1252,58 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-constructor TSCLPParser.Create{$IFNDEF FPC}(Dummy: Integer = 0){$ENDIF};
+constructor TSimpleCmdLineParser.Create{$IFNDEF FPC}(Dummy: Integer = 0){$ENDIF};
 begin
-Create(GetSysCmdLine);
+Create(GetCommandLine);
 end;
 
 //------------------------------------------------------------------------------
 
-destructor TSCLPParser.Destroy;
+destructor TSimpleCmdLineParser.Destroy;
 begin
-Clear;
-fLexer.Free;
+Finalize;
 inherited;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.LowIndex: Integer;
+Function TSimpleCmdLineParser.LowIndex: Integer;
 begin
 Result := Low(fParameters);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.HighIndex: Integer;
+Function TSimpleCmdLineParser.HighIndex: Integer;
 begin
 Result := Pred(fCount);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.First: TSCLPParameter;
+Function TSimpleCmdLineParser.First: TSCLPParameter;
 begin
 Result := GetParameter(LowIndex);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.Last: TSCLPParameter;
+Function TSimpleCmdLineParser.Last: TSCLPParameter;
 begin
 Result := GetParameter(HighIndex);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.IndexOf(const Str: String; CaseSensitive: Boolean): Integer;
+Function TSimpleCmdLineParser.IndexOf(const Str: String; CaseSensitive: Boolean): Integer;
 var
   i:  Integer;
 begin
 Result := -1;
+{
+  There are two seperate cycles for performance reasons - it removes check for
+  CaseSensitive that would be otherwise in every single iteration.
+}
 If CaseSensitive then
   begin
     For i := LowIndex to HighIndex do
@@ -1116,61 +1326,49 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.CommandCount: Integer;
-var
-  i:  Integer;
-begin
-Result := 0;
-For i := LowIndex to HighIndex do
-  If fParameters[i].ParamType in [ptShortCommand,ptLongCommand] then
-    Inc(Result);
-end;
-
-//------------------------------------------------------------------------------
-
-Function TSCLPParser.CommandPresentShort(ShortForm: Char): Boolean;
+Function TSimpleCmdLineParser.CommandPresentShort(ShortForm: Char): Boolean;
 var
   Index:  Integer;
 begin
 Index := IndexOf(ShortForm,True);
 If CheckIndex(Index) then
-  Result := fParameters[Index].ParamType = ptShortCommand
+  Result := fParameters[Index].ParamType = ptCommandShort
 else
   Result := False;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.CommandPresentLong(const LongForm: String): Boolean;
+Function TSimpleCmdLineParser.CommandPresentLong(const LongForm: String): Boolean;
 var
   Index:  Integer;
 begin
 Index := IndexOf(LongForm,False);
 If CheckIndex(Index) then
-  Result := fParameters[Index].ParamType = ptLongCommand
+  Result := fParameters[Index].ParamType = ptCommandLong
 else
   Result := False;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.CommandPresent(ShortForm: Char; const LongForm: String): Boolean;
+Function TSimpleCmdLineParser.CommandPresent(ShortForm: Char; const LongForm: String): Boolean;
 begin
 Result := CommandPresentShort(ShortForm) or CommandPresentLong(LongForm);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.CommandDataShort(ShortForm: Char; out CommandData: TSCLPParameter): Boolean;
+Function TSimpleCmdLineParser.CommandDataShort(ShortForm: Char; out CommandData: TSCLPParameter): Boolean;
 var
   i,j:  Integer;
 begin
 Result := False;
-CommandData.ParamType := ptShortCommand;
+CommandData.ParamType := ptCommandShort;
 CommandData.Str := ShortForm;
 SetLength(CommandData.Arguments,0);
 For i := LowIndex to HighIndex do
-  If (fParameters[i].ParamType = ptShortCommand) and
+  If (fParameters[i].ParamType = ptCommandShort) and
      AnsiSameStr(ShortForm,fParameters[i].Str) then
     begin
       For j := Low(fParameters[i].Arguments) to High(fParameters[i].Arguments) do
@@ -1181,16 +1379,16 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.CommandDataLong(const LongForm: String; out CommandData: TSCLPParameter): Boolean;
+Function TSimpleCmdLineParser.CommandDataLong(const LongForm: String; out CommandData: TSCLPParameter): Boolean;
 var
   i,j:  Integer;
 begin
 Result := False;
-CommandData.ParamType := ptLongCommand;
+CommandData.ParamType := ptCommandLong;
 CommandData.Str := LongForm;
 SetLength(CommandData.Arguments,0);
 For i := LowIndex to HighIndex do
-  If (fParameters[i].ParamType = ptLongCommand) and
+  If (fParameters[i].ParamType = ptCommandLong) and
      AnsiSameText(LongForm,fParameters[i].Str) then
     begin
       For j := Low(fParameters[i].Arguments) to High(fParameters[i].Arguments) do
@@ -1201,28 +1399,43 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TSCLPParser.CommandData(ShortForm: Char; const LongForm: String; out CommandData: TSCLPParameter): Boolean;
+Function TSimpleCmdLineParser.CommandData(ShortForm: Char; const LongForm: String; out CommandData: TSCLPParameter): Boolean;
 var
   i,j:  Integer;
 begin
 Result := False;
+CommandData.ParamType := ptGeneral;
 SetLength(CommandData.Arguments,0);
 For i := LowIndex to HighIndex do
-  If (fParameters[i].ParamType = ptShortCommand) and AnsiSameStr(ShortForm,fParameters[i].Str) then
+  If (fParameters[i].ParamType = ptCommandShort) and AnsiSameStr(ShortForm,fParameters[i].Str) then
     begin
-      If not Result then
-        begin
-          CommandData.ParamType := ptShortCommand;
-          CommandData.Str := ShortForm;
-        end;
+      case CommandData.ParamType of
+        ptGeneral:      begin
+                          CommandData.ParamType := ptCommandShort;
+                          CommandData.Str := ShortForm;
+                        end;
+        ptCommandLong:  CommandData.ParamType := ptCommandBoth;
+      else
+       {ptCommandShort,ptCommandBoth - do nothing}
+      end;
       For j := Low(fParameters[i].Arguments) to High(fParameters[i].Arguments) do
         AddParamArgument(CommandData,fParameters[i].Arguments[j]);
       Result := True;
     end
-  else If (fParameters[i].ParamType = ptLongCommand) and AnsiSameText(LongForm,fParameters[i].Str) then
+  else If (fParameters[i].ParamType = ptCommandLong) and AnsiSameText(LongForm,fParameters[i].Str) then
     begin
-      CommandData.ParamType := ptLongCommand;
-      CommandData.Str := LongForm;
+      case CommandData.ParamType of
+        ptGeneral:      begin
+                          CommandData.ParamType := ptCommandLong;
+                          CommandData.Str := LongForm;
+                        end;
+        ptCommandShort: begin
+                          CommandData.ParamType := ptCommandBoth;
+                          CommandData.Str := LongForm;
+                        end;
+      else
+       {ptCommandLong,ptCommandBoth - do nothing}
+      end;
       For j := Low(fParameters[i].Arguments) to High(fParameters[i].Arguments) do
         AddParamArgument(CommandData,fParameters[i].Arguments[j]);
       Result := True;
@@ -1231,55 +1444,54 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPParser.Clear;
+procedure TSimpleCmdLineParser.Clear;
 begin
+fCommandLine := '';
 fImagePath := '';
 SetLength(fParameters,0);
 fCount := 0;
-TSCLPLexer(fLexer).Clear;
+fCommandCount := 0;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSCLPParser.Parse(const CommandLine: String);
+procedure TSimpleCmdLineParser.Parse(const CommandLine: String);
+var
+  Lexer:      TSCLPLexer;
+  LastCmdIdx: Integer;
+  i:          Integer;
 begin
-fCommandLine := CommandLine;
-ReParse;
+Lexer := TSCLPLexer.Create;
+try
+  Clear;
+  fCommandLine := CommandLine;
+  Lexer.Analyze(fCommandLine);
+  LastCmdIdx := -1;
+  For i := Lexer.LowIndex to Lexer.HighIndex do
+    begin
+      case Lexer.Tokens[i].TokenType of
+        lttGeneral:       begin
+                            If CheckIndex(LastCmdIdx) then
+                              AddParamArgument(LastCmdIdx,Lexer.Tokens[i].Str);
+                            AddParam(ptGeneral,Lexer.Tokens[i].Str);
+                          end;
+        lttCommandShort:  LastCmdIdx := AddParam(ptCommandShort,Lexer.Tokens[i].Str);
+        lttCommandLong:   LastCmdIdx := AddParam(ptCommandLong,Lexer.Tokens[i].Str);
+      end;
+    end;
+  If fCount > 0 then
+    If First.ParamType = ptGeneral then
+      fImagePath := First.Str;
+finally
+  Lexer.Free;
+end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure TSCLPParser.Parse;
+procedure TSimpleCmdLineParser.Parse;
 begin
-Parse(GetSysCmdLine);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSCLPParser.ReParse;
-begin
-Clear;
-TSCLPLexer(fLexer).CommandIntroChar := fCommandIntroChar;
-TSCLPLexer(fLexer).QuoteChar := fQuoteChar;
-TSCLPLexer(fLexer).DelimiterChar := fDelimiterChar;
-TSCLPLexer(fLexer).TerminatorChar := fTerminatorChar;
-TSCLPLexer(fLexer).Analyze(fCommandLine);
-fState := psInitial;
-fTokenIndex := TSCLPLexer(fLexer).LowIndex;
-while fTokenIndex <= TSCLPLexer(fLexer).HighIndex do
-  begin
-    case fState of
-      psInitial:  Process_Initial;
-      psCommand:  Process_Command;
-      psArgument: Process_Argument;
-      psGeneral:  Process_General;
-    else
-      raise ESCLPInvalidState.CreateFmt('TSCLPParser.ReParse: Invalid parser state (%d).',[Ord(fState)]);
-    end;
-    Inc(fTokenIndex);
-  end;
-If fState in [psCommand,psArgument] then
-  AddParam(fCurrentParam);
+Parse(GetCommandLine);
 end;
 
 end.

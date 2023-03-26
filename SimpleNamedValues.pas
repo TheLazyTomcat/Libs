@@ -47,8 +47,8 @@
       - pass it to function/class that requires this data
       - the function/class should copy the passed data to a local storage
         and/or use them immediately
-      - after return from the function/method, free the instance and with it the
-        data
+      - after return from the function/method, free the instance and with it
+        the data
 
     In transient instancing, the object is created internally by function
     TransientNamedValues, containing values passed to this function, and
@@ -64,11 +64,11 @@
     Therefore, in this mode, you are not responsible for managing instances of
     the named value list.
 
-  Version 1.3.3 (2021-03-17)
+  Version 1.3.4 (2023-03-24)
 
-  Last change 2022-09-14
+  Last change 2023-03-24
 
-  ©2020-2022 František Milt
+  ©2020-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -118,7 +118,7 @@ type
   ESNVInvalidValue      = class(ESNVException);
   ESNVUnknownNamedValue = class(ESNVException);
   ESNVValueTypeMismatch = class(ESNVException);
-  ESNVDuplicitValue     = class(ESNVException);
+  ESNVDuplicateValue    = class(ESNVException);
   ESNVInvalidValueType  = class(ESNVException);
 
 {===============================================================================
@@ -221,8 +221,8 @@ type
     Function Find(const Name: String; ValueType: TSNVNamedValueType; out Index: Integer): Boolean; overload; virtual;
     Function Exists(const Name: String): Boolean; overload; virtual;
     Function Exists(const Name: String; ValueType: TSNVNamedValueType): Boolean; overload; virtual;
-    Function Add(const Name: String; ValueType: TSNVNamedValueType): Integer; overload; virtual;
-    procedure Add(Values: TSimpleNamedValues); overload; virtual;
+    Function Add(const Name: String; ValueType: TSNVNamedValueType): Integer; virtual;
+    procedure Append(Values: TSimpleNamedValues); virtual;
     procedure Insert(Index: Integer; const Name: String; ValueType: TSNVNamedValueType); virtual;
     procedure Move(SrcIdx,DstIdx: Integer); virtual;
     procedure Exchange(Idx1,Idx2: Integer); virtual;
@@ -935,12 +935,12 @@ If not Find(Name,Result) then
     Inc(fCount);
     DoChange;
   end
-else raise ESNVDuplicitValue.CreateFmt('TSimpleNamedValues.Add: Value "%s" already exists.',[Name]);
+else raise ESNVDuplicateValue.CreateFmt('TSimpleNamedValues.Add: Value "%s" already exists.',[Name]);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleNamedValues.Add(Values: TSimpleNamedValues);
+procedure TSimpleNamedValues.Append(Values: TSimpleNamedValues);
 var
   i:      Integer;
   Index:  Integer;
@@ -948,7 +948,7 @@ begin
 // first check for duplicitites
 For i := Values.LowIndex to Values.HighIndex do
   If Find(Values[i].Name,Index) then
-    raise ESNVDuplicitValue.CreateFmt('TSimpleNamedValues.Add: Value "%s" already exists.',[Values[i].Name]);
+    raise ESNVDuplicateValue.CreateFmt('TSimpleNamedValues.Add: Value "%s" already exists.',[Values[i].Name]);
 // add values
 For i := Values.LowIndex to Values.HighIndex do
   begin
@@ -1001,7 +1001,7 @@ If not CheckIndex(IndexOf(Name)) then
     else
       raise ESNVIndexOutOfBounds.CreateFmt('TSimpleNamedValues.Insert: Insertion index (%d) out of bounds.',[Index]);
   end
-else raise ESNVDuplicitValue.CreateFmt('TSimpleNamedValues.Insert: Value "%s" already exists.',[Name]);
+else raise ESNVDuplicateValue.CreateFmt('TSimpleNamedValues.Insert: Value "%s" already exists.',[Name]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1096,26 +1096,16 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    Transient instancing - transient class declaration
+    Transient instancing - class declaration
 ===============================================================================}
-{
-  TTransientSimpleNamedValues implements only simplified reference counting,
-  but since the class is used only internally, it should suffice.
-}
 type
-  TTransientSimpleNamedValues = class(TSimpleNamedValues,ITransientSimpleNamedValues)
-  private
-    fRefCount:  Integer;
+  TTransientSimpleNamedValues = class(TInterfacedObject,ITransientSimpleNamedValues)
   protected
-    // IInterface
-    Function QueryInterface({$IFDEF FPC}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): HResult; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
-    Function _AddRef: Integer; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
-    Function _Release: Integer; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
+    fImplementor: TSimpleNamedValues;
   public
-    class Function NewInstance: TObject; override;
-    procedure AfterConstruction; override;
-    procedure BeforeDestruction; override;
-    Function Implementor: TSimpleNamedValues; virtual; 
+    constructor Create(Implementor: TSimpleNamedValues);
+    destructor Destroy; override;
+    Function Implementor: TSimpleNamedValues; virtual;
   end;
 
 {===============================================================================
@@ -1214,10 +1204,10 @@ end;
 
 Function TransientNamedValues(const NamedValues: array of TSNVNamedValueContainer): ITransientSimpleNamedValues;
 var
-  List: TTransientSimpleNamedValues;
+  List: TSimpleNamedValues;
   i:    Integer;
 begin
-List := TTransientSimpleNamedValues.Create;
+List := TSimpleNamedValues.Create;
 For i := Low(NamedValues) to High(NamedValues) do
   case NamedValues[i].ValueType of
     nvtBool:      List.BoolValue[NamedValues[i].Name] := NamedValues[i].BoolValue;
@@ -1233,7 +1223,7 @@ For i := Low(NamedValues) to High(NamedValues) do
   else
     raise ESNVInvalidValue.CreateFmt('TransientNamedValues: Invalid value type (%d).',[Ord(NamedValues[i].ValueType)]);
   end;
-Result := List;
+Result := TTransientSimpleNamedValues.Create(List);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1244,61 +1234,23 @@ Result := TransientNamedValues([NamedValue]);
 end;
 
 {===============================================================================
-    Transient instancing - transient class implementation
+    Transient instancing - class implementation
 ===============================================================================}
-{-------------------------------------------------------------------------------
-    Transient instancing - protected methods
--------------------------------------------------------------------------------}
-
-Function TTransientSimpleNamedValues.QueryInterface({$IFDEF FPC}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): HResult; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
-begin
-If GetInterface(IID,Obj) then
-  Result := S_OK
-else
-  Result := E_NOINTERFACE;
-end;
-
-//------------------------------------------------------------------------------
-
-Function TTransientSimpleNamedValues._AddRef: Integer; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
-begin
-Result := InterlockedIncrement(fRefCount);
-end;
-
-//------------------------------------------------------------------------------
-
-Function TTransientSimpleNamedValues._Release: Integer; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
-begin
-Result := InterlockedDecrement(fRefCount);
-If Result <= 0 then
-  Self.Free;
-end;
-
 {-------------------------------------------------------------------------------
     Transient instancing - public methods
 -------------------------------------------------------------------------------}
 
-class Function TTransientSimpleNamedValues.NewInstance: TObject;
+constructor TTransientSimpleNamedValues.Create(Implementor: TSimpleNamedValues);
 begin
-Result := inherited NewInstance;
-If Assigned(Result) then
-  TTransientSimpleNamedValues(Result).fRefCount := 1;
+inherited Create;
+fImplementor := Implementor;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TTransientSimpleNamedValues.AfterConstruction;
+destructor TTransientSimpleNamedValues.Destroy;
 begin
-inherited;
-InterlockedDecrement(fRefCount);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TTransientSimpleNamedValues.BeforeDestruction;
-begin
-If fRefCount <> 0 then
-  raise ESNVInvalidValue.CreateFmt('TTransientSimpleNamedValues.BeforeDestruction: Invalid reference count (%d).',[fRefCount]);
+FreeAndNil(fImplementor);
 inherited;
 end;
 
@@ -1306,8 +1258,9 @@ end;
 
 Function TTransientSimpleNamedValues.Implementor: TSimpleNamedValues;
 begin
-Result := Self;
+Result := fImplementor;
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------

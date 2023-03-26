@@ -12,11 +12,11 @@
     Utility functions for 64bit unsigned integers. Meant mainly for compilers
     that do not have full native support for this type (eg. Delphi 7).
 
-  Version 1.0.2 (2022-01-03)
+  Version 1.0.3 (2023-02-21)
 
-  Last change 2022-01-03
+  Last change 2023-02-21
 
-  ©2018-2022 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -206,27 +206,30 @@ If Length(Str) > 0 then
           Result := HexToUInt64(Str);
           Exit;
         end;
-  end;
-// rectify string
-If Length(Str) < Length(UInt64NumTable[0]) then
-  TempStr := StringOfChar('0',Length(UInt64NumTable[0]) - Length(Str)) + Str
-else If Length(Str) > Length(UInt64NumTable[0]) then
-  raise EUI64UConvertError.CreateFmt('StrToUInt64: "%s" is not a valid integer string.',[Str])
-else
-  TempStr := Str;
-// check if string contains only numbers  
-For i := 1 to Length(TempStr) do
-  If not(Ord(TempStr[i]) in [Ord('0')..Ord('9')]) then
-    raise EUI64UConvertError.CreateFmt('StrToUInt64: "%s" is not a valid integer string.',[Str]);
-// do the calculations
-For i := 63 downto 0 do
-  If SubtractValStr(TempStr,UInt64NumTable[i],ResStr) >= 0 then
-    If CompareValStr(ResStr,UInt64NumTable[i]) < 0 then
-      begin
-        Result := Result or (UInt64(1) shl i);
-        TempStr := ResStr;
-      end
-    else raise EUI64UConvertError.CreateFmt('StrToUInt64: "%s" is not a valid integer string.',[Str]);
+    // rectify string
+    If Length(Str) < Length(UInt64NumTable[0]) then
+      TempStr := StringOfChar('0',Length(UInt64NumTable[0]) - Length(Str)) + Str
+    else If Length(Str) > Length(UInt64NumTable[0]) then
+      raise EUI64UConvertError.CreateFmt('StrToUInt64: "%s" is not a valid integer string.',[Str])
+    else
+      TempStr := Str;
+    // check if string contains only numbers
+    For i := 1 to Length(TempStr) do
+      If not(Ord(TempStr[i]) in [Ord('0')..Ord('9')]) then
+        raise EUI64UConvertError.CreateFmt('StrToUInt64: "%s" is not a valid integer string.',[Str]);
+    // do the calculations
+    For i := 63 downto 0 do
+      If SubtractValStr(TempStr,UInt64NumTable[i],ResStr) >= 0 then
+        begin
+          If CompareValStr(ResStr,UInt64NumTable[i]) < 0 then
+            begin
+              Result := Result or (UInt64(1) shl i);
+              TempStr := ResStr;
+            end
+          else raise EUI64UConvertError.CreateFmt('StrToUInt64: "%s" is not a valid integer string.',[Str]);
+        end;
+  end
+else raise EUI64UConvertError.CreateFmt('StrToUInt64: "%s" is not a valid integer string.',[Str]);
 end;
 
 //------------------------------------------------------------------------------
@@ -257,13 +260,20 @@ Result := 0;
 If Length(Str) > 0 then
   begin
     If Str[1] = '$' then
-      Start := 2
+      begin
+        If Length(Str) <= 1 then
+          raise EUI64UConvertError.CreateFmt('HexToUInt64: "%s" is not a valid hexadecimal string.',[Str]);
+        Start := 2;
+      end
     else If Length(Str) >= 2 then
       begin
         If (Str[1] = '0') and ((Str[2] = 'x') or (Str[2] = 'X')) then
-          Start := 3
-        else
-          Start := 1;
+          begin
+            If Length(Str) <= 2 then
+              raise EUI64UConvertError.CreateFmt('HexToUInt64: "%s" is not a valid hexadecimal string.',[Str]);
+            Start := 3;
+          end
+        else Start := 1;
       end
     else Start := 1;
     If (Length(Str) - Start) <= 15 then
@@ -281,7 +291,8 @@ If Length(Str) > 0 then
           end;
       end
     else raise EUI64UConvertError.CreateFmt('HexToUInt64: "%s" is not a valid hexadecimal string.',[Str]);
-  end;
+  end
+else raise EUI64UConvertError.CreateFmt('HexToUInt64: "%s" is not a valid hexadecimal string.',[Str]);
 end;
 
 //------------------------------------------------------------------------------
