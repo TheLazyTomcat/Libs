@@ -123,9 +123,9 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2022-09-24
+  Last change 2023-03-27
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1296,8 +1296,8 @@ If fTransCount < fBlockSize then
   {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
     FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
     PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := PaddingByte;
-    PUInt8(PtrUInt(fTransBlock) - 1 + PtrUInt(fBlockSize))^ :=
-      PUInt8(PtrUInt(fTransBlock) - 1 + PtrUInt(fBlockSize))^ or $80;
+    PUInt8(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - 1))^ :=
+      PUInt8(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - 1))^ or $80;
   {$IFDEF FPCDWM}{$POP}{$ENDIF}
     ProcessBlock(fTransBlock^);
     Squeeze;
@@ -1311,7 +1311,7 @@ else
       {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
         FillChar(fTransBlock^,fBlockSize,0);
         PUInt8(fTransBlock)^ := PaddingByte;
-        PUInt8(PtrUInt(fTransBlock) - 1 + PtrUInt(fBlockSize))^ := $80;
+        PUInt8(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - 1))^ := $80;
       {$IFDEF FPCDWM}{$POP}{$ENDIF}
         ProcessBlock(fTransBlock^);
         Squeeze;

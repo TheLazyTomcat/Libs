@@ -14,9 +14,9 @@
 
   version 1.1 (2021-12-11)
 
-  Last change 2021-12-11
+  Last change 2023-03-26
 
-  ©2015-2021 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -246,7 +246,7 @@ type
                 this as long as they work with full string, not pointer to
                 first character)
               - last character (terminating zero) is at index Length - 1
-              - last character that is part of the string is at index Lenth - 2
+              - last character that is part of the string is at index Length - 2
 }
 {$IF not Declared(UTF32Char)}
   UTF32Char = UCS4Char;

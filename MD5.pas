@@ -11,9 +11,9 @@
 
   Version 1.6.1 (2020-07-13)
 
-  Last change 2022-09-24
+  Last change 2023-03-27
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -287,7 +287,7 @@ If (fBlockSize - fTransCount) >= (SizeOf(UInt64) + 1) then
   {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
     FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
     PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := $80;
-    PUInt64(PtrUInt(fTransBlock) - SizeOf(UInt64) + PtrUInt(fBlockSize))^ :=
+    PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
       {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
   {$IFDEF FPCDWM}{$POP}{$ENDIF}
     ProcessBlock(fTransBlock^);
@@ -304,7 +304,7 @@ else
         ProcessBlock(fTransBlock^);
         FillChar(fTransBlock^,fBlockSize,0);
       {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-        PUInt64(PtrUInt(fTransBlock) - SizeOf(UInt64) + PtrUInt(fBlockSize))^ :=
+        PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
           {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
       {$IFDEF FPCDWM}{$POP}{$ENDIF}
         ProcessBlock(fTransBlock^);        
