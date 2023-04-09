@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.18 (2023-03-08)
+  Version 1.18.1 (2023-04-09)
 
-  Last change (2023-03-08)
+  Last change (2023-04-09)
 
   ©2014-2023 František Milt
 
@@ -1108,7 +1108,7 @@ Function SameData(A,B: array of UInt8): Boolean; overload;
 {
   Takes bytes at address Buffer + Shift and moves them down so the first moved
   byte is placed at the start of the buffer. Number of bytes shifted is equal
-  to BufferSize - Shift (so the the entire rest of the buffer beyond Shift
+  to BufferSize - Shift (so that the entire rest of the buffer beyond Shift
   offset is moved).
   This function is intended for situations where buffered data are only
   partially consumed and what is left must be shifted down to the beginning of
@@ -1168,7 +1168,7 @@ procedure CopyBits(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCou
   the asm version uses some CPU instruction extension that is not guaranteed to
   be present on the executing machine.
   These functions have both implementations (pascal and assembly) compiled, and
-  which will be used is selected at unit initialization after checking CPU for
+  which will be used is selected at unit initialization, after checking CPU for
   required extensions.
   Before unit initialization, all the functions are routed to default
   implementation (pascal).
@@ -4769,16 +4769,11 @@ begin
 Result := PopCountTable[Value];
 end;
 {$ELSE}
-var
-  i:  Integer;
 begin
-Result := 0;
-For i := 1 to 8 do
-  begin
-    If (Value and 1) <> 0 then
-      Inc(Result);
-    Value := UInt8(Value shr 1);
-  end;
+Value := (Value and UInt8($55)) + ((Value shr 1) and UInt8($55));
+Value := (Value and UInt8($33)) + ((Value shr 2) and UInt8($33));
+Value := (Value and UInt8($0F)) + ((Value shr 4) and UInt8($0F));
+Result := Integer(Value);
 end;
 {$ENDIF}
 
@@ -4790,16 +4785,12 @@ begin
 Result := PopCountTable[UInt8(Value)] + PopCountTable[UInt8(Value shr 8)];
 end;
 {$ELSE}
-var
-  i:  Integer;
 begin
-Result := 0;
-For i := 1 to 16 do
-  begin
-    If (Value and 1) <> 0 then
-      Inc(Result);
-    Value := UInt16(Value shr 1);
-  end;
+Value := (Value and UInt16($5555)) + ((Value shr 1) and UInt16($5555));
+Value := (Value and UInt16($3333)) + ((Value shr 2) and UInt16($3333));
+Value := (Value and UInt16($0F0F)) + ((Value shr 4) and UInt16($0F0F));
+Value := (Value and UInt16($00FF)) + ((Value shr 8) and UInt16($00FF));
+Result := Integer(Value);
 end;
 {$ENDIF}
 
@@ -4812,16 +4803,13 @@ Result := PopCountTable[UInt8(Value)] + PopCountTable[UInt8(Value shr 8)] +
   PopCountTable[UInt8(Value shr 16)] + PopCountTable[UInt8(Value shr 24)];
 end;
 {$ELSE}
-var
-  i:  Integer;
 begin
-Result := 0;
-For i := 1 to 32 do
-  begin
-    If (Value and 1) <> 0 then
-      Inc(Result);
-    Value := UInt32(Value shr 1);
-  end;
+Value := (Value and UInt32($55555555)) + ((Value shr 1) and UInt32($55555555));
+Value := (Value and UInt32($33333333)) + ((Value shr 2) and UInt32($33333333));
+Value := (Value and UInt32($0F0F0F0F)) + ((Value shr 4) and UInt32($0F0F0F0F));
+Value := (Value and UInt32($00FF00FF)) + ((Value shr 8) and UInt32($00FF00FF));
+Value := (Value and UInt32($0000FFFF)) + ((Value shr 16) and UInt32($0000FFFF));
+Result := Integer(Value);
 end;
 {$ENDIF}
 
@@ -4840,16 +4828,14 @@ Result := Fce_PopCount_32_Pas(Int64Rec(Value).Lo) + Fce_PopCount_32_Pas(Int64Rec
 {$ENDIF}
 end;
 {$ELSE}
-var
-  i:  Integer;
 begin
-Result := 0;
-For i := 1 to 64 do
-  begin
-    If (Value and 1) <> 0 then
-      Inc(Result);
-    Value := UInt64(Value shr 1);
-  end;
+Value := (Value and UInt64($5555555555555555)) + ((Value shr 1) and UInt64($5555555555555555));
+Value := (Value and UInt64($3333333333333333)) + ((Value shr 2) and UInt64($3333333333333333));
+Value := (Value and UInt64($0F0F0F0F0F0F0F0F)) + ((Value shr 4) and UInt64($0F0F0F0F0F0F0F0F));
+Value := (Value and UInt64($00FF00FF00FF00FF)) + ((Value shr 8) and UInt64($00FF00FF00FF00FF));
+Value := (Value and UInt64($0000FFFF0000FFFF)) + ((Value shr 16) and UInt64($0000FFFF0000FFFF));
+Value := (Value and UInt64($00000000FFFFFFFF)) + ((Value shr 32) and UInt64($00000000FFFFFFFF));
+Result := Integer(Value);
 end;
 {$ENDIF}
 
@@ -7406,13 +7392,14 @@ end;
 
 procedure CopyBits(Source,Destination: Pointer; BitCount: TMemSize);
 var
-  i:    TMemSize;
-  Mask: UInt8;
+  Mask:     UInt8;
+  DestTemp: PUInt8;
 begin
 If (Source <> Destination) and (BitCount > 0) then
   begin
     If (BitCount and 7) <> 0 then
       begin
+        // mask is used in any case, so let's calculate it here
         Mask := UInt8($FF) shr (8 - (BitCount and 7));
         // check whether the destination starts inside of source....
       {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
@@ -7421,33 +7408,26 @@ If (Source <> Destination) and (BitCount > 0) then
       {$IFDEF FPCDWM}{$POP}{$ENDIF}
           begin
             // source can be overwritten, do backward copy...
-            // move pointers to the last byte
-            PtrAdvanceVar(Source,Pred((BitCount + 7) shr 3));
-            PtrAdvanceVar(Destination,Pred((BitCount + 7) shr 3));
-            // first do partial byte
-            PUInt8(Destination)^ := (PUInt8(Destination)^ and not Mask) or (PUInt8(Source)^ and Mask);
-            Dec(PUInt8(Source));
-            Dec(PUInt8(Destination));
-            // and now complete bytes
-            For i := 1 to (BitCount shr 3) do
-              begin
-                PUInt8(Destination)^ := PUInt8(Source)^;
-                Dec(PUInt8(Source));
-                Dec(PUInt8(Destination));
-              end;
+            // first do the last, partial byte
+            DestTemp := PtrAdvance(Destination,Pred((BitCount + 7) shr 3));
+            PUInt8(DestTemp)^ := (PUInt8(DestTemp)^ and not Mask) or
+              (PUInt8(PtrAdvance(Source,Pred((BitCount + 7) shr 3)))^ and Mask);
+          {
+            And now complete bytes - System.Move is assumed to be optimized and
+            protected againts overwrites, therefore it is used instead of
+            custom code.
+          }
+            System.Move(Source^,Destination^,BitCount shr 3);
           end
         else
           begin
-            // source cannot be overvritten, do normal forward copy...
-            // first copy integral bytes
-            For i := 1 to (BitCount shr 3) do
-              begin
-                PUInt8(Destination)^ := PUInt8(Source)^;
-                Inc(PUInt8(Source));
-                Inc(PUInt8(Destination));
-              end;
-            // and now the rest
-            PUInt8(Destination)^ := (PUInt8(Destination)^ and not Mask) or (PUInt8(Source)^ and Mask);
+            // source cannot be overwritten, do normal forward copy...
+            // first full bytes...
+            System.Move(Source^,Destination^,BitCount shr 3);
+            DestTemp := PtrAdvance(Destination,BitCount shr 3);
+            // ...and now the rest
+            PUInt8(DestTemp)^ := (PUInt8(DestTemp)^ and not Mask) or
+              (PUInt8(PtrAdvance(Source,BitCount shr 3))^ and Mask);
           end;
       end
     else System.Move(Source^,Destination^,BitCount shr 3);
@@ -7460,49 +7440,121 @@ procedure CopyBits(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCou
 
   Function DestinationIsWithinSource: Boolean;
   var
-    ByteCount:  TMemSize;
+    SrcByteCount: TMemSize;
   begin
   {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
     If (PtrUInt(Destination) >= PtrUInt(Source)) then
   {$IFDEF FPCDWM}{$POP}{$ENDIF}
       begin
-        // destination pointer is somewhere abowe or at the source pointer
-        ByteCount := TMemSize((SrcBitOffset + BitCount + 7) shr 3){equivalent to "Ceil((SrcBitOffset + BitCount) / 8)"};
-        // note - ByteCount cannot resolve to zero
+      {
+        Destination pointer is somewhere abowe or at the source pointer.
+
+        Note - ByteCount cannot resolve to zero, because this function is not
+               called if BitCount is zero.
+      }
+        SrcByteCount := TMemSize((SrcBitOffset + BitCount + 7) shr 3){equivalent to "Ceil((SrcBitOffset + BitCount) / 8)"};
       {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        If PtrUInt(Destination) < (PtrUInt(Source) + PtrUInt(ByteCount)) then
+        If PtrUInt(Destination) < (PtrUInt(Source) + PtrUInt(SrcByteCount)) then
       {$IFDEF FPCDWM}{$POP}{$ENDIF}
           begin
-            // destination pointer is inside of source memory...
+            // destination pointer is inside of source bytes...
             If Destination = Source then
               // destination and source pointer are equal, result depends on bit offsets
               Result := DstBitOffset >= SrcBitOffset
           {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            else If (PtrUInt(Destination) + 1) = (PtrUInt(Source) + PtrUInt(ByteCount)) then
+            else If (PtrUInt(Destination) + 1) = (PtrUInt(Source) + PtrUInt(SrcByteCount)) then
           {$IFDEF FPCDWM}{$POP}{$ENDIF}
-              // destination pointer points to the last byte of source memory, result depends on bit count and destination bit offset
-              Result := DstBitOffset < (({$IFNDEF CPU64bit}Int64{$ENDIF}(SrcBitOffset) + BitCount) - ((ByteCount - 1) shl 3))
+            {
+              Destination pointer points to the last byte of source memory,
+              result depends on bit count and destination bit offset.
+
+              In reality we calculate number of source bits in the last source
+              byte and use this number for comparison.
+            }
+              Result := DstBitOffset < (({$IFNDEF CPU64bit}Int64{$ENDIF}(SrcBitOffset) + BitCount) - ((SrcByteCount - 1) shl 3))
             else
               // destination pointer is somewhere in the middle, just return true
               Result := True;
           end
-        // destination pointer is completely behind the source memory
+        // destination pointer is completely behind the source byes
         else Result := False;
       end
     // destination pointer is below source pointer, so it cannot be inside the source memory
     else Result := False;
   end;
 
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+const
+  ChunkSize = {$IFDEF CPU64Bit}7{$ELSE}3{$ENDIF};
+type
+  TLocalLong = {$IFDEF CPU64Bit}UInt64{$ELSE}UInt32{$ENDIF};
+var
+  ByteWriteMask:  UInt16;
+  LongWriteMask:  TLocalLong;
 
-  Function CorrectByteOrder(Value: UInt16): UInt16;
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  Function CBO16(Value: UInt16): UInt16;  // correct byte order
   begin
     Result := {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(Value);
   end;
 
 //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-var
-  WriteMask:  UInt16;
+
+  Function CBO(Value: TLocalLong): TLocalLong;
+  begin
+    Result := {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(Value);
+  end;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  procedure DoFullLongCopy;
+  type
+    TChunk = packed array[0..Pred(ChunkSize)] of UInt8;
+
+    Function ReadChunk: TLocalLong;
+    var
+      Chunk:  TChunk;
+    begin
+      Chunk := TChunk(Source^);
+      Result := TLocalLong(Chunk[0])
+        or (TLocalLong(Chunk[1]) shl 8) or (TLocalLong(Chunk[2]) shl 16)
+    {$IFDEF CPU64Bit}
+        or (TLocalLong(Chunk[3]) shl 24) or (TLocalLong(Chunk[4]) shl 32)
+        or (TLocalLong(Chunk[5]) shl 40) or (TLocalLong(Chunk[6]) shl 48)
+    {$ENDIF};
+    end;
+
+    procedure WriteChunk(Value: TLocalLong);
+    var
+      Chunk:  TChunk;
+    begin
+      Chunk[0] := Value and $FF;
+      Chunk[1] := (Value shr 8) and $FF;
+      Chunk[2] := (Value shr 16) and $FF;
+    {$IFDEF CPU64Bit}
+      Chunk[3] := (Value shr 24) and $FF;
+      Chunk[4] := (Value shr 32) and $FF;
+      Chunk[5] := (Value shr 40) and $FF;
+      Chunk[6] := (Value shr 48) and $FF;
+    {$ENDIF};
+      TChunk(Destination^) := Chunk;
+    end;
+
+  var
+    Buffer: TLocalLong;
+  begin
+    // read buffer
+    If SrcBitOffset <> 0 then
+      Buffer := CBO(TLocalLong(Source^)) shr SrcBitOffset
+    else
+      Buffer := ReadChunk;
+    // write buffer
+    If DstBitOffset <> 0 then
+      TLocalLong(Destination^) := CBO(((Buffer shl DstBitOffset) and not LongWriteMask) or (CBO(TLocalLong(Destination^)) and LongWriteMask))
+    else
+      WriteChunk(Buffer);
+  end;
 
 //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
 
@@ -7512,14 +7564,12 @@ var
   begin
     // read buffer
     If SrcBitOffset <> 0 then
-      Buffer := UInt8(CorrectByteOrder(PUInt16(Source)^) shr SrcBitOffset)
+      Buffer := UInt8(CBO16(PUInt16(Source)^) shr SrcBitOffset)
     else
       Buffer := PUInt8(Source)^;
     // write buffer
     If DstBitOffset <> 0 then
-      PUInt16(Destination)^ := CorrectByteOrder(
-        (UInt16(Buffer) shl DstBitOffset) or
-        (CorrectByteOrder(PUInt16(Destination)^) and WriteMask))
+      PUInt16(Destination)^ := CBO16((UInt16(Buffer) shl DstBitOffset) or (CBO16(PUInt16(Destination)^) and ByteWriteMask))
     else
       PUInt8(Destination)^ := Buffer;
   end;
@@ -7532,26 +7582,27 @@ var
   begin
     // load bits
     If (SrcBitOffset + (BitCount and 7)) > 8 then
-      Buffer := UInt8(GetBits(CorrectByteOrder(PUInt16(Source)^),Integer(SrcBitOffset),
-                              Pred(Integer(SrcBitOffset + (BitCount and 7))),True))
+      // source bits span byte boundary
+      Buffer := UInt8(GetBits(CBO16(PUInt16(Source)^),Integer(SrcBitOffset),Pred(Integer(SrcBitOffset + (BitCount and 7))),True))
     else
-      Buffer := GetBits(PUInt8(Source)^,Integer(SrcBitOffset),
-                        Pred(Integer(SrcBitOffset + (BitCount and 7))),True);
+      // all source bits are within one byte
+      Buffer := GetBits(PUInt8(Source)^,Integer(SrcBitOffset),Pred(Integer(SrcBitOffset + (BitCount and 7))),True);
     // store bits
     If (DstBitOffset + (BitCount and 7)) > 8 then
-      PUInt16(Destination)^ := CorrectByteOrder(
-        SetBits(CorrectByteOrder(PUInt16(Destination)^),UInt16(UInt16(Buffer) shl DstBitOffset),
-                Integer(DstBitOffset),Pred(Integer(DstBitOffset + (BitCount and 7)))))
+      // destination span byte boundary
+      PUInt16(Destination)^ := CBO16(SetBits(CBO16(PUInt16(Destination)^),UInt16(UInt16(Buffer) shl DstBitOffset),
+        Integer(DstBitOffset),Pred(Integer(DstBitOffset + (BitCount and 7)))))
     else
-      PUInt8(Destination)^ :=
-        SetBits(PUInt8(Destination)^,UInt8(Buffer shl DstBitOffset),
-                Integer(DstBitOffset),Pred(Integer(DstBitOffset + (BitCount and 7))));
+      // destination is within one byte
+      PUInt8(Destination)^ := SetBits(PUInt8(Destination)^,UInt8(Buffer shl DstBitOffset),
+        Integer(DstBitOffset),Pred(Integer(DstBitOffset + (BitCount and 7))));
   end;
 
 //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
 
 var
-  i:  TMemSize;
+  BytesToCopy:  TMemSize;
+  i:            TMemSize;
 begin
 If BitCount > 0 then
   begin
@@ -7565,40 +7616,61 @@ If BitCount > 0 then
         // at least one bit offset is non-zero
         If (Source <> Destination) or (SrcBitOffset <> DstBitOffset) then
           begin
-            WriteMask := not UInt16(UInt16($00FF) shl DstBitOffset);
+            BytesToCopy := BitCount shr 3;
+            ByteWriteMask := not UInt16(UInt16($00FF) shl DstBitOffset);
+          {$IFDEF CPU64Bit}
+            LongWriteMask := not UInt64(UInt64($00FFFFFFFFFFFFFF) shl DstBitOffset);
+          {$ELSE}
+            LongWriteMask := not UInt32(UInt32($00FFFFFF) shl DstBitOffset);
+          {$ENDIF}
             If DestinationIsWithinSource then 
               begin
                 // destination starts somewhere withing the source memory, do backward copy
-                PtrAdvanceVar(Source,Pred((BitCount + 7) shr 3));
-                PtrAdvanceVar(Destination,Pred((BitCount + 7) shr 3));
+                PtrAdvanceVar(Source,(BitCount + 7) shr 3);
+                PtrAdvanceVar(Destination,(BitCount + 7) shr 3);
                 // first the trailing partial byte
                 If (BitCount and 7) <> 0 then
                   begin
+                    // first advance poiters
+                    Dec(PUInt8(Source));
+                    Dec(PUInt8(Destination));
                     DoPartialByteCopy;
-                    // sdvance poiters    
-                    Dec(PUInt8(Source));
-                    Dec(PUInt8(Destination));
                   end;
-                // and now "whole" bytes
-                For i := 1 to (BitCount shr 3) do
+                // chunks
+                For i := 1 to (BytesToCopy div ChunkSize) do
                   begin
-                    DoFullByteCopy;
-                    // advance pointers
+                    Dec(PUInt8(Source),ChunkSize);
+                    Dec(PUInt8(Destination),ChunkSize);
+                    DoFullLongCopy;
+                    Dec(BytesToCopy,ChunkSize);
+                  end;
+                // "whole" bytes
+                For i := 1 to BytesToCopy do
+                  begin
                     Dec(PUInt8(Source));
-                    Dec(PUInt8(Destination));
+                    Dec(PUInt8(Destination));                  
+                    DoFullByteCopy;
                   end;
               end
             else
               begin
                 // destination is not within the source, do "normal" forward copy
-                // first do "whole" bytes
-                For i := 1 to (BitCount shr 3) do
+                // chunks
+                For i := 1 to (BytesToCopy div ChunkSize) do
+                  begin
+                    DoFullLongCopy;
+                    Inc(PUInt8(Source),ChunkSize);
+                    Inc(PUInt8(Destination),ChunkSize);
+                    Dec(BytesToCopy,ChunkSize);
+                  end;
+                // "whole" bytes
+                For i := 1 to BytesToCopy do
                   begin
                     DoFullByteCopy;
                     Inc(PUInt8(Source));
                     Inc(PUInt8(Destination));
                   end;
-                // now copy the remaining bits, if any
+                // and the remaining bits, if any
                 If (BitCount and 7) <> 0 then
                   DoPartialByteCopy;
               end;
@@ -7811,3 +7883,4 @@ initialization
   Initialize;
 
 end.
+
