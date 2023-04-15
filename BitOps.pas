@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.18.1 (2023-04-09)
+  Version 1.18.2 (2023-04-15)
 
-  Last change (2023-04-09)
+  Last change (2023-04-15)
 
   ©2014-2023 František Milt
 
@@ -34,6 +34,7 @@
 
   Dependencies:
     AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
   * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
     SimpleCPUID is required only when AllowASMExtensions symbol is defined and
@@ -162,8 +163,9 @@ uses
 type
   EBOException = class(Exception);
 
-  EBOUnknownFunction = class(EBOException);
-  EBOInvalidValue    = class(EBOException);
+  EBOUnknownFunction  = class(EBOException);
+  EBONoImplementation = class(EBOException);
+  EBOInvalidValue     = class(EBOException);
 
   EBOConversionError  = class(EBOException);
   EBOInvalidCharacter = class(EBOConversionError);
@@ -1239,10 +1241,8 @@ Function UIM_BitOps_SetFuncImpl(Func: TUIM_BitOps_Function; NewImpl: TUIM_BitOps
 
 implementation
 
-{$IFDEF ASM_Extensions}
 uses
-  SimpleCPUID;
-{$ENDIF}
+  BasicUIM{$IFDEF ASM_Extensions}, SimpleCPUID{$ENDIF};
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -7695,59 +7695,9 @@ end;
                          Unit implementation management
 ================================================================================
 -------------------------------------------------------------------------------}
-const
-  UIM_BITOPS_PASCAL_IMPL: array[TUIM_BitOps_Function] of Pointer = (
-    @Fce_PopCount_8_Pas,@Fce_PopCount_16_Pas,@Fce_PopCount_32_Pas,@Fce_PopCount_64_Pas,
-    @Fce_LZCount_8_Pas,@Fce_LZCount_16_Pas,@Fce_LZCount_32_Pas,@Fce_LZCount_64_Pas,
-    @Fce_TZCount_8_Pas,@Fce_TZCount_16_Pas,@Fce_TZCount_32_Pas,@Fce_TZCount_64_Pas,
-    @Fce_ExtractBits_8_Pas,@Fce_ExtractBits_16_Pas,@Fce_ExtractBits_32_Pas,@Fce_ExtractBits_64_Pas,
-    @Fce_ParallelBitsExtract_8_Pas,@Fce_ParallelBitsExtract_16_Pas,@Fce_ParallelBitsExtract_32_Pas,@Fce_ParallelBitsExtract_64_Pas,
-    @Fce_ParallelBitsDeposit_8_Pas,@Fce_ParallelBitsDeposit_16_Pas,@Fce_ParallelBitsDeposit_32_Pas,@Fce_ParallelBitsDeposit_64_Pas);
-
-{$IFDEF ASM_Extensions}
-  UIM_BITOPS_ASSEMBLY_IMPL: array[TUIM_BitOps_Function] of Pointer = (
-    @Fce_PopCount_8_Asm,@Fce_PopCount_16_Asm,@Fce_PopCount_32_Asm,@Fce_PopCount_64_Asm,
-    @Fce_LZCount_8_Asm,@Fce_LZCount_16_Asm,@Fce_LZCount_32_Asm,@Fce_LZCount_64_Asm,
-    @Fce_TZCount_8_Asm,@Fce_TZCount_16_Asm,@Fce_TZCount_32_Asm,@Fce_TZCount_64_Asm,
-    @Fce_ExtractBits_8_Asm,@Fce_ExtractBits_16_Asm,@Fce_ExtractBits_32_Asm,@Fce_ExtractBits_64_Asm,
-    @Fce_ParallelBitsExtract_8_Asm,@Fce_ParallelBitsExtract_16_Asm,@Fce_ParallelBitsExtract_32_Asm,@Fce_ParallelBitsExtract_64_Asm,
-    @Fce_ParallelBitsDeposit_8_Asm,@Fce_ParallelBitsDeposit_16_Asm,@Fce_ParallelBitsDeposit_32_Asm,@Fce_ParallelBitsDeposit_64_Asm);
-{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-Function UIM_GetFunctionVarAddr(Func: TUIM_BitOps_Function): PPointer;
-begin
-case Func of
-  fnPopCount8:              Result := Addr(@Var_PopCount_8);
-  fnPopCount16:             Result := Addr(@Var_PopCount_16);
-  fnPopCount32:             Result := Addr(@Var_PopCount_32);
-  fnPopCount64:             Result := Addr(@Var_PopCount_64);
-  fnLZCount8:               Result := Addr(@Var_LZCount_8);
-  fnLZCount16:              Result := Addr(@Var_LZCount_16);
-  fnLZCount32:              Result := Addr(@Var_LZCount_32);
-  fnLZCount64:              Result := Addr(@Var_LZCount_64);
-  fnTZCount8:               Result := Addr(@Var_TZCount_8);
-  fnTZCount16:              Result := Addr(@Var_TZCount_16);
-  fnTZCount32:              Result := Addr(@Var_TZCount_32);
-  fnTZCount64:              Result := Addr(@Var_TZCount_64);
-  fnExtractBits8:           Result := Addr(@Var_ExtractBits_8);
-  fnExtractBits16:          Result := Addr(@Var_ExtractBits_16);
-  fnExtractBits32:          Result := Addr(@Var_ExtractBits_32);
-  fnExtractBits64:          Result := Addr(@Var_ExtractBits_64);
-  fnParallelBitsExtract8:   Result := Addr(@Var_ParallelBitsExtract_8);
-  fnParallelBitsExtract16:  Result := Addr(@Var_ParallelBitsExtract_16);
-  fnParallelBitsExtract32:  Result := Addr(@Var_ParallelBitsExtract_32);
-  fnParallelBitsExtract64:  Result := Addr(@Var_ParallelBitsExtract_64);
-  fnParallelBitsDeposit8:   Result := Addr(@Var_ParallelBitsDeposit_8);
-  fnParallelBitsDeposit16:  Result := Addr(@Var_ParallelBitsDeposit_16);
-  fnParallelBitsDeposit32:  Result := Addr(@Var_ParallelBitsDeposit_32);
-  fnParallelBitsDeposit64:  Result := Addr(@Var_ParallelBitsDeposit_64);
-else
-  raise EBOUnknownFunction.CreateFmt('UIM_GetFunctionVarAddr: Unknown function %d.',[Ord(Func)]);
-end;
-end;
-
+var
+  varImplManager: TImplementationManager = nil;
+  
 //------------------------------------------------------------------------------
 
 {$IFNDEF ASM_Extensions}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
@@ -7803,6 +7753,7 @@ end;
 
 Function UIM_BitOps_SupportedFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementations;
 begin
+Result := [imNone,imPascal];
 case Func of
   fnPopCount8,fnPopCount16,fnPopCount32,fnPopCount64,
   fnLZCount8,fnLZCount16,fnLZCount32,fnLZCount64,
@@ -7811,9 +7762,7 @@ case Func of
   fnParallelBitsExtract8,fnParallelBitsExtract16,fnParallelBitsExtract32,fnParallelBitsExtract64,
   fnParallelBitsDeposit8,fnParallelBitsDeposit16,fnParallelBitsDeposit32,fnParallelBitsDeposit64:
     If UIM_CheckASMSupport(Func) then
-      Result := [imNone,imPascal,imAssembly]
-    else
-      Result := [imNone,imPascal];
+      Include(Result,imAssembly);
 else
   raise EBOUnknownFunction.CreateFmt('UIM_BitOps_SupportedFuncImpl: Unknown function (%d).',[Ord(Func)]);
 end;
@@ -7823,41 +7772,20 @@ end;
 
 Function UIM_BitOps_GetFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementation;
 var
-  FuncVarAddr:  PPointer;
+  SelectedImplID: TUIMIdentifier;
 begin
-Result := imNone;
-FuncVarAddr := UIM_GetFunctionVarAddr(Func);
-// no need to check FuncVarAddr for validity
-If Assigned(FuncVarAddr^) then
-  begin
-    If FuncVarAddr^ = UIM_BITOPS_PASCAL_IMPL[Func] then
-      Result := imPascal
-  {$IFDEF ASM_Extensions}
-    else If FuncVarAddr^ = UIM_BITOPS_ASSEMBLY_IMPL[Func] then
-      Result := imAssembly
-  {$ENDIF};
-  end;
+If varImplManager.FindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
+  Result := TUIM_BitOps_Implementation(SelectedImplID)
+else
+  raise EBONoImplementation.Create('UIM_BitOps_GetFuncImpl: No implementation selected.');
 end;
 
 //------------------------------------------------------------------------------
 
 Function UIM_BitOps_SetFuncImpl(Func: TUIM_BitOps_Function; NewImpl: TUIM_BitOps_Implementation): TUIM_BitOps_Implementation;
-var
-  FuncVarAddr:  PPointer;
 begin
 Result := UIM_BitOps_GetFuncImpl(Func);
-FuncVarAddr := UIM_GetFunctionVarAddr(Func);
-case NewImpl of
-  imPascal:   FuncVarAddr^ := UIM_BITOPS_PASCAL_IMPL[Func];
-{$IFDEF ASM_Extensions}
-  imAssembly: FuncVarAddr^ := UIM_BITOPS_ASSEMBLY_IMPL[Func];
-{$ELSE}
-  imAssembly: FuncVarAddr^ := UIM_BITOPS_PASCAL_IMPL[Func];
-{$ENDIF}
-else
- {imNone}
-  FuncVarAddr^ := nil;
-end;
+varImplManager.FindObj(TUIMIdentifier(Func)).Select(TUIMIdentifier(NewImpl));
 end;
 
 {-------------------------------------------------------------------------------
@@ -7866,21 +7794,67 @@ end;
 ================================================================================
 -------------------------------------------------------------------------------}
 
-procedure Initialize;
+procedure UnitInitialize;
+const
+  NilPtr:   Pointer = nil;
+  ImplsVar: array[TUIM_BitOps_Function] of PPointer = (
+    @@Var_PopCount_8,@@Var_PopCount_16,@@Var_PopCount_32,@@Var_PopCount_64,
+    @@Var_LZCount_8,@@Var_LZCount_16,@@Var_LZCount_32,@@Var_LZCount_64,
+    @@Var_TZCount_8,@@Var_TZCount_16,@@Var_TZCount_32,@@Var_TZCount_64,
+    @@Var_ExtractBits_8,@@Var_ExtractBits_16,@@Var_ExtractBits_32,@@Var_ExtractBits_64,
+    @@Var_ParallelBitsExtract_8,@@Var_ParallelBitsExtract_16,@@Var_ParallelBitsExtract_32,@@Var_ParallelBitsExtract_64,
+    @@Var_ParallelBitsDeposit_8,@@Var_ParallelBitsDeposit_16,@@Var_ParallelBitsDeposit_32,@@Var_ParallelBitsDeposit_64);
+  ImplsPas: array[TUIM_BitOps_Function] of Pointer = (
+    @Fce_PopCount_8_Pas,@Fce_PopCount_16_Pas,@Fce_PopCount_32_Pas,@Fce_PopCount_64_Pas,
+    @Fce_LZCount_8_Pas,@Fce_LZCount_16_Pas,@Fce_LZCount_32_Pas,@Fce_LZCount_64_Pas,
+    @Fce_TZCount_8_Pas,@Fce_TZCount_16_Pas,@Fce_TZCount_32_Pas,@Fce_TZCount_64_Pas,
+    @Fce_ExtractBits_8_Pas,@Fce_ExtractBits_16_Pas,@Fce_ExtractBits_32_Pas,@Fce_ExtractBits_64_Pas,
+    @Fce_ParallelBitsExtract_8_Pas,@Fce_ParallelBitsExtract_16_Pas,@Fce_ParallelBitsExtract_32_Pas,@Fce_ParallelBitsExtract_64_Pas,
+    @Fce_ParallelBitsDeposit_8_Pas,@Fce_ParallelBitsDeposit_16_Pas,@Fce_ParallelBitsDeposit_32_Pas,@Fce_ParallelBitsDeposit_64_Pas);
+{$IFDEF ASM_Extensions}
+  ImplsAsm: array[TUIM_BitOps_Function] of Pointer = (
+    @Fce_PopCount_8_Asm,@Fce_PopCount_16_Asm,@Fce_PopCount_32_Asm,@Fce_PopCount_64_Asm,
+    @Fce_LZCount_8_Asm,@Fce_LZCount_16_Asm,@Fce_LZCount_32_Asm,@Fce_LZCount_64_Asm,
+    @Fce_TZCount_8_Asm,@Fce_TZCount_16_Asm,@Fce_TZCount_32_Asm,@Fce_TZCount_64_Asm,
+    @Fce_ExtractBits_8_Asm,@Fce_ExtractBits_16_Asm,@Fce_ExtractBits_32_Asm,@Fce_ExtractBits_64_Asm,
+    @Fce_ParallelBitsExtract_8_Asm,@Fce_ParallelBitsExtract_16_Asm,@Fce_ParallelBitsExtract_32_Asm,@Fce_ParallelBitsExtract_64_Asm,
+    @Fce_ParallelBitsDeposit_8_Asm,@Fce_ParallelBitsDeposit_16_Asm,@Fce_ParallelBitsDeposit_32_Asm,@Fce_ParallelBitsDeposit_64_Asm);
+{$ENDIF}
 var
   i:  TUIM_BitOps_Function;
 begin
+varImplManager := TImplementationManager.Create;
 For i := Low(TUIM_BitOps_Function) to High(TUIM_BitOps_Function) do
-  If UIM_CheckASMSupport(i) then
-    UIM_BitOps_SetFuncImpl(i,imAssembly)
-  else
-    UIM_BitOps_SetFuncImpl(i,imPascal);
+  begin
+    with varImplManager.AddObj(TUIMIdentifier(i),ImplsVar[i]^) do
+      begin
+        Add(TUIMIdentifier(imNone),NilPtr);
+        Add(TUIMIdentifier(imPascal),ImplsPas[i],[ifSelect]);
+      {$IFDEF ASM_Extensions}
+        Add(TUIMIdentifier(imAssembly),ImplsAsm[i]);
+      {$ELSE}
+        AddAlias(TUIMIdentifier(imPascal),TUIMIdentifier(imAssembly));
+      {$ENDIF}
+      end;
+    If UIM_CheckASMSupport(i) then
+      UIM_BitOps_SetFuncImpl(i,imAssembly)
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure UnitFinalize;
+begin
+FreeAndNil(varImplManager);
 end;
 
 //------------------------------------------------------------------------------
 
 initialization
-  Initialize;
+  UnitInitialize;
+
+finalization
+  UnitFinalize;
 
 end.
 

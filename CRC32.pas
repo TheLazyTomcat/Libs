@@ -28,11 +28,11 @@
     functions that can be used. These functions are implemented above TCRC32Hash
     class and therefore are calculating CRC-32 with a polynomial of 0x104C11DB7.
 
-  Version 1.7.2 (2021-04-04)
+  Version 1.7.3 (2023-04-14)
 
-  Last change 2022-06-25
+  Last change 2023-04-14
 
-  ©2011-2021 František Milt
+  ©2011-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -51,6 +51,7 @@
   Dependencies:
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
@@ -61,7 +62,6 @@
 
 ===============================================================================}
 unit CRC32;
-
 {
   CRC32_PurePascal
 
@@ -74,9 +74,9 @@ unit CRC32;
   {$DEFINE PurePascal}
 {$ENDIF}
 
-{$IF defined(CPUX86_64) or defined(CPUX64)}
+{$IF Defined(CPUX86_64) or Defined(CPUX64)}
   {$DEFINE x64}
-{$ELSEIF defined(CPU386)}
+{$ELSEIF Defined(CPU386)}
   {$DEFINE x86}
 {$ELSE}
   {$DEFINE PurePascal}
@@ -125,7 +125,7 @@ interface
 
 uses
   Classes,
-  AuxTypes, HashBase;
+  AuxTypes, BasicUIM, HashBase;
 
 {===============================================================================
     Common types and constants
@@ -167,6 +167,7 @@ type
 
   ECRC32IncompatibleClass = class(ECRC32Exception);
   ECRC32IndexOutOfBounds  = class(ECRC32Exception);
+  ECRC32NoImplementation  = class(ECRC32Exception);
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -179,8 +180,9 @@ type
 type
   TCRC32BaseHash = class(TStreamHash)
   protected
-    fCRC32Value:  TCRC32Sys;
-    fCRC32Table:  PCRC32Table;
+    fImplManager:   TImplementationManager;
+    fCRC32Value:    TCRC32Sys;
+    fCRC32Table:    PCRC32Table;
     fProcessBuffer: procedure(const Buffer; Size: TMemSize) of object; register;
     Function GetCRC32: TCRC32; virtual;
     Function GetCRC32Poly: TCRC32Sys; virtual;
@@ -257,14 +259,13 @@ type
   protected
     class Function AccelerationSupported: Boolean; virtual;
     Function GetCRC32PolyRef: TCRC32Sys; override;
-    Function GetHashImplementation: THashImplementation; override;
-    procedure SetHashImplementation(Value: THashImplementation); override;
-  {$IF not defined(PurePascal) and defined(CRC32C_Accelerated)}
+  {$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
     procedure ProcessBuffer_ACC(const Buffer; Size: TMemSize); virtual; register;
   {$IFEND}
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure InitializeTable; override;
     procedure FinalizeTable; override;
+    procedure Initialize; override;
   public
     class Function HashImplementationsAvailable: THashImplementations; override;
     class Function HashImplementationsSupported: THashImplementations; override;
@@ -561,7 +562,7 @@ implementation
 
 uses
   SysUtils
-{$IF not defined(PurePascal) and defined(CRC32C_Accelerated)}
+{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
   , SimpleCPUID
 {$IFEND};
 
@@ -709,14 +710,14 @@ end;
 //------------------------------------------------------------------------------
 
 Function TCRC32BaseHash.GetHashImplementation: THashImplementation;
+var
+  SelectedImplID: TUIMIdentifier;
 begin
 // do not call inherited
-{$IFNDEF PurePascal}
-If TMethod(fProcessBuffer).Code = @TCRC32Hash.ProcessBuffer_ASM then
-  Result := hiAssembly
+If fImplManager.FindObj(0).Selected(SelectedImplID) then
+  Result := THashImplementation(SelectedImplID)
 else
-{$ENDIF}
-  Result := hiPascal;
+  raise ECRC32NoImplementation.Create('TCRC32BaseHash.GetHashImplementation: No implementation selected.');
 end;
 
 //------------------------------------------------------------------------------
@@ -724,17 +725,7 @@ end;
 procedure TCRC32BaseHash.SetHashImplementation(Value: THashImplementation);
 begin
 // do not call inherited
-case Value of
-  hiAssembly,
-  hiAccelerated:  {$IFDEF PurePascal}
-                    fProcessBuffer := ProcessBuffer_PAS;
-                  {$ELSE}
-                    fProcessBuffer := ProcessBuffer_ASM;
-                  {$ENDIF}
-else
- {hiPascal}
-  fProcessBuffer := ProcessBuffer_PAS;
-end;
+fImplManager.FindObj(0).Select(TUIMIdentifier(Value));
 end;
 
 //------------------------------------------------------------------------------
@@ -900,6 +891,18 @@ end;
 procedure TCRC32BaseHash.Initialize;
 begin
 inherited;
+fImplManager := TImplementationManager.Create;
+with fImplManager.AddObj(0,TMethod(fProcessBuffer)) do
+  begin
+    Add(TUIMIdentifier(hiPascal),@TCRC32BaseHash.ProcessBuffer_PAS,Self,[ifSelect]);
+  {$IFDEF PurePascal}
+    AddAlias(TUIMIdentifier(hiPascal),TUIMIdentifier(hiAssembly));
+    AddAlias(TUIMIdentifier(hiPascal),TUIMIdentifier(hiAccelerated));
+  {$ELSE}
+    Add(TUIMIdentifier(hiAssembly),@TCRC32BaseHash.ProcessBuffer_ASM,Self);
+    AddAlias(TUIMIdentifier(hiAssembly),TUIMIdentifier(hiAccelerated));
+  {$ENDIF}  
+  end;
 fCRC32Value := 0;
 InitializeTable;
 HashImplementation := hiAccelerated;  // sets fProcessBuffer
@@ -910,6 +913,7 @@ end;
 procedure TCRC32BaseHash.Finalize;
 begin
 FinalizeTable;
+FreeAndNil(fImplManager);
 inherited;
 end;
 
@@ -1255,7 +1259,7 @@ const
 
 class Function TCRC32CHash.AccelerationSupported: Boolean;
 begin
-{$IF not defined(PurePascal) and defined(CRC32C_Accelerated)}
+{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
 with TSimpleCPUID.Create do
 try
   Result := Info.SupportedExtensions.CRC32;
@@ -1276,52 +1280,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TCRC32CHash.GetHashImplementation: THashImplementation;
-begin
-// do not call inherited
-{$IFNDEF PurePascal}
-{$IFDEF CRC32C_Accelerated}
-If TMethod(fProcessBuffer).Code = @TCRC32CHash.ProcessBuffer_ACC then
-  Result := hiAccelerated
-else
-{$ENDIF}
-If TMethod(fProcessBuffer).Code = @TCRC32CHash.ProcessBuffer_ASM then
-  Result := hiAssembly
-else
-{$ENDIF}
-  Result := hiPascal;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TCRC32CHash.SetHashImplementation(Value: THashImplementation);
-begin
-// do not call inherited
-case Value of
-  hiAssembly:     {$IFDEF PurePascal}
-                    fProcessBuffer := ProcessBuffer_PAS;
-                  {$ELSE}
-                    fProcessBuffer := ProcessBuffer_ASM;
-                  {$ENDIF}
-  hiAccelerated:  {$IFDEF PurePascal}
-                    fProcessBuffer := ProcessBuffer_PAS;
-                  {$ELSE}
-                  {$IFDEF CRC32C_Accelerated}
-                    If AccelerationSupported then
-                      fProcessBuffer := ProcessBuffer_ACC
-                    else
-                  {$ENDIF}
-                      fProcessBuffer := ProcessBuffer_ASM;
-                  {$ENDIF}
-else
- {himPascal}
-  fProcessBuffer := ProcessBuffer_PAS;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-{$IF not defined(PurePascal) and defined(CRC32C_Accelerated)}
+{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
 {
   Note that following implementation expects relatively long buffers, so it is
   written with larger overhead but shorter calculation cycles.
@@ -1528,6 +1487,21 @@ end;
 procedure TCRC32CHash.FinalizeTable;
 begin
 fCRC32Table := nil;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TCRC32CHash.Initialize;
+begin
+inherited;
+{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
+with fImplManager.FindObj(0) do
+  begin
+    Replace(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_ACC,Self);
+    If AccelerationSupported then
+      Select(TUIMIdentifier(hiAccelerated));
+  end;
+{$IFEND}
 end;
 
 {-------------------------------------------------------------------------------

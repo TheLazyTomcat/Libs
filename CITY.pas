@@ -35,9 +35,9 @@
     WARNING - version of this library does not correlate with version of
               implemented and used version of the CITY hash!
 
-  Version 2.1 (2021-09-16)
+  Version 2.1.1 (2023-04-15)
 
-  Last change 2023-01-24
+  Last change 2023-04-15
 
   ©2016-2023 František Milt
 
@@ -58,6 +58,7 @@
   Dependencies:
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps

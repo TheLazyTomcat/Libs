@@ -11,9 +11,9 @@
 
     Code common to all versions of the hash (functions, constants, ...)
 
-  Version 2.1 (2021-09-16)
+  Version 2.1.1 (2023-04-15)
 
-  Last change 2023-01-24
+  Last change 2023-04-15
 
   ©2016-2023 František Milt
 
@@ -34,6 +34,7 @@
   Dependencies:
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
@@ -61,7 +62,8 @@ uses
 type
   ECITYException = class(EHASHException);
 
-  ECITYUnknownFunction = class(ECITYException);
+  ECITYUnknownFunction  = class(ECITYException);
+  ECITYNoImplementation = class(ECITYException);
 
 {===============================================================================
     common types - declaration
@@ -212,7 +214,7 @@ Function _mm_crc32_u64(crc,v: UInt64): UInt64;{$IF Defined(CanInline) and Define
     Unit implementation management - declaration
 ===============================================================================}
 {
-  WARNING - be wery careful when changing the selected implementation, as there
+  WARNING - be very careful when changing the selected implementation, as there
             is absolutely no thread-safety protection.
 
   For full description of this section, please refer to the same section in
@@ -268,16 +270,10 @@ Function UIM_CityHash_SetFuncImpl(Func: TUIM_CityHash_Function; NewImpl: TUIM_Ci
 implementation
 
 uses
-  BitOps
+  BasicUIM, BitOps
 {$IFNDEF PurePascal}
   , SimpleCPUID
 {$ENDIF};
-
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
-{$ENDIF}
 
 {===============================================================================
     common types - implementation
@@ -350,18 +346,14 @@ end;
 
 Function PTR_ADVANCE(const Ptr: Pointer; Offset: PtrUInt): Pointer;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := Pointer(PtrUInt(Ptr) + Offset);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+Result := PtrAdvance(Ptr,PtrInt(Offset));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure PTR_ADVANCEVAR(var Ptr: Pointer; Offset: PtrUInt);
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Ptr := Pointer(PtrUInt(Ptr) + Offset);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+PtrAdvanceVar(Ptr,PtrInt(Offset));
 end;
 
 {===============================================================================
@@ -653,43 +645,28 @@ end;
 {-------------------------------------------------------------------------------
     Unit implementation management - internals
 -------------------------------------------------------------------------------}
-const
-  UIM_CITYHASH_PASCAL_IMPL: array[TUIM_CityHash_Function] of Pointer = (@_mm_crc32_u64_pas);
-{$IFNDEF PurePascal}
-  UIM_CITYHASH_ASSEMBLY_IMPL: array[TUIM_CityHash_Function] of Pointer = (@_mm_crc32_u64_asm);
-{$ENDIF}
+var
+  varImplManager: TImplementationManager = nil;
 
 //------------------------------------------------------------------------------
 
-Function UIM_GetFunctionVarAddr(Func: TUIM_CityHash_Function): PPointer;
-begin
-case Func of
-  fnCRC32Intrinsic: Result := Addr(@_mm_crc32_u64_var);
-else
-  raise ECITYUnknownFunction.CreateFmt('UIM_GetFunctionVarAddr: Unknown function %d.',[Ord(Func)]);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function UIM_CheckASMSupport(Func: TUIM_CityHash_Function): Boolean;
 begin
 Result := False;
+If Func = fnCRC32Intrinsic then
 {$IFNDEF PurePascal}
-with TSimpleCPUID.Create do
-try
-  case Func of
-    fnCRC32Intrinsic: Result := Info.SupportedExtensions.CRC32;
-  else
-    raise ECITYUnknownFunction.CreateFmt('UIM_CheckASMSupport: Unknown function (%d).',[Ord(Func)]);
-  end;
-finally
-  Free;
+  with TSimpleCPUID.Create do
+  try
+    case Func of
+      fnCRC32Intrinsic: Result := Info.SupportedExtensions.CRC32;
+    else
+      raise ECITYUnknownFunction.CreateFmt('UIM_CheckASMSupport: Unknown function (%d).',[Ord(Func)]);
+    end;
+  finally
+    Free;
+  end
+{$ENDIF};
 end;
-{$ENDIF}
-end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 {-------------------------------------------------------------------------------
     Unit implementation management - public functions
@@ -708,12 +685,10 @@ end;
 
 Function UIM_CityHash_SupportedFuncImpl(Func: TUIM_CityHash_Function): TUIM_CityHash_Implementations;
 begin
+Result := [imNone,imPascal];
 case Func of
-  fnCRC32Intrinsic:
-    If UIM_CheckASMSupport(Func) then
-      Result := [imNone,imPascal,imAssembly,imAccelerated]
-    else
-      Result := [imNone,imPascal];
+  fnCRC32Intrinsic: If UIM_CheckASMSupport(Func) then
+                      Result := Result + [imAssembly,imAccelerated];
 else
   raise ECITYUnknownFunction.CreateFmt('UIM_CityHash_SupportedFuncImpl: Unknown function (%d).',[Ord(Func)]);
 end;
@@ -723,20 +698,12 @@ end;
 
 Function UIM_CityHash_GetFuncImpl(Func: TUIM_CityHash_Function): TUIM_CityHash_Implementation;
 var
-  FuncVarAddr:  PPointer;
+  SelectedImplID: TUIMIdentifier;
 begin
-Result := imNone;
-FuncVarAddr := UIM_GetFunctionVarAddr(Func);
-// no need to check FuncVarAddr for validity
-If Assigned(FuncVarAddr^) then
-  begin
-    If FuncVarAddr^ = UIM_CITYHASH_PASCAL_IMPL[Func] then
-      Result := imPascal
-  {$IFNDEF PurePascal}
-    else If FuncVarAddr^ = UIM_CITYHASH_ASSEMBLY_IMPL[Func] then
-      Result := imAccelerated
-  {$ENDIF};
-  end;
+If varImplManager.FindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
+  Result := TUIM_CityHash_Implementation(SelectedImplID)
+else
+  raise ECITYNoImplementation.Create('TUIM_CityHash_GetFuncImpl: No implementation selected.');
 end;
 
 //------------------------------------------------------------------------------
@@ -744,40 +711,57 @@ end;
 Function UIM_CityHash_SetFuncImpl(Func: TUIM_CityHash_Function; NewImpl: TUIM_CityHash_Implementation): TUIM_CityHash_Implementation;
 begin
 Result := UIM_CityHash_GetFuncImpl(Func);
-case NewImpl of
-  imPascal:
-    UIM_GetFunctionVarAddr(Func)^ := UIM_CITYHASH_PASCAL_IMPL[Func];
-  imAssembly,
-  imAccelerated:
-{$IFDEF PurePascal}
-    UIM_GetFunctionVarAddr(Func)^ := UIM_CITYHASH_PASCAL_IMPL[Func];
-{$ELSE}
-    UIM_GetFunctionVarAddr(Func)^ := UIM_CITYHASH_ASSEMBLY_IMPL[Func];
-{$ENDIF}   
-else
- {imNone}
-  UIM_GetFunctionVarAddr(Func)^ := nil;
-end;
+varImplManager.FindObj(TUIMIdentifier(Func)).Select(TUIMIdentifier(NewImpl));
 end;
 
 {===============================================================================
     Unit initialization
 ===============================================================================}
 
-procedure Initialize;
+procedure UnitInitialize;
+const
+  NilPtr:   Pointer = nil;
+  ImplsVar: array[TUIM_CityHash_Function] of PPointer = (@@_mm_crc32_u64_var);
+  ImplsPas: array[TUIM_CityHash_Function] of Pointer = (@_mm_crc32_u64_pas);
+{$IFNDEF PurePascal}
+  ImplsAsm: array[TUIM_CityHash_Function] of Pointer = (@_mm_crc32_u64_asm);
+{$ENDIF}
 var
   i:  TUIM_CityHash_Function;
 begin
+varImplManager := TImplementationManager.Create;
 For i := Low(TUIM_CityHash_Function) to High(TUIM_CityHash_Function) do
-  If UIM_CheckASMSupport(i) then
-    UIM_CityHash_SetFuncImpl(i,imAccelerated)
-  else
-    UIM_CityHash_SetFuncImpl(i,imPascal);
+  begin
+    with varImplManager.AddObj(TUIMIdentifier(i),ImplsVar[i]^) do
+      begin
+        Add(TUIMIdentifier(imNone),NilPtr);
+        Add(TUIMIdentifier(imPascal),ImplsPas[i],[ifSelect]);
+      {$IFDEF PurePascal}
+        AddAlias(TUIMIdentifier(imPascal),TUIMIdentifier(imAssembly));
+        AddAlias(TUIMIdentifier(imPascal),TUIMIdentifier(imAccelerated));
+      {$ELSE}
+        Add(TUIMIdentifier(imAccelerated),ImplsAsm[i]);
+        AddAlias(TUIMIdentifier(imAccelerated),TUIMIdentifier(imAssembly));
+      {$ENDIF}
+      end;
+    If UIM_CheckASMSupport(i) then
+      UIM_CityHash_SetFuncImpl(i,imAccelerated)
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure UnitFinalize;
+begin
+FreeAndNil(varImplManager);
 end;
 
 //------------------------------------------------------------------------------
 
 initialization
-  Initialize;
+  UnitInitialize;
+
+finalization
+  UnitFinalize;
 
 end.

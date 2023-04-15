@@ -29,11 +29,11 @@
 
       NOTE - type Half is declared in unit AuxTypes, not here.
 
-  Version 1.1.3 (2021-09-15)
+  Version 1.1.4 (2023-04-15)
 
-  Last change 2022-09-13
+  Last change 2023-04-15
 
-  ©2017-2022 František Milt
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -51,6 +51,7 @@
 
   Dependencies:
     AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
   * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
   SimpleCPUID is required only when AllowF16CExtension symbol is defined and
@@ -156,8 +157,9 @@ const
 type
   EF16UException = class(Exception);
 
-  EF16UInvalidFlag     = class(EF16UException);
-  EF16UUnknownFunction = class(EF16UException);
+  EF16UInvalidFlag      = class(EF16UException);
+  EF16UUnknownFunction  = class(EF16UException);
+  EF16UNoImplementation = class(EF16UException);
 
 {-------------------------------------------------------------------------------
     Library-specific exceptions - floating-point exceptions
@@ -808,7 +810,7 @@ operator / (A,B: Half): Half;{$IFDEF CanInline} inline;{$ENDIF}
 }
 
 type
-  TUIM_Float16Utils_Function = (fnMXCSRAccess,
+  TUIM_Float16Utils_Function = (fnGetMXCSR,fnSetMXCSR,
                                 fnHalfToSingle,fnSingleToHalf,
                                 fnHalfToSingle4x,fnSingleToHalf4x);
 
@@ -840,9 +842,9 @@ Function UIM_Float16Utils_GetFuncImpl(Func: TUIM_Float16Utils_Function): TUIM_Fl
 
   Returned value is the previous routing.
 
-  NOTE - when routing for fnMXCSRAccess, both GetMXCSR and SetMXCSR are set to
-         the same implementation - sanity protection, so the two functions do
-         not operate on different domains
+  NOTE - when routing GetMXCSR or SetMXCSR (fnGetMXCSR, fnSetMXCSR), both
+         functions are set to the same implementation - sanity protection,
+         so they do not operate on different domains
 
   NOTE - when asm implementation cannot be used, and you still select it,
          the function will be routed to pascal version
@@ -864,6 +866,7 @@ uses
 {$IF Defined(AllowF16CExtension) and not Defined(PurePascal)}
   SimpleCPUID,
 {$IFEND}
+  BasicUIM,
   Math;
 
 {$IFDEF FPC_DisableWarns}
@@ -1146,10 +1149,10 @@ end;
 Function EmulatedMXCSR: Boolean;
 begin
 {$IFDEF F16U_ASM_IMPL}
-If Assigned(@Var_SetMXCSR) then
-  Result := UIM_Float16Utils_GetFuncImpl(fnMXCSRAccess) = imPascal
+If Assigned(@Var_GetMXCSR) then
+  Result := UIM_Float16Utils_GetFuncImpl(fnGetMXCSR) = imPascal
 else
-  raise EF16UUnknownFunction.Create('EmulatedMXCSR: Unassigned routing.');
+  raise EF16UNoImplementation.Create('EmulatedMXCSR: Unassigned routing.');
 {$ELSE}
 Result := True;
 {$ENDIF}
@@ -2706,33 +2709,8 @@ end;
                          Unit implementation management
 ================================================================================
 -------------------------------------------------------------------------------}
-const
-  UIM_FLOAT16UTILS_PASCAL_IMPL: array[TUIM_Float16Utils_Function] of Pointer = (
-    @Fce_SetMXCSR_Pas,
-    @Fce_HalfToSingle_Pas,@Fce_SingleToHalf_Pas,
-    @Fce_HalfToSingle4x_Pas,@Fce_SingleToHalf4x_Pas);
-
-{$IFDEF F16U_ASM_IMPL}
-  UIM_FLOAT16UTILS_ASSEMBLY_IMPL: array[TUIM_Float16Utils_Function] of Pointer = (
-    @Fce_SetMXCSR_Asm,
-    @Fce_HalfToSingle_Asm,@Fce_SingleToHalf_Asm,
-    @Fce_HalfToSingle4x_Asm,@Fce_SingleToHalf4x_Asm);
-{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-Function UIM_GetFunctionVarAddr(Func: TUIM_Float16Utils_Function): PPointer;
-begin
-case Func of
-  fnMXCSRAccess:    Result := Addr(@Var_SetMXCSR);
-  fnHalfToSingle:   Result := Addr(@Var_HalfToSingle);
-  fnSingleToHalf:   Result := Addr(@Var_SingleToHalf);
-  fnHalfToSingle4x: Result := Addr(@Var_HalfToSingle4x);
-  fnSingleToHalf4x: Result := Addr(@Var_SingleToHalf4x);
-else
-  raise EF16UUnknownFunction.CreateFmt('UIM_GetFunctionVarAddr: Unknown function %d.',[Ord(Func)]);
-end;
-end;
+var
+  varImplManager: TImplementationManager = nil;  
 
 //------------------------------------------------------------------------------
 
@@ -2744,7 +2722,7 @@ Result := False;
 with TSimpleCPUID.Create do
 try
   case Func of
-    fnMXCSRAccess,
+    fnGetMXCSR,fnSetMXCSR,
     fnHalfToSingle,fnSingleToHalf,
     fnHalfToSingle4x,fnSingleToHalf4x:
       // SSE2 for MOVD instruction
@@ -2765,7 +2743,7 @@ end;
 Function UIM_Float16Utils_AvailableFuncImpl(Func: TUIM_Float16Utils_Function): TUIM_Float16Utils_Implementations;
 begin
 case Func of
-  fnMXCSRAccess,
+  fnGetMXCSR,fnSetMXCSR,
   fnHalfToSingle,fnSingleToHalf,
   fnHalfToSingle4x,fnSingleToHalf4x:
     Result := [imNone,imPascal{$IFDEF F16U_ASM_IMPL},imAssembly{$ENDIF}];
@@ -2778,14 +2756,12 @@ end;
 
 Function UIM_Float16Utils_SupportedFuncImpl(Func: TUIM_Float16Utils_Function): TUIM_Float16Utils_Implementations;
 begin
+Result := [imNone,imPascal];
 case Func of
-  fnMXCSRAccess,
+  fnGetMXCSR,fnSetMXCSR,
   fnHalfToSingle,fnSingleToHalf,
-  fnHalfToSingle4x,fnSingleToHalf4x:
-    If UIM_CheckASMSupport(Func) then
-      Result := [imNone,imPascal,imAssembly]
-    else
-      Result := [imNone,imPascal];
+  fnHalfToSingle4x,fnSingleToHalf4x:  If UIM_CheckASMSupport(Func) then
+                                        Include(Result,imAssembly);
 else
   raise EF16UUnknownFunction.CreateFmt('UIM_Float16Utils_SupportedFuncImpl: Unknown function (%d).',[Ord(Func)]);
 end;
@@ -2795,20 +2771,12 @@ end;
 
 Function UIM_Float16Utils_GetFuncImpl(Func: TUIM_Float16Utils_Function): TUIM_Float16Utils_Implementation;
 var
-  FuncVarAddr:  PPointer;
+  SelectedImplID: TUIMIdentifier;
 begin
-Result := imNone;
-FuncVarAddr := UIM_GetFunctionVarAddr(Func);
-// no need to check FuncVarAddr for validity
-If Assigned(FuncVarAddr^) then
-  begin
-    If FuncVarAddr^ = UIM_FLOAT16UTILS_PASCAL_IMPL[Func] then
-      Result := imPascal
-  {$IFDEF F16U_ASM_IMPL}
-    else If FuncVarAddr^ = UIM_FLOAT16UTILS_ASSEMBLY_IMPL[Func] then
-      Result := imAssembly
-  {$ENDIF};
-  end;
+If varImplManager.FindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
+  Result := TUIM_Float16Utils_Implementation(SelectedImplID)
+else
+  raise EF16UNoImplementation.Create('UIM_Float16Utils_GetFuncImpl: No implementation selected.');
 end;
 
 //------------------------------------------------------------------------------
@@ -2816,44 +2784,12 @@ end;
 Function UIM_Float16Utils_SetFuncImpl(Func: TUIM_Float16Utils_Function; NewImpl: TUIM_Float16Utils_Implementation): TUIM_Float16Utils_Implementation;
 begin
 Result := UIM_Float16Utils_GetFuncImpl(Func);
-If Func = fnMXCSRAccess then
-  begin
-    case NewImpl of
-      imPascal:   begin
-                    Var_GetMXCSR := Fce_GetMXCSR_Pas;
-                    Var_SetMXCSR := Fce_SetMXCSR_Pas;
-                  end;
-    {$IFDEF F16U_ASM_IMPL}
-      imAssembly: begin
-                    Var_GetMXCSR := Fce_GetMXCSR_Asm;
-                    Var_SetMXCSR := Fce_SetMXCSR_Asm;
-                  end;
-    {$ELSE}
-      imAssembly: begin
-                    Var_GetMXCSR := Fce_GetMXCSR_Pas;
-                    Var_SetMXCSR := Fce_SetMXCSR_Pas;
-                  end;
-    {$ENDIF}
-    else
-     {imNone}
-      Var_GetMXCSR := nil;
-      Var_SetMXCSR := nil;
-    end;
-  end
-else
-  begin
-    case NewImpl of
-      imPascal:   UIM_GetFunctionVarAddr(Func)^ := UIM_FLOAT16UTILS_PASCAL_IMPL[Func];
-    {$IFDEF F16U_ASM_IMPL}
-      imAssembly: UIM_GetFunctionVarAddr(Func)^ := UIM_FLOAT16UTILS_ASSEMBLY_IMPL[Func];
-    {$ELSE}
-      imAssembly: UIM_GetFunctionVarAddr(Func)^ := UIM_FLOAT16UTILS_PASCAL_IMPL[Func];
-    {$ENDIF}
-    else
-     {imNone}
-      UIM_GetFunctionVarAddr(Func)^ := nil;
-    end;
-  end;
+varImplManager.FindObj(TUIMIdentifier(Func)).Select(TUIMIdentifier(NewImpl));
+// make sure GetMXCSR and SetMXCSR have the same implementation selected
+case Func of
+  fnGetMXCSR: varImplManager.FindObj(TUIMIdentifier(fnSetMXCSR)).Select(TUIMIdentifier(NewImpl));
+  fnSetMXCSR: varImplManager.FindObj(TUIMIdentifier(fnGetMXCSR)).Select(TUIMIdentifier(NewImpl));
+end;
 end;
 
 {-------------------------------------------------------------------------------
@@ -2862,21 +2798,52 @@ end;
 ================================================================================
 -------------------------------------------------------------------------------}
 
-procedure Initialize;
+procedure UnitInitialize;
+const
+  NilPtr:   Pointer = nil;
+  ImplsVar: array[TUIM_Float16Utils_Function] of PPointer = (@@Var_GetMXCSR,@@Var_SetMXCSR,
+    @@Var_HalfToSingle,@@Var_SingleToHalf,@@Var_HalfToSingle4x,@@Var_SingleToHalf4x);
+  ImplsPas: array[TUIM_Float16Utils_Function] of Pointer = (@Fce_GetMXCSR_Pas,@Fce_SetMXCSR_Pas,
+    @Fce_HalfToSingle_Pas,@Fce_SingleToHalf_Pas,@Fce_HalfToSingle4x_Pas,@Fce_SingleToHalf4x_Pas);
+{$IFDEF F16U_ASM_IMPL}
+  ImplsAsm: array[TUIM_Float16Utils_Function] of Pointer = (@Fce_GetMXCSR_Asm,@Fce_SetMXCSR_Asm,
+    @Fce_HalfToSingle_Asm,@Fce_SingleToHalf_Asm,@Fce_HalfToSingle4x_Asm,@Fce_SingleToHalf4x_Asm);
+{$ENDIF}
 var
   i:  TUIM_Float16Utils_Function;
 begin
-MXCSR_MASK_Init(not UIM_CheckASMSupport(fnMXCSRAccess));
+MXCSR_MASK_Init(not UIM_CheckASMSupport(fnGetMXCSR));
+varImplManager := TImplementationManager.Create;
 For i := Low(TUIM_Float16Utils_Function) to High(TUIM_Float16Utils_Function) do
-  If UIM_CheckASMSupport(i) then
-    UIM_Float16Utils_SetFuncImpl(i,imAssembly)
-  else
-    UIM_Float16Utils_SetFuncImpl(i,imPascal);
+  begin
+    with varImplManager.AddObj(TUIMIdentifier(i),ImplsVar[i]^) do
+      begin
+        Add(TUIMIdentifier(imNone),NilPtr);
+        Add(TUIMIdentifier(imPascal),ImplsPas[i],[ifSelect]);
+      {$IFDEF F16U_ASM_IMPL}
+        Add(TUIMIdentifier(imAssembly),ImplsAsm[i]);
+      {$ELSE}
+        AddAlias(TUIMIdentifier(imPascal),TUIMIdentifier(imAssembly));
+      {$ENDIF}
+      end;
+    If UIM_CheckASMSupport(i) then
+      UIM_Float16Utils_SetFuncImpl(i,imAssembly);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure UnitFinalize;
+begin
+FreeAndNil(varImplManager);
 end;
 
 //------------------------------------------------------------------------------
 
 initialization
-  Initialize;
+  UnitInitialize;
+
+finalization
+  UnitFinalize;
 
 end.
