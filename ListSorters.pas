@@ -28,11 +28,11 @@
       - quick sort (could use some testing and optimizations)
       - bogo sort (only for fun and tests)
 
-  Version 1.1.1 (2020-03-09)
+  Version 1.1.2 (2023-04-17)
 
-  Last change 2020-08-02
+  Last change 2023-04-17
 
-  ©2018-2020 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -63,14 +63,22 @@ unit ListSorters;
 interface
 
 uses
+  SysUtils,
   AuxClasses;
+
+{===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  ELSException = class(Exception);
+
+  ELSNotAssigned = class(ELSException);
 
 {===============================================================================
 --------------------------------------------------------------------------------
                                   TListSorter
 --------------------------------------------------------------------------------
-===============================================================================}
-
+===============================================================================}  
 type
   TCompareMethod = Function(Index1,Index2: Integer): Integer of object;
   TCompareFunction = Function(Context: Pointer; Index1,Index2: Integer): Integer;
@@ -97,6 +105,7 @@ type
     fExchangeMethod:    TExchangeMethod;
     fExchangeFunction:  TExchangeFunction;
     fCompareCoef:       Integer;
+    fBreakProcessing:   Boolean;
     fOnBreakEvent:      TBreakEvent;
     fOnBreakCallback:   TBreakCallback;
     // some statistics
@@ -106,6 +115,7 @@ type
     fIndexArray:        array of Integer;
     Function CompareItems(Index1,Index2: Integer): Integer; virtual;
     procedure ExchangeItems(Index1,Index2: Integer); virtual;
+    Function DoBreak: Boolean; virtual;
     procedure InitCompareCoef; virtual;
     procedure InitStatistics; virtual;
     procedure Execute; virtual; abstract; // must be implemented by descendants
@@ -182,12 +192,6 @@ type
 
 implementation
 
-uses
-  SysUtils;
-
-type
-  ELSBreakException = class(Exception); // internal silent exception
-
 {===============================================================================
 --------------------------------------------------------------------------------
                                   TListSorter
@@ -201,34 +205,23 @@ type
 -------------------------------------------------------------------------------}
 
 Function TListSorter.CompareItems(Index1,Index2: Integer): Integer;
-var
-  BreakProcessing:  Boolean;
 begin
-If Index1 <> Index2 then
+Result := 0;
+If not DoBreak and (Index1 <> Index2) then
   begin
-    BreakProcessing := False;
-    If Assigned(fOnBreakEvent) then
-      fOnBreakEvent(Self,BreakProcessing)
-    else If Assigned(fOnBreakCallback) then
-      fOnBreakCallback(fContext,Self,BreakProcessing);
-    If not BreakProcessing then
-      begin
-        If Assigned(fCompareMethod) then
-          Result := fCompareMethod(Index1,Index2) * fCompareCoef
-        else If Assigned(fCompareFunction) then
-          Result := fCompareFunction(fContext,Index1,Index2) * fCompareCoef
-        else
-          Result := 0;
-        Inc(fCompareCount);
-        // stabilization
-        If (Result = 0) and (Length(fIndexArray) > 0) then
-          Result := (fIndexArray[Index1 - fLowIndex] - fIndexArray[Index2 - fLowIndex]);
-      end
-    else raise ELSBreakException.Create('Processing aborted.');
-    If fReversed then
-      Result := -Result;    
-  end
-else Result := 0;
+    If Assigned(fCompareMethod) then
+      Result := fCompareMethod(Index1,Index2) * fCompareCoef
+    else If Assigned(fCompareFunction) then
+      Result := fCompareFunction(fContext,Index1,Index2) * fCompareCoef
+    else
+      Result := 0;
+    Inc(fCompareCount);
+    // stabilization
+    If (Result = 0) and (Length(fIndexArray) > 0) then
+      Result := (fIndexArray[Index1 - fLowIndex] - fIndexArray[Index2 - fLowIndex]);
+      If fReversed then
+        Result := -Result;
+  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -237,7 +230,7 @@ procedure TListSorter.ExchangeItems(Index1,Index2: Integer);
 var
   TempIdx:  Integer;
 begin
-If Index1 <> Index2 then
+If not DoBreak and (Index1 <> Index2) then
   begin
     If Assigned(fExchangeMethod) then
       fExchangeMethod(Index1,Index2)
@@ -251,7 +244,24 @@ If Index1 <> Index2 then
         fIndexArray[Index1 - fLowIndex] := fIndexArray[Index2 - fLowIndex];
         fIndexArray[Index2 - fLowIndex] := TempIdx;
       end;
-  end;
+  end; 
+end;
+
+//------------------------------------------------------------------------------
+
+Function TListSorter.DoBreak: Boolean;
+begin
+If not fBreakProcessing then
+  begin
+    Result := False;
+    If Assigned(fOnBreakEvent) then
+      fOnBreakEvent(Self,Result)
+    else If Assigned(fOnBreakCallback) then
+      fOnBreakCallback(fContext,Self,Result);
+    If Result then
+      fBreakProcessing := True;
+  end
+else Result := True;
 end;
 
 //------------------------------------------------------------------------------
@@ -289,6 +299,7 @@ fCompareFunction := nil;
 fExchangeMethod := nil;
 fExchangeFunction := nil;
 fCompareCoef := 1;
+fBreakProcessing := False;
 fOnBreakEvent := nil;
 fOnBreakCallback := nil;
 InitStatistics;
@@ -323,17 +334,37 @@ end;
 
 procedure TListSorter.Initialize(CompareMethod: TCompareMethod; ExchangeMethod: TExchangeMethod);
 begin
-fCompareMethod := CompareMethod;
-fExchangeMethod := ExchangeMethod;
+If Assigned(CompareMethod) then
+  begin
+    If Assigned(ExchangeMethod) then
+      begin
+        fCompareMethod := CompareMethod;
+        fExchangeMethod := ExchangeMethod;
+      end
+    else raise ELSNotAssigned.Create('TListSorter.Initialize: Exchange method not assigned.');
+  end
+else raise ELSNotAssigned.Create('TListSorter.Initialize: Compare method not assigned.');
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure TListSorter.Initialize(Context: Pointer; CompareFunction: TCompareFunction; ExchangeFunction: TExchangeFunction);
 begin
-fContext := Context;
-fCompareFunction := CompareFunction;
-fExchangeFunction := ExchangeFunction;
+If Assigned(Context) then
+  begin
+    If Assigned(CompareFunction) then
+      begin
+        If Assigned(CompareFunction) then
+          begin
+            fContext := Context;
+            fCompareFunction := CompareFunction;
+            fExchangeFunction := ExchangeFunction;
+          end
+        else raise ELSNotAssigned.Create('TListSorter.Initialize: Exchange function not assigned.');
+      end
+    else raise ELSNotAssigned.Create('TListSorter.Initialize: Compare function not assigned.');
+  end
+else raise ELSNotAssigned.Create('TListSorter.Initialize: Context not assigned.');
 end;
 
 //------------------------------------------------------------------------------
@@ -353,19 +384,20 @@ var
 begin
 Result := True;
 InitCompareCoef;
-try
-  For i := fLowIndex to Pred(fHighIndex) do
-    If CompareItems(i,i + 1) > 0 then
+fBreakProcessing := False;
+For i := fLowIndex to Pred(fHighIndex) do
+  begin
+    If fBreakProcessing then
+      begin
+        Result := False;
+        Exit;
+      end
+    else If CompareItems(i,i + 1) > 0 then
       begin
         Result := False;
         Break{For i};
       end;
-except
-  on E: ELSBreakException do
-    // drop the exception
-  else
-    raise;
-end;
+  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -396,14 +428,9 @@ If fHighIndex > fLowIndex then
       end
     else SetLength(fIndexArray,0);  // to be sure
     try
-      try
-        Execute;
-      except
-        on E: ELSBreakException do
-          // drop the exception
-        else
-          raise;
-      end;
+      fBreakProcessing := False;
+      // descendants must observe and react to fBreakProcessing being true
+      Execute;
     finally
       SetLength(fIndexArray,0); // clear the array after use
     end;
@@ -432,11 +459,15 @@ For i := fHighIndex downto fLowIndex do
   begin
     ExchCntr := 0;
     For j := fLowIndex to Pred(i) do
-      If CompareItems(j,j + 1) > 0 then
-        begin
-          ExchangeItems(j,j + 1);
-          Inc(ExchCntr);
-        end;
+      begin
+        If CompareItems(j,j + 1) > 0 then
+          begin
+            ExchangeItems(j,j + 1);
+            Inc(ExchCntr);
+          end;
+        If fBreakProcessing then
+          Exit;
+      end;
     If ExchCntr <= 0 then
       Break{For i};
   end;
@@ -467,12 +498,22 @@ procedure TListQuickSorter.Execute;
       PivotIdx := (Left + Right) shr 1;
       repeat
         while CompareItems(PivotIdx,LowIdx) > 0 do
-          Inc(LowIdx);
+          begin
+            If fBreakProcessing then
+              Exit;
+            Inc(LowIdx);
+          end;
         while CompareItems(PivotIdx,HighIdx) < 0 do
-          Dec(HighIdx);
+          begin
+            If fBreakProcessing then
+              Exit;
+            Dec(HighIdx);
+          end;
         If LowIdx <= HighIdx then
           begin
             ExchangeItems(LowIdx,HighIdx);
+            If fBreakProcessing then
+              Exit;
             If PivotIdx = LowIdx then
               PivotIdx := HighIdx
             else If PivotIdx = HighIdx then
@@ -483,6 +524,8 @@ procedure TListQuickSorter.Execute;
       until LowIdx > HighIdx;
       If Left < HighIdx then
         QuickSort(Left,HighIdx);
+      If fBreakProcessing then
+        Exit;
       Left := LowIdx;
     until LowIdx >= Right;
   end;
@@ -510,9 +553,17 @@ var
 begin
 Randomize;
 while not Sorted do
-  For i := fLowIndex to Pred(fHighIndex) do
-    If Random(2) <> 0 then
-      ExchangeItems(i,i + 1);
+  begin
+    If fBreakProcessing then
+      Exit;
+    For i := fLowIndex to Pred(fHighIndex) do
+      begin
+        If Random(2) <> 0 then
+          ExchangeItems(i,i + 1);
+        If fBreakProcessing then
+          Exit;
+      end;
+  end;
 end;
 
 end.

@@ -14,9 +14,9 @@
     Should be compatible with any Windows and Linux system running on x86(-64)
     architecture.
 
-  Version 1.2 (2023-04-04)
+  Version 1.3 (2023-04-23)
 
-  Last change 2023-04-04
+  Last change 2023-04-23
 
   ©2016-2023 František Milt
 
@@ -38,12 +38,12 @@
     AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
 
   Sources:
-    https://en.wikipedia.org/wiki/CPUID
-    http://sandpile.org/x86/cpuid.htm
-    Intel® 64 and IA-32 Architectures Software Developer’s Manual (April 2022)
-    AMD64 Architecture Programmer’s Manual; Publication #40332 Revision 4.02
-    (November 2020)
-    AMD CPUID Specification; Publication #25481 Revision 2.34 (September 2010)
+    - en.wikipedia.org/wiki/CPUID
+    - sandpile.org/x86/cpuid.htm
+    - Intel® 64 and IA-32 Architectures Software Developer’s Manual (April 2022)
+    - AMD64 Architecture Programmer’s Manual; Publication #40332 Revision 4.02
+      (November 2020)
+    - AMD CPUID Specification; Publication #25481 Revision 2.34 (September 2010)
 
 ===============================================================================}
 unit SimpleCPUID;
@@ -79,11 +79,10 @@ unit SimpleCPUID;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
+  {$MODESWITCH DuplicateLocals+}
   {$INLINE ON}
   {$DEFINE CanInline}
   {$ASMMODE Intel}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ELSE}
   {$IF CompilerVersion >= 17 then}  // Delphi 2005+
     {$DEFINE CanInline}
@@ -362,16 +361,16 @@ type
     X87,          // x87 FPU                                            features.FPU
     EmulatedX87,  // x87 is emulated                                    CR0[EM:2]=1
     MMX,          // MMX Technology                                     features.MMX and CR0[EM:2]=0
-    SSE,          // Streaming SIMD Extensions                          features.SSE
+    SSE,          // Streaming SIMD Extensions                          features.FXSR and features.SSE and (system support for SSE)
     SSE2,         // Streaming SIMD Extensions 2                        features.SSE2 and SSE
     SSE3,         // Streaming SIMD Extensions 3                        features.SSE3 and SSE2
     SSSE3,        // Supplemental Streaming SIMD Extensions 3           features.SSSE3 and SSE3
     SSE4_1,       // Streaming SIMD Extensions 4.1                      features.SSE4_1 and SSSE3
     SSE4_2,       // Streaming SIMD Extensions 4.2                      features.SSE4_2 and SSE4_1
-    CRC32,        // CRC32 Instruction                                  SSE4_2
-    POPCNT,       // POPCNT Instruction                                 features.POPCNT and SSE4_2
+    CRC32,        // CRC32 Instruction                                  features.SSE4_2
+    POPCNT,       // POPCNT Instruction                                 features.POPCNT and features.SSE4_2
     AES,          // AES New Instructions                               features.AES and SSE2
-    PCLMULQDQ,    // PCLMULQDQ Instruction                              features.AES and SSE2
+    PCLMULQDQ,    // PCLMULQDQ Instruction                              features.PCLMULQDQ and SSE2
     AVX,          // Advanced Vector Extensions                         features.OSXSAVE -> XCR0[1..2]=11b and features.AVX
     F16C,         // 16bit Float Conversion Instructions                features.F16C and AVX
     FMA,          // Fused-Multiply-Add Instructions                    features.FMA and AVX
@@ -379,6 +378,11 @@ type
     AVX512F,      // AVX-512 Foundation Instructions                    features.OSXSAVE -> XCR0[1..2]=11b and XCR0[5..7]=111b and features.AVX512F
     AVX512ER,     // AVX-512 Exponential and Reciprocal Instructions    features.AVX512ER and AVX512F
     AVX512PF,     // AVX-512 Prefetch Instructions                      features.AVX512PF and AVX512F
+  {
+    WARNING - If instructions from CD, DQ or BW group are to operate on 256bit
+              or 128bit vectors (not only on 512bit vector), it is necessary to
+              also check AVX512VL flag (vector length extension).
+  }
     AVX512CD,     // AVX-512 Conflict Detection Instructions            features.AVX512CD and AVX512F
     AVX512DQ,     // AVX-512 Doubleword and Quadword Instructions       features.AVX512DQ and AVX512F
     AVX512BW:     // AVX-512 Byte and Word Instructions                 features.AVX512BW and AVX512F
@@ -414,14 +418,17 @@ type
 type
   TSimpleCPUID = class(TObject)
   protected
-    fIncUnsuppLeafs:  Boolean;
-    fSupported:       Boolean;
-    fLeafs:           TCPUIDLeafs;
-    fInfo:            TCPUIDInfo;
-    fHighestStdLeaf:  TCPUIDResult;
+    fIncludeEmptyLeafs: Boolean;
+    fSupported:         Boolean;
+    fLoaded:            Boolean;
+    fLeafs:             TCPUIDLeafs;
+    fInfo:              TCPUIDInfo;
+    fHighestStdLeaf:    TCPUIDResult;
     Function GetLeafCount: Integer; virtual;
     Function GetLeaf(Index: Integer): TCPUIDLeaf; virtual;
-    procedure DeleteLeaf(Index: Integer); virtual;  // only for internal use
+    class Function EqualLeafs(A,B: TCPUIDResult): Boolean; virtual;
+    Function EqualsToHighestStdLeaf(Leaf: TCPUIDResult): Boolean; virtual;
+    procedure DeleteLeaf(Index: Integer); virtual;
     procedure InitLeafs(Mask: UInt32); virtual;
     procedure InitStdLeafs; virtual;                // standard leafs
     procedure ProcessLeaf_0000_0000; virtual;
@@ -446,18 +453,23 @@ type
     procedure InitTNMLeafs; virtual;                // Transmeta leafs
     procedure InitCNTLeafs; virtual;                // Centaur leafs
     procedure InitSupportedExtensions; virtual;
-    Function EqualsToHighestStdLeaf(Leaf: TCPUIDResult): Boolean; virtual;
-    class Function SameLeafs(A,B: TCPUIDResult): Boolean; virtual;
-  public
-    constructor Create(DoInitialize: Boolean = True; IncUnsupportedLeafs: Boolean = True);
-    destructor Destroy; override;
-    procedure Initialize; virtual;
+    procedure ClearInfo; virtual;
+    procedure Initialize(IncludeEmptyLeafs: Boolean); virtual;
     procedure Finalize; virtual;
+  public
+    constructor Create(LoadInfo: Boolean = True; IncludeEmptyLeafs: Boolean = True);
+    destructor Destroy; override;
+    procedure LoadInfo; virtual;
+    Function LowIndex: Integer; virtual;
+    Function HighIndex: Integer; virtual;
+    Function CheckIndex(Index: Integer): Boolean; virtual;
     Function IndexOf(LeafID: UInt32): Integer; virtual;
+    Function Find(LeafID: UInt32; out Index: Integer): Boolean; virtual;
+    property IncludeEmptyLeafs: Boolean read fIncludeEmptyLeafs write fIncludeEmptyLeafs;
+    property Supported: Boolean read fSupported;
+    property Loaded: Boolean read fLoaded;
     property Info: TCPUIDInfo read fInfo;
     property Leafs[Index: Integer]: TCPUIDLeaf read GetLeaf; default;
-    property IncludeUnsupportedLeafs: Boolean read fIncUnsuppLeafs write fIncUnsuppLeafs;
-    property Supported: Boolean read fSupported;
     property Count: Integer read GetLeafCount;
   end;
 
@@ -480,8 +492,8 @@ type
     class procedure SetThreadAffinity(var ProcessorMask: TCPUSet); virtual;
   public
     class Function ProcessorAvailable(ProcessorID: Integer): Boolean; virtual;
-    constructor Create(ProcessorID: Integer = 0; DoInitialize: Boolean = True; IncUnsupportedLeafs: Boolean = True);
-    procedure Initialize; override;
+    constructor Create(ProcessorID: Integer = 0; LoadInfo: Boolean = True; IncludeEmptyLeafs: Boolean = True);
+    procedure LoadInfo; override;
     property ProcessorID: Integer read fProcessorID write fProcessorID;
   end;
 
@@ -499,11 +511,6 @@ uses
 
 {$IFNDEF Windows}
   {$LINKLIB C}
-{$ENDIF}
-
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
 {$ENDIF}
 
 {===============================================================================
@@ -558,7 +565,7 @@ end;
 
 //   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
 
-Function GetBit(const Value: TCPUSet; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function GetBit(const Value: TCPUSet; Bit: Integer): Boolean; overload;{$IF Defined(Windows) and Defined(CanInline)} inline; {$IFEND}
 begin
 {$IFDEF Windows}
 Result := ((Value shr Bit) and 1) <> 0;
@@ -573,7 +580,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure SetBit(var Value: TCPUSet; Bit: Integer);{$IFDEF CanInline} inline; {$ENDIF}
+procedure SetBit(var Value: TCPUSet; Bit: Integer);{$IF Defined(Windows) and Defined(CanInline)} inline; {$IFEND}
 begin
 {$IFDEF Windows}
 Value := Value or PtrUInt(PtrUInt(1) shl Bit);
@@ -598,7 +605,7 @@ end;
 Function GetMSW: UInt16 assembler; register;
 asm
 {
-  Replacement for GetCR0, which cannot be used in user mode.
+  Replacement for GetCR0 (now removed), which cannot be used in user mode.
   It returns only lower 16 bits of CR0 (a Machine Status Word), but that should
   suffice.
 }
@@ -613,6 +620,25 @@ asm
 
   // note - support for XGETBV (OSXSAVE) IS checked before calling this routine
   DB  $0F, $01, $D0 // XGETBV (XCR0.Low -> EAX (result), XCR0.Hi -> EDX)
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TestSSE; register; assembler;
+asm
+  XORPS   XMM0, XMM0
+end;
+
+//------------------------------------------------------------------------------
+
+Function SystemSupportsSSE: Boolean;
+begin
+try
+  TestSSE;
+  Result := True;
+except
+  Result := False;
+end;
 end;
 
 {===============================================================================
@@ -819,10 +845,24 @@ end;
 
 Function TSimpleCPUID.GetLeaf(Index: Integer): TCPUIDLeaf;
 begin
-If (Index >= Low(fLeafs)) and (Index <= High(fLeafs)) then
+If CheckIndex(Index) then
   Result := fLeafs[Index]
 else
   raise ESCIDIndexOutOfBounds.CreateFmt('TSimpleCPUID.GetLeaf: Index (%d) out of bounds.',[Index]);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TSimpleCPUID.EqualLeafs(A,B: TCPUIDResult): Boolean;
+begin
+Result := (A.EAX = B.EAX) and (A.EBX = B.EBX) and (A.ECX = B.ECX) and (A.EDX = B.EDX);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleCPUID.EqualsToHighestStdLeaf(Leaf: TCPUIDResult): Boolean;
+begin
+Result := EqualLeafs(Leaf,fHighestStdLeaf);
 end;
 
 //------------------------------------------------------------------------------
@@ -831,9 +871,9 @@ procedure TSimpleCPUID.DeleteLeaf(Index: Integer);
 var
   i:  Integer;
 begin
-If (Index >= Low(fLeafs)) and (Index <= High(fLeafs)) then
+If CheckIndex(Index) then
   begin
-    For i := Index to Pred(High(fLeafs)) do
+    For i := Index to Pred(HighIndex) do
       fLeafs[i] := fLeafs[i + 1];
     SetLength(fLeafs,Length(fLeafs) - 1);
   end
@@ -855,7 +895,7 @@ If ((Temp.EAX and $FFFF0000) = Mask) and not EqualsToHighestStdLeaf(Temp) then
     Cnt := Length(fLeafs);
     SetLength(fLeafs,Length(fLeafs) + Integer(Temp.EAX and not Mask) + 1);
     // load all leafs
-    For i := Cnt to High(fLeafs) do
+    For i := Cnt to HighIndex do
       begin
         fLeafs[i].ID := UInt32(i - Cnt) or Mask;
         CPUID(fLeafs[i].ID,Addr(fLeafs[i].Data));
@@ -869,7 +909,7 @@ procedure TSimpleCPUID.InitStdLeafs;
 begin
 InitLeafs($00000000);
 If Length(fLeafs) > 0 then
-  fHighestStdLeaf := fLeafs[High(fLeafs)].Data
+  fHighestStdLeaf := fLeafs[HighIndex].Data
 else
   FillChar(fHighestStdLeaf,SizeOf(fHighestStdLeaf),0);
 // process individual leafs
@@ -891,19 +931,18 @@ end;
 
 procedure TSimpleCPUID.ProcessLeaf_0000_0000;
 var
-  Index:  Integer;
-  Str:    AnsiString;
-  i:      Integer;
+  Index:      Integer;
+  Str:        AnsiString;
+  StrOverlay: PByteArray;
+  i:          Integer;
 begin
-Index := IndexOf($00000000);
-If Index >= 0 then
+If Find($00000000,Index) then
   begin
     SetLength(Str,12);
-    Move(fLeafs[Index].Data.EBX,Pointer(PAnsiChar(Str))^,4);
-  {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-    Move(fLeafs[Index].Data.EDX,Pointer(PtrUInt(PAnsiChar(Str)) + 4)^,4);
-    Move(fLeafs[Index].Data.ECX,Pointer(PtrUInt(PAnsiChar(Str)) + 8)^,4);
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
+    StrOverlay := Pointer(PAnsiChar(Str));
+    Move(fLeafs[Index].Data.EBX,StrOverlay^[0],4);
+    Move(fLeafs[Index].Data.EDX,StrOverlay^[4],4);
+    Move(fLeafs[Index].Data.ECX,StrOverlay^[8],4);
     fInfo.ManufacturerIDString := String(Str);
     fInfo.ManufacturerID := mnOthers;
     For i := Low(Manufacturers) to High(Manufacturers) do
@@ -918,8 +957,7 @@ procedure TSimpleCPUID.ProcessLeaf_0000_0001;
 var
   Index:  Integer;
 begin
-Index := IndexOf($00000001);
-If Index >= 0 then
+If Find($00000001,Index) then
   begin
     // processor type
     fInfo.ProcessorType := GetBits(fLeafs[Index].Data.EAX,12,13);
@@ -1028,8 +1066,7 @@ begin
   But according to sandpile, this leaf might be run several times with differing
   results and this number gives the repeat count.
 }
-Index := IndexOf($00000002);
-If Index >= 0 then
+If Find($00000002,Index) then
   If Byte(fLeafs[Index].Data.EAX) > 0 then
     begin
       SetLength(fLeafs[Index].SubLeafs,Byte(fLeafs[Index].Data.EAX));
@@ -1046,8 +1083,7 @@ var
   Index:  Integer;
   Temp:   TCPUIDResult;
 begin
-Index := IndexOf($00000004);
-If Index >= 0 then
+If Find($00000004,Index) then
   begin
     Temp := fLeafs[Index].Data;
     while ((Temp.EAX and $1F) <> 0) and (Length(fLeafs[Index].SubLeafs) <= 128) do
@@ -1066,8 +1102,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf($00000007);
-If Index >= 0 then
+If Find($00000007,Index) then
   begin
     // get all subleafs
     SetLength(fLeafs[Index].SubLeafs,fLeafs[Index].Data.EAX + 1);
@@ -1134,8 +1169,7 @@ var
   Index:  Integer;
   Temp:   TCPUIDResult;
 begin
-Index := IndexOf($0000000B);
-If Index >= 0 then
+If Find($0000000B,Index) then
   begin
     Temp := fLeafs[Index].Data;
     while GetBits(Temp.ECX,8,15) <> 0 do
@@ -1154,8 +1188,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf($0000000D);
-If Index >= 0 then
+If Find($0000000D,Index) then
   begin
     SetLength(fLeafs[Index].SubLeafs,2);
     fLeafs[Index].SubLeafs[0] := fLeafs[Index].Data;
@@ -1182,8 +1215,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf($0000000F);
-If Index >= 0 then
+If Find($0000000F,Index) then
   begin
     SetLength(fLeafs[Index].SubLeafs,1);
     fLeafs[Index].SubLeafs[0] := fLeafs[Index].Data;
@@ -1203,8 +1235,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf($00000010);
-If Index >= 0 then
+If Find($00000010,Index) then
   begin
     SetLength(fLeafs[Index].SubLeafs,1);
     fLeafs[Index].SubLeafs[0] := fLeafs[Index].Data;
@@ -1224,8 +1255,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf($00000012);
-If Index >= 0 then
+If Find($00000012,Index) then
   begin
     If fInfo.ProcessorFeatures.SGX then
       begin
@@ -1249,8 +1279,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf($00000014);
-If Index >= 0 then
+If Find($00000014,Index) then
   begin
     SetLength(fLeafs[Index].SubLeafs,fLeafs[Index].Data.EAX + 1);
     For i := Low(fLeafs[Index].SubLeafs) to High(fLeafs[Index].SubLeafs) do
@@ -1265,8 +1294,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf($00000017);
-If Index >= 0 then
+If Find($00000017,Index) then
   begin
     If fLeafs[Index].Data.EAX >= 3 then
       begin
@@ -1297,8 +1325,8 @@ procedure TSimpleCPUID.InitHypLeafs;
     If not EqualsToHighestStdLeaf(Temp) then
       begin
         SetLength(fLeafs,Length(fLeafs) + 1);
-        fLeafs[High(fLeafs)].ID := ID;
-        fLeafs[High(fLeafs)].Data := Temp;
+        fLeafs[HighIndex].ID := ID;
+        fLeafs[HighIndex].Data := Temp;
       end;
   end;
 
@@ -1333,8 +1361,7 @@ procedure TSimpleCPUID.ProcessLeaf_8000_0001;
 var
   Index:  Integer;
 begin
-Index := IndexOf($80000001);
-If Index >= 0 then
+If Find($80000001,Index) then
   begin
     // extended processor features
     with fInfo.ExtendedProcessorFeatures do
@@ -1404,30 +1431,27 @@ end;
 
 procedure TSimpleCPUID.ProcessLeaf_8000_0002_to_8000_0004;
 var
-  Str:    AnsiString;
-  i:      Integer;
-  Index:  Integer;
+  Str:        AnsiString;
+  StrOverlay: PByteArray;
+  i:          Integer;
+  Index:      Integer;
 begin
 // get brand string
 SetLength(Str,48);
+StrOverlay := Pointer(PAnsiChar(Str));
 For i := 0 to 2 do
-  begin
-    Index := IndexOf($80000002 + UInt32(i));
-    If Index >= 0 then
-      begin
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        Move(fLeafs[Index].Data.EAX,Pointer(PtrUInt(PAnsiChar(Str)) + PtrUInt(i * 16))^,4);
-        Move(fLeafs[Index].Data.EBX,Pointer(PtrUInt(PAnsiChar(Str)) + PtrUInt(i * 16) + 4)^,4);
-        Move(fLeafs[Index].Data.ECX,Pointer(PtrUInt(PAnsiChar(Str)) + PtrUInt(i * 16) + 8)^,4);
-        Move(fLeafs[Index].Data.EDX,Pointer(PtrUInt(PAnsiChar(Str)) + PtrUInt(i * 16) + 12)^,4);
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
-      end
-    else
-      begin
-        fInfo.BrandString := '';
-        Exit;
-      end;
-  end;
+  If Find($80000002 + UInt32(i),Index) then
+    begin
+      Move(fLeafs[Index].Data.EAX,StrOverlay^[i * 16],4);
+      Move(fLeafs[Index].Data.EBX,StrOverlay^[(i * 16) + 4],4);
+      Move(fLeafs[Index].Data.ECX,StrOverlay^[(i * 16) + 8],4);
+      Move(fLeafs[Index].Data.EDX,StrOverlay^[(i * 16) + 12],4);
+    end
+  else
+    begin
+      fInfo.BrandString := '';
+      Exit;
+    end;
 {$IF not Defined(FPC) and (CompilerVersion >= 20)}
 SetLength(Str,AnsiStrings.StrLen(PAnsiChar(Str)));
 {$ELSE}
@@ -1442,8 +1466,7 @@ procedure TSimpleCPUID.ProcessLeaf_8000_0007;
 var
   Index:  Integer;
 begin
-Index := IndexOf($80000007);
-If Index >= 0 then
+If Find($80000007,Index) then
   fInfo.ExtendedProcessorFeatures.ITSC := GetBit(fLeafs[Index].Data.EDX,8);
 end;
 
@@ -1454,8 +1477,7 @@ var
   Index:  Integer;
   Temp:   TCPUIDResult;
 begin
-Index := IndexOf($8000001D);
-If (Index >= 0) and fInfo.ExtendedProcessorFeatures.TOPX then
+If Find($8000001D,Index) and fInfo.ExtendedProcessorFeatures.TOPX then
   begin
     Temp := fLeafs[Index].Data;
     while GetBits(Temp.EAX,0,4) <> 0 do
@@ -1487,62 +1509,114 @@ procedure TSimpleCPUID.InitSupportedExtensions;
 begin
 with fInfo.SupportedExtensions do
   begin
+    // FPU - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    
     X87         := fInfo.ProcessorFeatures.FPU;
     EmulatedX87 := GetBit(GetMSW,2);
     MMX         := fInfo.ProcessorFeatures.MMX and not EmulatedX87;
-    SSE         := fInfo.ProcessorFeatures.SSE;
-    SSE2        := fInfo.ProcessorFeatures.SSE2 and SSE;
-    SSE3        := fInfo.ProcessorFeatures.SSE3 and SSE2;
-    SSSE3       := fInfo.ProcessorFeatures.SSSE3 and SSE3;
-    SSE4_1      := fInfo.ProcessorFeatures.SSE4_1 and SSSE3;
-    SSE4_2      := fInfo.ProcessorFeatures.SSE4_2 and SSE4_1;
-    CRC32       := fInfo.ProcessorFeatures.SSE4_2;
-    POPCNT      := fInfo.ProcessorFeatures.POPCNT and SSE4_2;
-    AES         := fInfo.ProcessorFeatures.AES and SSE2;
-    PCLMULQDQ   := fInfo.ProcessorFeatures.PCLMULQDQ and SSE2;
+
+    // SSE - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  {
+    Full check for SSE support (mainly from OS) is complicated and pretty much
+    impossible to do from normal code (ie. in privilege level above 0) without
+    cooperation with the OS (which I want to avoid).
+    FYI these are SOME things that needs to be checked:
+
+      - CR4.OSFXSR[bit 9] must be 1 (any CR can be accessed only from CPL 0)
+      - CR4.OSXMMEXCPT[bit 10] must be 1
+      - CR0.TS[bit 3] must be 0
+      - CR0.EM[bit 2] must be 0
+      - CR0.MP[bit 1] must be 1
+      - CPUID.1:EDX.FXSR[bit 24] must be 1
+      - CPUID.1:EDX.SSE[bit 25] must be 1
+
+    Only the last two points can be checked from CPL > 0. We check those and
+    then do a brute force approach - SSE instruction is executed and, if it
+    goes without error, it is assumed the system has proper suport for SSE,
+    otherwise it is assumed the system does not support SSE. This, of course,
+    assumes that there is exception handler assigned for #UD (invalid opcode)
+    by the system and that the program can process it. This should be true on
+    most sane systems...
+  }
+    If fInfo.ProcessorFeatures.FXSR then
+      SSE := fInfo.ProcessorFeatures.SSE and SystemSupportsSSE
+    else
+      SSE := False;
+    SSE2      := fInfo.ProcessorFeatures.SSE2 and SSE;
+    SSE3      := fInfo.ProcessorFeatures.SSE3 and SSE2;
+    SSSE3     := fInfo.ProcessorFeatures.SSSE3 and SSE3;
+    SSE4_1    := fInfo.ProcessorFeatures.SSE4_1 and SSSE3;
+    SSE4_2    := fInfo.ProcessorFeatures.SSE4_2 and SSE4_1;
+    CRC32     := fInfo.ProcessorFeatures.SSE4_2;
+    POPCNT    := fInfo.ProcessorFeatures.POPCNT and fInfo.ProcessorFeatures.SSE4_2;
+    AES       := fInfo.ProcessorFeatures.AES and SSE2;
+    PCLMULQDQ := fInfo.ProcessorFeatures.PCLMULQDQ and SSE2;
+
+    // AVX - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     If fInfo.ProcessorFeatures.OSXSAVE then
       AVX := (GetXCR0L and $6 = $6) and fInfo.ProcessorFeatures.AVX
     else
       AVX := False;
-    F16C        := fInfo.ProcessorFeatures.F16C and AVX;
-    FMA         := fInfo.ProcessorFeatures.FMA and AVX;
-    AVX2        := fInfo.ProcessorFeatures.AVX2 and AVX;
+    F16C := fInfo.ProcessorFeatures.F16C and AVX;
+    FMA  := fInfo.ProcessorFeatures.FMA and AVX;
+
+    // AVX2  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    AVX2 := fInfo.ProcessorFeatures.AVX2 and AVX;
+    
+    // AVX-512 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     If fInfo.ProcessorFeatures.OSXSAVE then
       AVX512F := (GetXCR0L and $E6 = $E6) and fInfo.ProcessorFeatures.AVX512F
     else
       AVX512F := False;
-    AVX512ER    := fInfo.ProcessorFeatures.AVX512ER and AVX512F;
-    AVX512PF    := fInfo.ProcessorFeatures.AVX512PF and AVX512F;
-    AVX512CD    := fInfo.ProcessorFeatures.AVX512CD and AVX512F;
-    AVX512DQ    := fInfo.ProcessorFeatures.AVX512DQ and AVX512F;
-    AVX512BW    := fInfo.ProcessorFeatures.AVX512BW and AVX512F;
+    AVX512ER := fInfo.ProcessorFeatures.AVX512ER and AVX512F;
+    AVX512PF := fInfo.ProcessorFeatures.AVX512PF and AVX512F;
+    AVX512CD := fInfo.ProcessorFeatures.AVX512CD and AVX512F;
+    AVX512DQ := fInfo.ProcessorFeatures.AVX512DQ and AVX512F;
+    AVX512BW := fInfo.ProcessorFeatures.AVX512BW and AVX512F;
   end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSimpleCPUID.EqualsToHighestStdLeaf(Leaf: TCPUIDResult): Boolean;
+procedure TSimpleCPUID.ClearInfo;
 begin
-Result := SameLeafs(Leaf,fHighestStdLeaf);
+fLoaded := False;
+SetLength(fLeafs,0);
+fInfo.ManufacturerIDString := '';
+fInfo.BrandString := '';
+FillChar(fInfo,SizeOf(TCPUIDInfo),0);
+FillChar(fHighestStdLeaf,SizeOf(TCPUIDResult),0);
 end;
 
 //------------------------------------------------------------------------------
 
-class Function TSimpleCPUID.SameLeafs(A,B: TCPUIDResult): Boolean;
+procedure TSimpleCPUID.Initialize(IncludeEmptyLeafs: Boolean);
 begin
-Result := (A.EAX = B.EAX) and (A.EBX = B.EBX) and (A.ECX = B.ECX) and (A.EDX = B.EDX);
+fIncludeEmptyLeafs := IncludeEmptyLeafs;
+fSupported := SimpleCPUID.CPUIDSupported;
+ClearInfo;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleCPUID.Finalize;
+begin
+ClearInfo;
 end;
 
 {-------------------------------------------------------------------------------
     TSimpleCPUID - public methods
 -------------------------------------------------------------------------------}
 
-constructor TSimpleCPUID.Create(DoInitialize: Boolean = True; IncUnsupportedLeafs: Boolean = True);
+constructor TSimpleCPUID.Create(LoadInfo: Boolean = True; IncludeEmptyLeafs: Boolean = True);
 begin
 inherited Create;
-fIncUnsuppLeafs := IncUnsupportedLeafs;
-If DoInitialize then
-  Initialize;
+Initialize(IncludeEmptyLeafs);
+If LoadInfo then
+  Self.LoadInfo;
 end;
 
 //------------------------------------------------------------------------------
@@ -1555,12 +1629,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleCPUID.Initialize;
+procedure TSimpleCPUID.LoadInfo;
 var
   i:  Integer;
 begin
-SetLength(fLeafs,0);
-fSupported := SimpleCPUID.CPUIDSupported;
+ClearInfo;
 If fSupported then
   begin
     InitStdLeafs;
@@ -1569,18 +1642,33 @@ If fSupported then
     InitExtLeafs;
     InitTNMLeafs;
     InitCNTLeafs;
+    If not fIncludeEmptyLeafs then
+      For i := HighIndex downto LowIndex do
+        If EqualLeafs(fLeafs[i].Data,NullLeaf) then DeleteLeaf(i);
+    InitSupportedExtensions;
+    fLoaded := True;
   end;
-If not fIncUnsuppLeafs then
-  For i := High(fLeafs) downto Low(fLeafs) do
-    If SameLeafs(fLeafs[i].Data,NullLeaf) then DeleteLeaf(i);
-InitSupportedExtensions;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleCPUID.Finalize;
+Function TSimpleCPUID.LowIndex: Integer;
 begin
-SetLength(fLeafs,0);
+Result := Low(fLeafs);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleCPUID.HighIndex: Integer;
+begin
+Result := High(fLeafs);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleCPUID.CheckIndex(Index: Integer): Boolean;
+begin
+Result := (Index >= LowIndex) and (Index <= HighIndex);
 end;
 
 //------------------------------------------------------------------------------
@@ -1590,12 +1678,20 @@ var
   i:  Integer;
 begin
 Result := -1;
-For i := Low(fLeafs) to High(fLeafs) do
+For i := LowIndex to HighIndex do
   If fLeafs[i].ID = LeafID then
     begin
       Result := i;
       Break;
     end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleCPUID.Find(LeafID: UInt32; out Index: Integer): Boolean;
+begin
+Index := IndexOf(LeafID);
+Result := CheckIndex(Index);
 end;
 
 
@@ -1666,17 +1762,17 @@ end;
 
 //------------------------------------------------------------------------------
 
-constructor TSimpleCPUIDEx.Create(ProcessorID: Integer = 0; DoInitialize: Boolean = True; IncUnsupportedLeafs: Boolean = True);
+constructor TSimpleCPUIDEx.Create(ProcessorID: Integer = 0; LoadInfo: Boolean = True; IncludeEmptyLeafs: Boolean = True);
 begin
-inherited Create(False,IncUnsupportedLeafs);
+inherited Create(False,IncludeEmptyLeafs);
 fProcessorID := ProcessorID;
-If DoInitialize then
-  Initialize;
+If LoadInfo then
+  Self.LoadInfo;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleCPUIDEx.Initialize;
+procedure TSimpleCPUIDEx.LoadInfo;
 var
   ProcessorMask:  TCPUSet;
 begin
@@ -1686,7 +1782,7 @@ If ProcessorAvailable(fProcessorID) then
     SetBit(ProcessorMask,fProcessorID);
     SetThreadAffinity(ProcessorMask);
     try
-      inherited Initialize;
+      inherited LoadInfo;
     finally
       // restore the affinity
       SetThreadAffinity(ProcessorMask);

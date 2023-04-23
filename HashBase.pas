@@ -18,11 +18,11 @@
     stored in a memory buffer and then the processing is run as a whole at
     finalization.
 
-  Version 1.0.3 (2021-04-05)
+  Version 1.0.4 (2023-04-17)
 
-  Last change 2022-10-31
+  Last change 2023-04-17
 
-  ©2020-2022 František Milt
+  ©2020-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -685,8 +685,11 @@ If Assigned(Stream) then
               FreeMem(Buffer,fReadBufferSize);
             end;
           end;
-        Final;
-        DoProgress(1.0);
+        If not fBreakProcessing  then
+          begin
+            Final;
+            DoProgress(1.0);
+          end;
       end;
   end
 else raise EHASHNoStream.Create('THashBase.HashStream: Stream not assigned.');

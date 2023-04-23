@@ -20,9 +20,9 @@
       original data (a result of these encodings being block-based, these
       zeroes are block padding)
 
-  Version 2.1.1 (2023-02-03)
+  Version 2.1.2 (2023-04-17)
 
-  Last change 2023-02-03
+  Last change 2023-04-17
 
   ©2015-2023 František Milt
 
@@ -1544,9 +1544,13 @@ try
   // preallocate encoded string (note that it may already contain the header)
   SetLength(fEncodedString,EncodedLengthFromBuffer(Buffer,Size));
   DoProgress(0.0);
-  // encoding-specific processing
-  EncodeSpecific(Buffer,Size);
-  DoProgress(1.0);
+  If not fBreakProcessing then
+    begin
+      // encoding-specific processing
+      EncodeSpecific(Buffer,Size);
+      If not fBreakProcessing then
+        DoProgress(1.0);
+    end;
 finally
   fIsProcessing := False;
 end;
@@ -1788,9 +1792,13 @@ try
   else
     fEncodedStringPos := 1;
   DoProgress(0.0);
-  // decoding-specific processing
-  DecodeSpecific(Buffer,Size);
-  DoProgress(1.0);
+  If not fBreakProcessing then
+    begin
+      // decoding-specific processing
+      DecodeSpecific(Buffer,Size);
+      If not fBreakProcessing then
+        DoProgress(1.0);
+    end;
 finally
   fIsProcessing := False;
 end;
