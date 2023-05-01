@@ -42,9 +42,9 @@
 
   Version 1.1.3 (2022-12-03)
 
-  Last change 2022-12-03
+  Last change 2023-05-01
 
-  ©2021-2022 František Milt
+  ©2021-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -72,6 +72,7 @@
   * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
   * InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
   * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
 
   Libraries SimpleFutex and InterlockedOps are required only when compiling for
   Linux operating system.

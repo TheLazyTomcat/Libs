@@ -50,7 +50,7 @@
 
   Version 1.1.1 (2023-01-13)
 
-  Last change 2023-01-13
+  Last change 2023-05-01
 
   ©2022-2023 František Milt
 
@@ -71,6 +71,7 @@
   Dependencies:
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps

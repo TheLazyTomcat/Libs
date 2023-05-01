@@ -123,7 +123,7 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2023-03-27
+  Last change 2023-05-01
 
   ©2015-2023 František Milt
 
@@ -149,6 +149,7 @@
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
   * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
 
   SimpleCPUID might not be needed, see BitOps library for details.
 

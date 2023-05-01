@@ -11,7 +11,7 @@
 
   Version 1.3.4 (2023-01-25)
 
-  Last change 2023-01-25
+  Last change 2023-05-01
 
   ©2015-2023 František Milt
 
@@ -32,6 +32,7 @@
   Dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
   * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID

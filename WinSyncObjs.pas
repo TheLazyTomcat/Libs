@@ -39,9 +39,9 @@
 
   Version 1.2 (2022-12-26)
 
-  Last change 2022-12-26
+  Last change 2023-05-01
 
-  ©2016-2022 František Milt
+  ©2016-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -60,6 +60,7 @@
   Dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
