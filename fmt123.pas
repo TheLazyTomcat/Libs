@@ -14,13 +14,13 @@
 
     More info about the mpg123 library can be found at: https://www.mpg123.de
 
-  Version 1.0.4 (2020-08-11)
+  Version 1.0.5 (2023-05-16)
 
   Build against library version 1.25.13
 
-  Last change 2022-09-24
+  Last change 2023-05-16
 
-  ©2018-2022 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com

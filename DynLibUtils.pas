@@ -14,11 +14,11 @@
     on different systems.
     Beyond that, only some simple macro functions are currently implemented.
 
-  Version 1.2 (2022-09-18)
+  Version 1.2.1 (2023-05-16)
 
-  Last change 2022-10-23
+  Last change 2023-05-16
 
-  ©2020-2022 František Milt
+  ©2020-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -131,6 +131,10 @@ type
   TDLULibraryHandle = {$IFDEF Windows}THandle{$ELSE}Pointer{$ENDIF};
   PDLULibraryHandle = ^TDLULibraryHandle;
 
+const
+  DefaultLibraryHandle = TDLULibraryHandle({$IFDEF Windows}0{$ELSE}nil{$ENDIF});
+
+type
   // TDLUSymbol is used in macro functions for symbol resolving
   TDLUSymbol = record
     Name:       String;
@@ -402,7 +406,7 @@ type
   TDLULibraryContext = TDLULibraryHandle;
 
 const
-  DefaultLibraryContext: TDLULibraryHandle = {$IFDEF Windows}0{$ELSE}nil{$ENDIF};
+  DefaultLibraryContext = TDLULibraryContext({$IFDEF Windows}0{$ELSE}nil{$ENDIF});
 
 //------------------------------------------------------------------------------
 {
@@ -417,7 +421,7 @@ Function OpenLibrary(const LibFileName: String; out Context: TDLULibraryContext;
   SafeOpenLibrary
 
   Works the same as OpenLibrary, but preserves selected system settings (see
-  precious overload of SafeOpenLibrary for details).
+  previous overload of SafeOpenLibrary for details).
 }
 Function SafeOpenLibrary(const LibFileName: String; out Context: TDLULibraryContext; SilentCriticalErrors: Boolean = False): Integer; overload;
 

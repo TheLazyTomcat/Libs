@@ -14,13 +14,13 @@
 
     More info about the mpg123 library can be found at: https://www.mpg123.de
 
-  Version 1.0.4 (2020-08-11)
+  Version 1.0.5 (2023-05-16)
 
   Build against library version 1.25.13 (libout123 API version 2)
 
-  Last change 2022-09-24
+  Last change 2023-05-16
 
-  ©2018-2022 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -201,12 +201,12 @@ const
  * \return pointer to new handle or NULL on error
  *)
 var
-  out123_new: Function: out123_handle_p; cdecl;
+  out123_new: Function: out123_handle_p; cdecl = nil;
 
 (** Delete output handle.
  *  This implies out123_close().
  *)
-  out123_del: procedure(ao: out123_handle_p); cdecl;
+  out123_del: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Error code enumeration
  * API calls return a useful (positve) value or zero (OUT123_OK) on simple
@@ -243,7 +243,7 @@ const
  * \return error string
  *)
 var
-  out123_strerror: Function(ao: out123_handle_p): PAnsiChar; cdecl;
+  out123_strerror: Function(ao: out123_handle_p): PAnsiChar; cdecl = nil;
 
 (** Get the plain errcode intead of a string.
  * Note that this used to return OUT123_ERR instead of
@@ -251,13 +251,13 @@ var
  * \param ao handle
  * \return error code recorded in handle or OUT123_BAD_HANDLE
  *)
-  out123_errcode: Function(ao: out123_handle_p): int; cdecl;
+  out123_errcode: Function(ao: out123_handle_p): int; cdecl = nil;
 
 (** Return the error string for a given error code.
  * \param errcode the integer error code
  * \return error string
  *)
-  out123_plain_strerror: Function(errcode: int): PAnsiChar; cdecl;
+  out123_plain_strerror: Function(errcode: int): PAnsiChar; cdecl = nil;
 
 (** Set a desired output buffer size.
  *  This starts a separate process that handles the audio output, decoupling
@@ -290,7 +290,7 @@ var
  *    a value of zero disables the buffer.
  * \return 0 on success, OUT123_ERR on error
  *)
-  out123_set_buffer: Function(ao: out123_handle_p; buffer_bytes: size_t): int; cdecl;
+  out123_set_buffer: Function(ao: out123_handle_p; buffer_bytes: size_t): int; cdecl = nil;
 
 (** Set a specific parameter, for a specific out123_handle, using a parameter 
  *  code chosen from the out123_parms enumeration, to the specified value.
@@ -303,7 +303,7 @@ var
  * \param svalue input value for string parameters (contens are copied)
  * \return 0 on success, OUT123_ERR on error.
  *)
-  out123_param: Function(ao: out123_handle_p; code: out123_parms_t; value: long; fvalue: Double; svalue: PAnsiChar): int; cdecl;
+  out123_param: Function(ao: out123_handle_p; code: out123_parms_t; value: long; fvalue: Double; svalue: PAnsiChar): int; cdecl = nil;
 
   Function out123_param_int(ao: out123_handle_p; code: out123_parms_t; value: long): int;
   Function out123_param_float(ao: out123_handle_p; code: out123_parms_t; value: Double): int;
@@ -320,7 +320,7 @@ var
  * \return 0 on success, OUT123_ERR on error (bad parameter name or bad handle).
  *)
 var
-  out123_getparam: Function(ao: out123_handle_p; code: out123_parms_t; ret_value: plong; ret_fvalue: PDouble; ret_svalue: PPAnsiChar): int; cdecl;
+  out123_getparam: Function(ao: out123_handle_p; code: out123_parms_t; ret_value: plong; ret_fvalue: PDouble; ret_svalue: PPAnsiChar): int; cdecl = nil;
 
   Function out123_getparam_int(ao: out123_handle_p; code: out123_parms_t; ret_value: plong): int;
   Function out123_getparam_float(ao: out123_handle_p; code: out123_parms_t; ret_value: PDouble): int;
@@ -332,7 +332,7 @@ var
  * \return 0 in success, -1 on error
  *)
 var
-  out123_param_from: Function(ao, from_ao: out123_handle_p): int; cdecl;
+  out123_param_from: Function(ao, from_ao: out123_handle_p): int; cdecl = nil;
 
 (** Get list of driver modules reachable in system in C argv-style format.
  *  The client is responsible for freeing the memory of both the individual
@@ -346,7 +346,7 @@ var
  * \param descr address for storing list of descriptions
  * \return number of drivers found, -1 on error
  *)
-  out123_drivers: Function(ao: out123_handle_p; names, descr: PPPAnsiChar): int; cdecl;
+  out123_drivers: Function(ao: out123_handle_p; names, descr: PPPAnsiChar): int; cdecl = nil;
 {$IFDEF LEAK_WARNINGS}
   {$MESSAGE WARN 'Function out123_drivers is allocating buffers that cannot be freed. Use it with caution!'}
 {$ENDIF}
@@ -362,7 +362,7 @@ var
  * \param device device name to open, NULL for default
  * \return 0 on success, -1 on error.
  *)
-  out123_open: Function(ao: out123_handle_p; driver, device: PAnsiChar): int; cdecl;
+  out123_open: Function(ao: out123_handle_p; driver, device: PAnsiChar): int; cdecl = nil;
 
 (** Give info about currently loaded driver and device
  *  Any of the return addresses can be NULL if you are not interested in
@@ -375,7 +375,7 @@ var
  * \param device return address for device name
  * \return 0 on success, -1 on error (i.e. no driver loaded)
  *)
-  out123_driver_info: Function(ao: out123_handle_p; driver, device: PPAnsiChar): int; cdecl;
+  out123_driver_info: Function(ao: out123_handle_p; driver, device: PPAnsiChar): int; cdecl = nil;
 
 (** Close the current output device and driver.
  *  This implies out123_drain() to ensure no data is lost.
@@ -385,7 +385,7 @@ var
  *  quickly.
  * \param ao handle
  *)
-  out123_close: procedure(ao: out123_handle_p); cdecl;
+  out123_close: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Get supported audio encodings for given rate and channel count,
  *  for the currently openend audio device.
@@ -408,12 +408,12 @@ var
  * \return supported encodings combined with bitwise or, to be checked
  *         against your favourite bitmask, -1 on error
  *)
-  out123_encodings: Function(ao: out123_handle_p; rate: long; channels: int): int; cdecl;
+  out123_encodings: Function(ao: out123_handle_p; rate: long; channels: int): int; cdecl = nil;
 
 (** Return the size (in bytes) of one mono sample of the named encoding.
  * \param encoding The encoding value to analyze.
  * \return positive size of encoding in bytes, 0 on invalid encoding. *)
-  out123_encsize: Function(encoding: int): int; cdecl;
+  out123_encsize: Function(encoding: int): int; cdecl = nil;
 
 (** Get list of supported formats for currently opened audio device.
  *  Given a list of sampling rates and minimal/maximal channel count,
@@ -443,7 +443,7 @@ var
  *        Memory shall be freed by user.
  * \return number of returned format enries, -1 on error
  *)
-  out123_formats: Function(ao: out123_handle_p; rates: plong; ratecount, minchannels, maxchannels: int; fmtlist: mpg123_fmt_pp): int; cdecl;
+  out123_formats: Function(ao: out123_handle_p; rates: plong; ratecount, minchannels, maxchannels: int; fmtlist: mpg123_fmt_pp): int; cdecl = nil;
 {$IFDEF LEAK_WARNINGS}
   {$MESSAGE WARN 'Function out123_formats is allocating buffer that cannot be freed. Use it with caution!'}
 {$ENDIF}
@@ -453,7 +453,7 @@ var
  * \param enclist return address for allocated array of encoding codes
  * \return number of encodings, -1 on error
  *)
-  out123_enc_list: Function(enclist: ppint): int; cdecl;
+  out123_enc_list: Function(enclist: ppint): int; cdecl = nil;
 {$IFDEF LEAK_WARNINGS}
   {$MESSAGE WARN 'Function out123_enc_list is allocating buffer that cannot be freed. Use it with caution!'}
 {$ENDIF}
@@ -462,19 +462,19 @@ var
  * \param name short or long name to find encoding code for
  * \return encoding if found (enum mpg123_enc_enum), else 0
  *)
-  out123_enc_byname: Function(name: PAnsiChar): int; cdecl;
+  out123_enc_byname: Function(name: PAnsiChar): int; cdecl = nil;
 
 (** Get name of encoding.
  * \param encoding code (enum mpg123_enc_enum)
  * \return short name for valid encodings, NULL otherwise
  *)
-  out123_enc_name: Function(encoding: int): PAnsiChar; cdecl;
+  out123_enc_name: Function(encoding: int): PAnsiChar; cdecl = nil;
 
 (** Get long name of encoding.
  * \param encoding code (enum mpg123_enc_enum)
  * \return long name for valid encodings, NULL otherwise
  *)
-  out123_enc_longname: Function(encoding: int): PAnsiChar; cdecl;
+  out123_enc_longname: Function(encoding: int): PAnsiChar; cdecl = nil;
 
 (** Start playback with a certain output format
  *  It might be a good idea to have audio data handy to feed after this
@@ -488,7 +488,7 @@ var
  * \param rate sampling rate
  * \return 0 on success, negative on error (bad format, usually)
  *)
-  out123_start: Function(ao: out123_handle_p; rate: long; channels, encoding: int): int; cdecl;
+  out123_start: Function(ao: out123_handle_p; rate: long; channels, encoding: int): int; cdecl = nil;
 
 (** Pause playback
  *  Interrupt playback, holding any data in the optional buffer.
@@ -497,7 +497,7 @@ var
  *  by out123_continue() or out123_play() with the existing parameters.
  * \param ao handle
  *)
-  out123_pause: procedure(ao: out123_handle_p); cdecl;
+  out123_pause: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Continue playback
  *  The counterpart to out123_pause(). Announce to the driver that playback
@@ -509,7 +509,7 @@ var
  *  out123_play(), which will trigger out123_continue() for you, too.
  * \param ao handle
  *)
-  out123_continue: procedure(ao: out123_handle_p); cdecl;
+  out123_continue: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Stop playback.
  *  This waits for pending audio data to drain to the speakers.
@@ -517,7 +517,7 @@ var
  *  to end things right away.
  * \param ao handle
  *)
-  out123_stop: procedure(ao: out123_handle_p); cdecl;
+  out123_stop: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Hand over data for playback and wait in case audio device is busy.
  *  This survives non-fatal signals like SIGSTOP/SIGCONT and keeps on
@@ -535,7 +535,7 @@ var
  * \param bytes number of bytes to read from the buffer
  * \return number of bytes played (might be less than given, even zero)
  *)
-  out123_play: Function(ao: out123_handle_p; buffer: Pointer; bytes: size_t): size_t; cdecl;
+  out123_play: Function(ao: out123_handle_p; buffer: Pointer; bytes: size_t): size_t; cdecl = nil;
 
 (** Drop any buffered data, making next provided data play right away.
  *  This does not imply an actual pause in playback.
@@ -546,7 +546,7 @@ var
  *  For others (files), this only concerns data in the optional buffer.
  * \param ao handle
  *)
-  out123_drop: procedure(ao: out123_handle_p); cdecl;
+  out123_drop: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Drain the output, waiting until all data went to the hardware.
  * This does imply out123_continue() before and out123_pause()
@@ -555,7 +555,7 @@ var
  * buffers on the audio driver side, too.
  * \param ao handle
  *)
-  out123_drain: procedure(ao: out123_handle_p); cdecl;
+  out123_drain: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Drain the output, but only partially up to the given number of
  *  bytes. This gives you the opportunity to do something while
@@ -574,7 +574,7 @@ var
  * \param bytes limit of buffered bytes to drain
  * \return number of bytes drained from buffer
  *)
-  out123_ndrain: procedure(ao: out123_handle_p; bytes: size_t); cdecl;
+  out123_ndrain: procedure(ao: out123_handle_p; bytes: size_t); cdecl = nil;
 
 (** Get an indication of how many bytes reside in the optional buffer.
  * This might get extended to tell the number of bytes queued up in the
@@ -582,7 +582,7 @@ var
  * \param ao handle
  * \return number of bytes in out123 library buffer
  *)
-  out123_buffered: procedure(ao: out123_handle_p); cdecl;
+  out123_buffered: procedure(ao: out123_handle_p); cdecl = nil;
 
 (** Extract currently used audio format from handle.
  *  matching mpg123_getformat().
@@ -594,7 +594,7 @@ var
  * \param framesize size of a full PCM frame (for convenience)
  * \return 0 on success, -1 on error
  *)
-  out123_getformat: Function(ao: out123_handle_p; rate: plong; channels, encoding, framesize: pint): int; cdecl;
+  out123_getformat: Function(ao: out123_handle_p; rate: plong; channels, encoding, framesize: pint): int; cdecl = nil;
 
 (* @} *)
 
@@ -603,6 +603,7 @@ var
 const
   out123_LibFileName = 'out123.dll';
 
+Function out123_Initialized: Boolean;  
 Function out123_Initialize(const LibPath: String = out123_LibFileName): Boolean;
 procedure out123_Finalize;
 
@@ -656,13 +657,20 @@ end;
 //==============================================================================
 
 var
-  LibContext: TDLULibraryContext;
+  out123_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
 
-//------------------------------------------------------------------------------  
+//------------------------------------------------------------------------------
+
+Function out123_Initialized: Boolean;
+begin
+Result := CheckLibrary(out123_LibraryHandle);
+end;
+
+//------------------------------------------------------------------------------
 
 Function out123_Initialize(const LibPath: String = out123_LibFileName): Boolean;
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,LibContext,[
+Result := OpenLibraryAndResolveSymbols(LibPath,out123_LibraryHandle,[
   Symbol(@@out123_new           ,'out123_new'),
   Symbol(@@out123_del           ,'out123_del'),
   Symbol(@@out123_strerror      ,'out123_strerror'),
@@ -699,12 +707,7 @@ end;
 
 procedure out123_Finalize;
 begin
-CloseLibrary(LibContext);
+CloseLibrary(out123_LibraryHandle);
 end;
-
-//==============================================================================
-
-initialization
-  LibContext := DefaultLibraryContext;
 
 end.

@@ -20,9 +20,9 @@
 
   Build against zlib version 1.2.13
 
-  Last change 2022-12-27
+  Last change 2023-05-16
 
-  ©2017-2022 František Milt
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1808,28 +1808,28 @@ end;
 {$IF Defined(GZIP_Support) and Defined(Windows)}
 
 var
-  CRT_LibContext:         TDLULibraryContext;
-  CRT_libfunc_strlen:     Pointer;
-  CRT_libfunc_open:       Pointer;
-  CRT_libfunc_lseek:      Pointer;
-  CRT_libfunc_wcstombs:   Pointer;
-  CRT_libfunc_wopen:      Pointer;
-  CRT_libfunc_vsnprintf:  Pointer;
-  CRT_libfunc_close:      Pointer;
-  CRT_libfunc_memchr:     Pointer;
-  CRT_libfunc_read:       Pointer;
-  CRT_libfunc_strerror:   Pointer;
-  CRT_libfunc_errno:      Pointer;
-  CRT_libfunc_write:      Pointer;
-  CRT_libfunc_snprintf:   Pointer;
-  CRT_libfunc_memmove:    Pointer;
-  CRT_libfunc_lseeki64:   Pointer;
+  CRT_LibraryHandle:      TDLULibraryHandle = DefaultLibraryHandle;
+  CRT_libfunc_strlen:     Pointer = nil;
+  CRT_libfunc_open:       Pointer = nil;
+  CRT_libfunc_lseek:      Pointer = nil;
+  CRT_libfunc_wcstombs:   Pointer = nil;
+  CRT_libfunc_wopen:      Pointer = nil;
+  CRT_libfunc_vsnprintf:  Pointer = nil;
+  CRT_libfunc_close:      Pointer = nil;
+  CRT_libfunc_memchr:     Pointer = nil;
+  CRT_libfunc_read:       Pointer = nil;
+  CRT_libfunc_strerror:   Pointer = nil;
+  CRT_libfunc_errno:      Pointer = nil;
+  CRT_libfunc_write:      Pointer = nil;
+  CRT_libfunc_snprintf:   Pointer = nil;
+  CRT_libfunc_memmove:    Pointer = nil;
+  CRT_libfunc_lseeki64:   Pointer = nil;
 
 //------------------------------------------------------------------------------
 
 procedure CRT_Initialize;
 begin
-If OpenLibraryAndResolveSymbols('msvcrt.dll',CRT_LibContext,[
+If OpenLibraryAndResolveSymbols('msvcrt.dll',CRT_LibraryHandle,[
   Symbol(@CRT_libfunc_strlen   ,'strlen'),
   Symbol(@CRT_libfunc_open     ,'_open'),
   Symbol(@CRT_libfunc_lseek    ,'_lseek'),
@@ -1853,7 +1853,7 @@ end;
 
 procedure CRT_Finalize;
 begin
-CloseLibrary(CRT_LibContext);
+CloseLibrary(CRT_LibraryHandle);
 end;
 
 //==============================================================================
@@ -2056,7 +2056,6 @@ initialization
   CheckCompatibility(zlibCompileFlags);
 {$ENDIF}
 {$IF Defined(GZIP_Support) and Defined(Windows)}
-  CRT_LibContext := DefaultLibraryContext;
   CRT_Initialize;
 {$IFEND}
 

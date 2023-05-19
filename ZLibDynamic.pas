@@ -20,9 +20,9 @@
 
   Build against zlib version 1.2.13
 
-  Last change 2022-12-27
+  Last change 2023-05-16
 
-  ©2017-2022 František Milt
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -65,111 +65,111 @@ uses
 //== Procedural variables ======================================================
 
 var
-  zlibVersion:          Function: PAnsiChar; cdecl;
+  zlibVersion:          Function: PAnsiChar; cdecl = nil;
 
-  deflate:              Function(strm: z_streamp; flush: int): int; cdecl;
-  deflateEnd:           Function(strm: z_streamp): int; cdecl;
+  deflate:              Function(strm: z_streamp; flush: int): int; cdecl = nil;
+  deflateEnd:           Function(strm: z_streamp): int; cdecl = nil;
 
-  inflate:              Function(strm: z_streamp; flush: int): int; cdecl;
-  inflateEnd:           Function(strm: z_streamp): int; cdecl;
+  inflate:              Function(strm: z_streamp; flush: int): int; cdecl = nil;
+  inflateEnd:           Function(strm: z_streamp): int; cdecl = nil;
 
-  deflateSetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: uInt): int; cdecl;
-  deflateGetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: puInt): int; cdecl;
-  deflateCopy:          Function(dest, source: z_streamp): int; cdecl;
-  deflateReset:         Function(strm: z_streamp): int; cdecl;
-  deflateParams:        Function(strm: z_streamp; level, strategy: int): int; cdecl;
-  deflateTune:          Function(strm: z_streamp; good_length, max_lazy, nice_length, max_chain: int): int; cdecl;
-  deflateBound:         Function(strm: z_streamp; sourceLen: uLong): uLong; cdecl;
-  deflatePending:       Function(strm: z_streamp; pending: punsigned; bits: pint): int; cdecl;
-  deflatePrime:         Function(strm: z_streamp; bits, value: int): int; cdecl;
-  deflateSetHeader:     Function(strm: z_streamp; head: gz_headerp): int; cdecl;
+  deflateSetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: uInt): int; cdecl = nil;
+  deflateGetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: puInt): int; cdecl = nil;
+  deflateCopy:          Function(dest, source: z_streamp): int; cdecl = nil;
+  deflateReset:         Function(strm: z_streamp): int; cdecl = nil;
+  deflateParams:        Function(strm: z_streamp; level, strategy: int): int; cdecl = nil;
+  deflateTune:          Function(strm: z_streamp; good_length, max_lazy, nice_length, max_chain: int): int; cdecl = nil;
+  deflateBound:         Function(strm: z_streamp; sourceLen: uLong): uLong; cdecl = nil;
+  deflatePending:       Function(strm: z_streamp; pending: punsigned; bits: pint): int; cdecl = nil;
+  deflatePrime:         Function(strm: z_streamp; bits, value: int): int; cdecl = nil;
+  deflateSetHeader:     Function(strm: z_streamp; head: gz_headerp): int; cdecl = nil;
 
-  inflateSetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: uInt): int; cdecl;
-  inflateGetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: puInt): int; cdecl;
-  inflateSync:          Function(strm: z_streamp): int; cdecl;
-  inflateCopy:          Function(dest, source: z_streamp): int; cdecl;
-  inflateReset:         Function(strm: z_streamp): int; cdecl;
-  inflateReset2:        Function(strm: z_streamp; windowBits: int): int; cdecl;
-  inflatePrime:         Function(strm: z_streamp; bits, value: int): int; cdecl;
-  inflateMark:          Function(strm: z_streamp): long; cdecl;
-  inflateGetHeader:     Function(strm: z_streamp; head: gz_headerp): int; cdecl;
+  inflateSetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: uInt): int; cdecl = nil;
+  inflateGetDictionary: Function(strm: z_streamp; dictionary: PByte; dictLength: puInt): int; cdecl = nil;
+  inflateSync:          Function(strm: z_streamp): int; cdecl = nil;
+  inflateCopy:          Function(dest, source: z_streamp): int; cdecl = nil;
+  inflateReset:         Function(strm: z_streamp): int; cdecl = nil;
+  inflateReset2:        Function(strm: z_streamp; windowBits: int): int; cdecl = nil;
+  inflatePrime:         Function(strm: z_streamp; bits, value: int): int; cdecl = nil;
+  inflateMark:          Function(strm: z_streamp): long; cdecl = nil;
+  inflateGetHeader:     Function(strm: z_streamp; head: gz_headerp): int; cdecl = nil;
 
-  inflateBack:          Function(strm: z_streamp; in_f: in_func; in_desc: Pointer; out_f: out_func; out_desc: Pointer): int; cdecl;
-  inflateBackEnd:       Function(strm: z_streamp): int; cdecl;
+  inflateBack:          Function(strm: z_streamp; in_f: in_func; in_desc: Pointer; out_f: out_func; out_desc: Pointer): int; cdecl = nil;
+  inflateBackEnd:       Function(strm: z_streamp): int; cdecl = nil;
 
-  zlibCompileFlags:     Function: uLong; cdecl;
+  zlibCompileFlags:     Function: uLong; cdecl = nil;
 
-  compress:             Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong): int; cdecl;
-  compress2:            Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong; level: int): int; cdecl;
-  compressBound:        Function(sourceLen: uLong): uLong; cdecl;
-  uncompress:           Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong): int; cdecl;
-  uncompress2:          Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: puLong): int; cdecl;
-
-{$IFDEF GZIP_Support}
-  gzopen:               Function(path: PAnsiChar; mode: PAnsiChar): gzFile; cdecl;
-  gzdopen:              Function(fd: int; mode: PAnsiChar): gzFile; cdecl;
-  gzbuffer:             Function(aFile: gzFile; size: unsigned): int; cdecl;
-  gzsetparams:          Function(aFile: gzFile; level, strategy: int): int; cdecl;
-  gzread:               Function(aFile: gzFile; buf: Pointer; len: unsigned): int; cdecl;
-  gzfread:              Function(buf: Pointer; size, nitems: z_size_t; aFile: gzFile): z_size_t; cdecl;
-  gzwrite:              Function(aFile: gzFile; buf: Pointer; len: unsigned): int; cdecl;
-  gzfwrite:             Function(buf: Pointer; size, nintems: z_size_t; aFile: gzFile): z_size_t; cdecl;
-  gzprintf:             Function(aFile: gzFile; format: PAnsiChar): int; cdecl varargs;
-  gzputs:               Function(aFile: gzFile; s: PAnsiChar): int; cdecl;
-  gzgets:               Function(aFile: gzFile; buf: PAnsiChar; len: int): PAnsiChar; cdecl;
-  gzputc:               Function(aFile: gzFile; c: int): int; cdecl;
-  gzgetc:               Function(aFile: gzFile): int; cdecl;
-  gzungetc:             Function(c: int; aFile: gzFile): int; cdecl;
-  gzflush:              Function(aFile: gzFile; flush: int): int; cdecl;
-  gzseek:               Function(aFile: gzFile; offset: z_off_t; whence: int): z_off_t; cdecl;
-  gzrewind:             Function(aFile: gzFile): int; cdecl;
-  gztell:               Function(aFile: gzFile): z_off_t; cdecl;
-  gzoffset:             Function(aFile: gzFile): z_off_t; cdecl;
-  gzeof:                Function(aFile: gzFile): int; cdecl;
-  gzdirect:             Function(aFile: gzFile): int; cdecl;
-  gzclose:              Function(aFile: gzFile): int; cdecl;
-  gzclose_r:            Function(aFile: gzFile): int; cdecl;
-  gzclose_w:            Function(aFile: gzFile): int; cdecl;
-  gzerror:              Function(aFile: gzFile; errnum: pint): PAnsiChar; cdecl;
-  gzclearerr:           procedure(aFile: gzFile); cdecl;
-{$ENDIF GZIP_Support}
-
-  adler32:              Function(adler: uLong; buf: PByte; len: uInt): uLong; cdecl;
-  adler32_z:            Function(adler: uLong; buf: PByte; len: z_size_t): uLong; cdecl;
-  adler32_combine:      Function(adler1, adler2: uLong; len2: z_off_t): uLong; cdecl;
-  crc32:                Function(crc: uLong; buf: PByte; len: uInt): uLong; cdecl;
-  crc32_z:              Function(crc: uLong; buf: PByte; len: z_size_t): uLong; cdecl;
-  crc32_combine:        Function(crc1, crc2: uLong; len2: z_off_t): uLong; cdecl;
-  crc32_combine_gen:    Function(len2: z_off_t): uLong; cdecl;
-  crc32_combine_op:     Function (crc1: uLong; crc2: uLong; op: uLong): uLong; cdecl;
-
-  deflateInit_:         Function(strm: z_streamp; level: int; version: PAnsiChar; stream_size: int): int; cdecl;
-  inflateInit_:         Function(strm: z_streamp; version: PAnsiChar; stream_size: int): int; cdecl;
-  deflateInit2_:        Function(strm: z_streamp; level, method, windowBits, memLevel, strategy: int; version: PAnsiChar; stream_size: int): int; cdecl;
-  inflateInit2_:        Function(strm: z_streamp; windowBits: int; version: PAnsiChar; stream_size: int): int; cdecl;
-  inflateBackInit_:     Function(strm: z_streamp; windowBits: int; window: PByte; version: PAnsiChar; stream_size: int): int; cdecl;
+  compress:             Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong): int; cdecl = nil;
+  compress2:            Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong; level: int): int; cdecl = nil;
+  compressBound:        Function(sourceLen: uLong): uLong; cdecl = nil;
+  uncompress:           Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong): int; cdecl = nil;
+  uncompress2:          Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: puLong): int; cdecl = nil;
 
 {$IFDEF GZIP_Support}
-  gzgetc_:              Function(aFile: gzFile): int; cdecl;
-  gzopen64:             Function(path: PAnsiChar; mode: PAnsiChar): gzFile; cdecl;
-  gzseek64:             Function(aFile: gzFile; offset: z_off64_t; whence: int): z_off64_t; cdecl;
-  gztell64:             Function(aFile: gzFile): z_off64_t; cdecl;
-  gzoffset64:           Function(aFile: gzFile): z_off64_t; cdecl;
+  gzopen:               Function(path: PAnsiChar; mode: PAnsiChar): gzFile; cdecl = nil;
+  gzdopen:              Function(fd: int; mode: PAnsiChar): gzFile; cdecl = nil;
+  gzbuffer:             Function(aFile: gzFile; size: unsigned): int; cdecl = nil;
+  gzsetparams:          Function(aFile: gzFile; level, strategy: int): int; cdecl = nil;
+  gzread:               Function(aFile: gzFile; buf: Pointer; len: unsigned): int; cdecl = nil;
+  gzfread:              Function(buf: Pointer; size, nitems: z_size_t; aFile: gzFile): z_size_t; cdecl = nil;
+  gzwrite:              Function(aFile: gzFile; buf: Pointer; len: unsigned): int; cdecl = nil;
+  gzfwrite:             Function(buf: Pointer; size, nintems: z_size_t; aFile: gzFile): z_size_t; cdecl = nil;
+  gzprintf:             Function(aFile: gzFile; format: PAnsiChar): int; cdecl varargs = nil;
+  gzputs:               Function(aFile: gzFile; s: PAnsiChar): int; cdecl = nil;
+  gzgets:               Function(aFile: gzFile; buf: PAnsiChar; len: int): PAnsiChar; cdecl = nil;
+  gzputc:               Function(aFile: gzFile; c: int): int; cdecl = nil;
+  gzgetc:               Function(aFile: gzFile): int; cdecl = nil;
+  gzungetc:             Function(c: int; aFile: gzFile): int; cdecl = nil;
+  gzflush:              Function(aFile: gzFile; flush: int): int; cdecl = nil;
+  gzseek:               Function(aFile: gzFile; offset: z_off_t; whence: int): z_off_t; cdecl = nil;
+  gzrewind:             Function(aFile: gzFile): int; cdecl = nil;
+  gztell:               Function(aFile: gzFile): z_off_t; cdecl = nil;
+  gzoffset:             Function(aFile: gzFile): z_off_t; cdecl = nil;
+  gzeof:                Function(aFile: gzFile): int; cdecl = nil;
+  gzdirect:             Function(aFile: gzFile): int; cdecl = nil;
+  gzclose:              Function(aFile: gzFile): int; cdecl = nil;
+  gzclose_r:            Function(aFile: gzFile): int; cdecl = nil;
+  gzclose_w:            Function(aFile: gzFile): int; cdecl = nil;
+  gzerror:              Function(aFile: gzFile; errnum: pint): PAnsiChar; cdecl = nil;
+  gzclearerr:           procedure(aFile: gzFile); cdecl = nil;
 {$ENDIF GZIP_Support}
-  adler32_combine64:    Function(adler1, adler2: uLong; len2: z_off64_t): uLong; cdecl;
-  crc32_combine64:      Function(crc1, crc2: uLong; len2: z_off64_t): uLong; cdecl;
-  crc32_combine_gen64:  Function(len2: z_off64_t): uLong; cdecl;
 
-  zError:               Function(errnum: int): PAnsiChar; cdecl;
-  inflateSyncPoint:     Function(strm: z_streamp): int; cdecl;
-  get_crc_table:        Function: pz_crc_t; cdecl;
-  inflateUndermine:     Function(strm: z_streamp; subvert: int): int; cdecl;
-  inflateValidate:      Function(strm: z_streamp; check: int): int; cdecl;
-  inflateCodesUsed:     Function(strm: z_streamp): UInt32; cdecl;
-  inflateResetKeep:     Function(strm: z_streamp): int; cdecl;
-  deflateResetKeep:     Function(strm: z_streamp): int; cdecl;
+  adler32:              Function(adler: uLong; buf: PByte; len: uInt): uLong; cdecl = nil;
+  adler32_z:            Function(adler: uLong; buf: PByte; len: z_size_t): uLong; cdecl = nil;
+  adler32_combine:      Function(adler1, adler2: uLong; len2: z_off_t): uLong; cdecl = nil;
+  crc32:                Function(crc: uLong; buf: PByte; len: uInt): uLong; cdecl = nil;
+  crc32_z:              Function(crc: uLong; buf: PByte; len: z_size_t): uLong; cdecl = nil;
+  crc32_combine:        Function(crc1, crc2: uLong; len2: z_off_t): uLong; cdecl = nil;
+  crc32_combine_gen:    Function(len2: z_off_t): uLong; cdecl = nil;
+  crc32_combine_op:     Function (crc1: uLong; crc2: uLong; op: uLong): uLong; cdecl = nil;
+
+  deflateInit_:         Function(strm: z_streamp; level: int; version: PAnsiChar; stream_size: int): int; cdecl = nil;
+  inflateInit_:         Function(strm: z_streamp; version: PAnsiChar; stream_size: int): int; cdecl = nil;
+  deflateInit2_:        Function(strm: z_streamp; level, method, windowBits, memLevel, strategy: int; version: PAnsiChar; stream_size: int): int; cdecl = nil;
+  inflateInit2_:        Function(strm: z_streamp; windowBits: int; version: PAnsiChar; stream_size: int): int; cdecl = nil;
+  inflateBackInit_:     Function(strm: z_streamp; windowBits: int; window: PByte; version: PAnsiChar; stream_size: int): int; cdecl = nil;
+
+{$IFDEF GZIP_Support}
+  gzgetc_:              Function(aFile: gzFile): int; cdecl = nil;
+  gzopen64:             Function(path: PAnsiChar; mode: PAnsiChar): gzFile; cdecl = nil;
+  gzseek64:             Function(aFile: gzFile; offset: z_off64_t; whence: int): z_off64_t; cdecl = nil;
+  gztell64:             Function(aFile: gzFile): z_off64_t; cdecl = nil;
+  gzoffset64:           Function(aFile: gzFile): z_off64_t; cdecl = nil;
+{$ENDIF GZIP_Support}
+  adler32_combine64:    Function(adler1, adler2: uLong; len2: z_off64_t): uLong; cdecl = nil;
+  crc32_combine64:      Function(crc1, crc2: uLong; len2: z_off64_t): uLong; cdecl = nil;
+  crc32_combine_gen64:  Function(len2: z_off64_t): uLong; cdecl = nil;
+
+  zError:               Function(errnum: int): PAnsiChar; cdecl = nil;
+  inflateSyncPoint:     Function(strm: z_streamp): int; cdecl = nil;
+  get_crc_table:        Function: pz_crc_t; cdecl = nil;
+  inflateUndermine:     Function(strm: z_streamp; subvert: int): int; cdecl = nil;
+  inflateValidate:      Function(strm: z_streamp; check: int): int; cdecl = nil;
+  inflateCodesUsed:     Function(strm: z_streamp): UInt32; cdecl = nil;
+  inflateResetKeep:     Function(strm: z_streamp): int; cdecl = nil;
+  deflateResetKeep:     Function(strm: z_streamp): int; cdecl = nil;
 {$IF Defined(GZIP_Support) and Defined(Windows)}
-  gzopen_w:             Function(path: PWideChar; mode: PAnsiChar): gzFile; cdecl;
+  gzopen_w:             Function(path: PWideChar; mode: PAnsiChar): gzFile; cdecl = nil;
 {$IFEND}
 
 //== Macro functions ===========================================================
@@ -229,20 +229,20 @@ end;
 //== Library initialization implementation =====================================
 
 var
-  ZLib_LibContext:  TDLULibraryContext;
+  ZLib_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
 
 //------------------------------------------------------------------------------
 
 Function ZLib_Initialized: Boolean;
 begin
-Result := CheckLibrary(ZLib_LibContext);
+Result := CheckLibrary(ZLib_LibraryHandle);
 end;
 
 //------------------------------------------------------------------------------
 
 Function ZLib_Initialize(const LibPath: String = LibName): Boolean;
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibContext,[
+Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryHandle,[
   Symbol(@@zlibVersion         ,'zlibVersion'),
   // deflate
   Symbol(@@deflate             ,'deflate'),
@@ -357,13 +357,8 @@ end;
 
 procedure ZLib_Finalize;
 begin
-CloseLibrary(ZLib_LibContext);
+CloseLibrary(ZLib_LibraryHandle);
 end;
-
-//== Unit initialization =======================================================
-
-initialization
-  ZLib_LibContext := DefaultLibraryContext;
 
 end.
 

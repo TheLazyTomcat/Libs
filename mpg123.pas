@@ -14,13 +14,13 @@
 
     More info about the mpg123 library can be found at: https://www.mpg123.de
 
-  Version 1.0.4 (2020-08-11)
+  Version 1.0.5 (2023-05-16)
 
   Build against library version 1.25.13 (mpg123 API version 44)
 
-  Last change 2022-09-24
+  Last change 2023-05-16
 
-  ©2018-2022 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -182,11 +182,11 @@ type
  *  \return MPG123_OK if successful, otherwise an error number.
  *)
 var
-  mpg123_init: Function: int; cdecl;
+  mpg123_init: Function: int; cdecl = nil;
 
 (** Function to close down the mpg123 library.
  *  This function is not thread-safe. Call it exactly once per process, before any other (possibly threaded) work with the library. *)
-  mpg123_exit: procedure; cdecl;
+  mpg123_exit: procedure; cdecl = nil;
 
 (** Create a handle with optional choice of decoder (named by a string, see mpg123_decoders() or mpg123_supported_decoders()).
  *  and optional retrieval of an error code to feed to mpg123_plain_strerror().
@@ -196,12 +196,12 @@ var
  *  \param error optional address to store error codes
  *  \return Non-NULL pointer to fresh handle when successful.
  *)
-  mpg123_new: Function(decoder: PAnsiChar; error: pint): mpg123_handle_p; cdecl;
+  mpg123_new: Function(decoder: PAnsiChar; error: pint): mpg123_handle_p; cdecl = nil;
 
 (** Delete handle, mh is either a valid mpg123 handle or NULL.
  *  \param mh handle
  *)
-  mpg123_delete: procedure(mh: mpg123_handle_p); cdecl;
+  mpg123_delete: procedure(mh: mpg123_handle_p); cdecl = nil;
 
 (** Enumeration of the parameters types that it is possible to set/get. *)
 type
@@ -278,7 +278,7 @@ const
  *  \return MPG123_OK on success
  *)
 var
-  mpg123_param: Function(mh: mpg123_handle_p; atype: mpg123_parms_t; value: long; fvalue: Double): int; cdecl;
+  mpg123_param: Function(mh: mpg123_handle_p; atype: mpg123_parms_t; value: long; fvalue: Double): int; cdecl = nil;
 
 (** Get a specific parameter, for a specific mpg123_handle.
  *  See the mpg123_parms enumeration for a list of available parameters.
@@ -288,7 +288,7 @@ var
  *  \param fvalue floating point value return address
  *  \return MPG123_OK on success
  *)
-  mpg123_getparam: Function(mh: mpg123_handle_p; atype: mpg123_parms_t; value: plong; fvalue: PDouble): int; cdecl;
+  mpg123_getparam: Function(mh: mpg123_handle_p; atype: mpg123_parms_t; value: plong; fvalue: PDouble): int; cdecl = nil;
 
 (** Feature set available for query with mpg123_feature. *)
 type
@@ -316,7 +316,7 @@ const
  *  \return 1 for success, 0 for unimplemented functions
  *)
 var
-  mpg123_feature: Function(key: mpg123_feature_set_t): int; cdecl;
+  mpg123_feature: Function(key: mpg123_feature_set_t): int; cdecl = nil;
 
 (* @} *)
 
@@ -411,7 +411,7 @@ const
  *  \return string describing what that error error code means
  *)
 var
-  mpg123_plain_strerror: Function(errcode: int): PAnsiChar; cdecl;
+  mpg123_plain_strerror: Function(errcode: int): PAnsiChar; cdecl = nil;
 
 (** Give string describing what error has occured in the context of handle mh.
  *  When a function operating on an mpg123 handle returns MPG123_ERR, you should check for the actual reason via
@@ -420,13 +420,13 @@ var
  *  \param mh handle
  *  \return error message
  *)
-  mpg123_strerror: Function(mh: mpg123_handle_p): PAnsiChar; cdecl;
+  mpg123_strerror: Function(mh: mpg123_handle_p): PAnsiChar; cdecl = nil;
 
 (** Return the plain errcode intead of a string.
  *  \param mh handle
  *  \return error code recorded in handle or MPG123_BAD_HANDLE
  *)
-  mpg123_errcode: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_errcode: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (*@}*)
 
@@ -442,19 +442,19 @@ var
 (** Get available decoder list.
  *  \return NULL-terminated array of generally available decoder names (plain 8bit ASCII)
  *)
-  mpg123_decoders: Function: PPAnsiChar; cdecl;
+  mpg123_decoders: Function: PPAnsiChar; cdecl = nil;
 
 (** Get supported decoder list.
  *  \return NULL-terminated array of the decoders supported by the CPU (plain 8bit ASCII)
  *)
-  mpg123_supported_decoders: Function: PPAnsiChar; cdecl;
+  mpg123_supported_decoders: Function: PPAnsiChar; cdecl = nil;
 
 (** Set the active decoder.
  *  \param mh handle
  *  \param decoder_name name of decoder
  *  \return MPG123_OK on success
  *)
-  mpg123_decoder: Function(mh: mpg123_handle_p; decoder_name: PAnsiChar): int; cdecl;
+  mpg123_decoder: Function(mh: mpg123_handle_p; decoder_name: PAnsiChar): int; cdecl = nil;
 
 (** Get the currently active decoder name.
  *  The active decoder engine can vary depening on output constraints,
@@ -465,7 +465,7 @@ var
  *  \param mh handle
  *  \return The decoder name or NULL on error.
  *)
-  mpg123_current_decoder: Function(mh: mpg123_handle_p): PAnsiChar; cdecl;
+  mpg123_current_decoder: Function(mh: mpg123_handle_p): PAnsiChar; cdecl = nil;
 
 (*@}*)
 
@@ -501,32 +501,32 @@ const
  *  \param list Store a pointer to the sample rates array there.
  *  \param number Store the number of sample rates there. *)
 var
-  mpg123_rates: procedure(list: pplong; number: psize_t); cdecl;
+  mpg123_rates: procedure(list: pplong; number: psize_t); cdecl = nil;
 
 (** An array of supported audio encodings.
  *  An audio encoding is one of the fully qualified members of mpg123_enc_enum (MPG123_ENC_SIGNED_16, not MPG123_SIGNED).
  *  \param list Store a pointer to the encodings array there.
  *  \param number Store the number of encodings there. *)
-  mpg123_encodings: procedure(list: ppint; number: psize_t); cdecl;
+  mpg123_encodings: procedure(list: ppint; number: psize_t); cdecl = nil;
 
 (** Return the size (in bytes) of one mono sample of the named encoding.
  * \param encoding The encoding value to analyze.
  * \return positive size of encoding in bytes, 0 on invalid encoding. *)
-  mpg123_encsize: Function(encoding: int): int; cdecl;
+  mpg123_encsize: Function(encoding: int): int; cdecl = nil;
 
 (** Configure a mpg123 handle to accept no output format at all,
  *  use before specifying supported formats with mpg123_format
  *  \param mh handle
  *  \return MPG123_OK on success
  *)
-  mpg123_format_none: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_format_none: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Configure mpg123 handle to accept all formats
  *  (also any custom rate you may set) -- this is default.
  *  \param mh handle
  *  \return MPG123_OK on success
  *)
-  mpg123_format_all: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_format_all: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Set the audio format support of a mpg123_handle in detail:
  *  \param mh handle
@@ -534,7 +534,7 @@ var
  *  \param channels A combination of MPG123_STEREO and MPG123_MONO.
  *  \param encodings A combination of accepted encodings for rate and channels, p.ex MPG123_ENC_SIGNED16 | MPG123_ENC_ULAW_8 (or 0 for no support). Please note that some encodings may not be supported in the library build and thus will be ignored here.
  *  \return MPG123_OK on success, MPG123_ERR if there was an error. *)
-  mpg123_format: Function(mh: mpg123_handle_p; rate: long; channels, encodings: int): int; cdecl;
+  mpg123_format: Function(mh: mpg123_handle_p; rate: long; channels, encodings: int): int; cdecl = nil;
 
 (** Check to see if a specific format at a specific rate is supported
  *  by mpg123_handle.
@@ -543,7 +543,7 @@ var
  *  \param encoding encoding
  *  \return 0 for no support (that includes invalid parameters), MPG123_STEREO, 
  *          MPG123_MONO or MPG123_STEREO|MPG123_MONO. *)
-  mpg123_format_support: Function(mh: mpg123_handle_p; rate: long; encoding: int): int; cdecl;
+  mpg123_format_support: Function(mh: mpg123_handle_p; rate: long; encoding: int): int; cdecl = nil;
 
 (** Get the current output format written to the addresses given.
  *  If the stream is freshly loaded, this will try to parse enough
@@ -556,7 +556,7 @@ var
  *  \param encoding encoding return address
  *  \return MPG123_OK on success
  *)
-  mpg123_getformat: Function(mh: mpg123_handle_p; rate: plong; channels, encoding: pint): int; cdecl;
+  mpg123_getformat: Function(mh: mpg123_handle_p; rate: plong; channels, encoding: pint): int; cdecl = nil;
 
 (** Get the current output format written to the addresses given.
  *  This differs from plain mpg123_getformat() in that you can choose
@@ -569,7 +569,7 @@ var
  *  \param clear_flag if true, clear internal format flag
  *  \return MPG123_OK on success
  *)
-  mpg123_getformat2: Function(mh: mpg123_handle_p; rate: plong; channels, encoding: pint; clear_flag: int): int; cdecl;
+  mpg123_getformat2: Function(mh: mpg123_handle_p; rate: plong; channels, encoding: pint; clear_flag: int): int; cdecl = nil;
 
 (*@}*)
 
@@ -591,9 +591,9 @@ var
  *  \param path filesystem path
  *  \return MPG123_OK on success
  *)
-  mpg123_open: Function(mh: mpg123_handle_p; path: PAnsiChar): int; cdecl;
-  mpg123_open_32: Function(mh: mpg123_handle_p; path: PAnsiChar): int; cdecl;
-  mpg123_open_64: Function(mh: mpg123_handle_p; path: PAnsiChar): int; cdecl;
+  mpg123_open: Function(mh: mpg123_handle_p; path: PAnsiChar): int; cdecl = nil;
+  mpg123_open_32: Function(mh: mpg123_handle_p; path: PAnsiChar): int; cdecl = nil;
+  mpg123_open_64: Function(mh: mpg123_handle_p; path: PAnsiChar): int; cdecl = nil;
 
 (** Use an already opened file descriptor as the bitstream input
  *  mpg123_close() will _not_ close the file descriptor.
@@ -601,9 +601,9 @@ var
  *  \param fd file descriptor
  *  \return MPG123_OK on success
  *)
-  mpg123_open_fd: Function(mh: mpg123_handle_p; fd: int): int; cdecl;
-  mpg123_open_fd_32: Function(mh: mpg123_handle_p; fd: int): int; cdecl;
-  mpg123_open_fd_64: Function(mh: mpg123_handle_p; fd: int): int; cdecl;
+  mpg123_open_fd: Function(mh: mpg123_handle_p; fd: int): int; cdecl = nil;
+  mpg123_open_fd_32: Function(mh: mpg123_handle_p; fd: int): int; cdecl = nil;
+  mpg123_open_fd_64: Function(mh: mpg123_handle_p; fd: int): int; cdecl = nil;
 
 (** Use an opaque handle as bitstream input. This works only with the
  *  replaced I/O from mpg123_replace_reader_handle()!
@@ -612,22 +612,22 @@ var
  *  \param iohandle your handle
  *  \return MPG123_OK on success
  *)
-  mpg123_open_handle: Function(mh: mpg123_handle_p; iohandle: Pointer): int; cdecl;
-  mpg123_open_handle_32: Function(mh: mpg123_handle_p; iohandle: Pointer): int; cdecl;
-  mpg123_open_handle_64: Function(mh: mpg123_handle_p; iohandle: Pointer): int; cdecl;
+  mpg123_open_handle: Function(mh: mpg123_handle_p; iohandle: Pointer): int; cdecl = nil;
+  mpg123_open_handle_32: Function(mh: mpg123_handle_p; iohandle: Pointer): int; cdecl = nil;
+  mpg123_open_handle_64: Function(mh: mpg123_handle_p; iohandle: Pointer): int; cdecl = nil;
 
 (** Open a new bitstream and prepare for direct feeding
  *  This works together with mpg123_decode(); you are responsible for reading and feeding the input bitstream.
  *  \param mh handle
  *  \return MPG123_OK on success
  *)
-  mpg123_open_feed: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_open_feed: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Closes the source, if libmpg123 opened it.
  *  \param mh handle
  *  \return MPG123_OK on success
  *)
-  mpg123_close: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_close: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Read from stream and decode up to outmemsize bytes.
  *  \param mh handle
@@ -636,7 +636,7 @@ var
  *  \param done address to store the number of actually decoded bytes to
  *  \return MPG123_OK or error/message code
  *)
-  mpg123_read: Function(mh: mpg123_handle_p; outmemory: PByte; outmemsize: size_t; done: psize_t): int; cdecl;
+  mpg123_read: Function(mh: mpg123_handle_p; outmemory: PByte; outmemsize: size_t; done: psize_t): int; cdecl = nil;
 
 (** Feed data for a stream that has been opened with mpg123_open_feed().
  *  It's give and take: You provide the bytestream, mpg123 gives you the decoded samples.
@@ -645,7 +645,7 @@ var
  *  \param size number of input bytes
  *  \return MPG123_OK or error/message code.
  *)
-  mpg123_feed: Function(mh: mpg123_handle_p; inbuff: PByte; size: size_t): int; cdecl;
+  mpg123_feed: Function(mh: mpg123_handle_p; inbuff: PByte; size: size_t): int; cdecl = nil;
 
 (** Decode MPEG Audio from inmemory to outmemory. 
  *  This is very close to a drop-in replacement for old mpglib.
@@ -662,7 +662,7 @@ var
  *  \param done address to store the number of actually decoded bytes to
  *  \return error/message code (watch out especially for MPG123_NEED_MORE)
  *)
-  mpg123_decode: Function(mh: mpg123_handle_p; inmemory: PByte; inmemsize: size_t; outmemory: PByte; outmemsize: size_t; done: psize_t): int; cdecl;
+  mpg123_decode: Function(mh: mpg123_handle_p; inmemory: PByte; inmemsize: size_t; outmemory: PByte; outmemsize: size_t; done: psize_t): int; cdecl = nil;
 
 (** Decode next MPEG frame to internal buffer
  *  or read a frame and return after setting a new format.
@@ -672,9 +672,9 @@ var
  *  \param bytes number of output bytes ready in the buffer
  *  \return MPG123_OK or error/message code
  *)
-  mpg123_decode_frame: Function(mh: mpg123_handle_p; num: poff_t; audio: PPByte; bytes: psize_t): int; cdecl;
-  mpg123_decode_frame_32: Function(mh: mpg123_handle_p; num: poff32_t; audio: PPByte; bytes: psize_t): int; cdecl;
-  mpg123_decode_frame_64: Function(mh: mpg123_handle_p; num: poff64_t; audio: PPByte; bytes: psize_t): int; cdecl;
+  mpg123_decode_frame: Function(mh: mpg123_handle_p; num: poff_t; audio: PPByte; bytes: psize_t): int; cdecl = nil;
+  mpg123_decode_frame_32: Function(mh: mpg123_handle_p; num: poff32_t; audio: PPByte; bytes: psize_t): int; cdecl = nil;
+  mpg123_decode_frame_64: Function(mh: mpg123_handle_p; num: poff64_t; audio: PPByte; bytes: psize_t): int; cdecl = nil;
 
 (** Decode current MPEG frame to internal buffer.
  * Warning: This is experimental API that might change in future releases!
@@ -685,9 +685,9 @@ var
  *  \param bytes number of output bytes ready in the buffer
  *  \return MPG123_OK or error/message code
  *)
-  mpg123_framebyframe_decode: Function(mh: mpg123_handle_p; num: poff_t; audio: PPByte; bytes: psize_t): int; cdecl;
-  mpg123_framebyframe_decode_32: Function(mh: mpg123_handle_p; num: poff32_t; audio: PPByte; bytes: psize_t): int; cdecl;
-  mpg123_framebyframe_decode_64: Function(mh: mpg123_handle_p; num: poff64_t; audio: PPByte; bytes: psize_t): int; cdecl;
+  mpg123_framebyframe_decode: Function(mh: mpg123_handle_p; num: poff_t; audio: PPByte; bytes: psize_t): int; cdecl = nil;
+  mpg123_framebyframe_decode_32: Function(mh: mpg123_handle_p; num: poff32_t; audio: PPByte; bytes: psize_t): int; cdecl = nil;
+  mpg123_framebyframe_decode_64: Function(mh: mpg123_handle_p; num: poff64_t; audio: PPByte; bytes: psize_t): int; cdecl = nil;
 
 (** Find, read and parse the next mp3 frame
  * Warning: This is experimental API that might change in future releases!
@@ -695,7 +695,7 @@ var
  *  \param mh handle
  *  \return MPG123_OK or error/message code
  *)
-  mpg123_framebyframe_next: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_framebyframe_next: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Get access to the raw input data for the last parsed frame.
  * This gives you a direct look (and write access) to the frame body data.
@@ -712,7 +712,7 @@ var
  *    explanation, the error state of the mpg123_handle is not modified by
  *    this function).
  *)
-  mpg123_framedata: Function(mh: mpg123_handle_p; header: pulong; bodydata: PPByte; bodybytes: psize_t): int; cdecl;
+  mpg123_framedata: Function(mh: mpg123_handle_p; header: pulong; bodydata: PPByte; bodybytes: psize_t): int; cdecl = nil;
 
 (** Get the input position (byte offset in stream) of the last parsed frame.
  *  This can be used for external seek index building, for example.
@@ -721,9 +721,9 @@ var
  * \param mh handle
  * \return byte offset in stream
  *)
-  mpg123_framepos: Function(mh: mpg123_handle_p): off_t; cdecl;
-  mpg123_framepos_32: Function(mh: mpg123_handle_p): off32_t; cdecl;
-  mpg123_framepos_64: Function(mh: mpg123_handle_p): off64_t; cdecl;
+  mpg123_framepos: Function(mh: mpg123_handle_p): off_t; cdecl = nil;
+  mpg123_framepos_32: Function(mh: mpg123_handle_p): off32_t; cdecl = nil;
+  mpg123_framepos_64: Function(mh: mpg123_handle_p): off64_t; cdecl = nil;
 
 (*@}*)
 
@@ -753,25 +753,25 @@ var
  *  \param mh handle
  *  \return sample offset or MPG123_ERR (null handle)
  *)
-  mpg123_tell: Function(mh: mpg123_handle_p): off_t; cdecl;
-  mpg123_tell_32: Function(mh: mpg123_handle_p): off32_t; cdecl;
-  mpg123_tell_64: Function(mh: mpg123_handle_p): off64_t; cdecl;
+  mpg123_tell: Function(mh: mpg123_handle_p): off_t; cdecl = nil;
+  mpg123_tell_32: Function(mh: mpg123_handle_p): off32_t; cdecl = nil;
+  mpg123_tell_64: Function(mh: mpg123_handle_p): off64_t; cdecl = nil;
 
 (** Returns the frame number that the next read will give you data from.
  *  \param mh handle
  *  \return frame offset or MPG123_ERR (null handle)
  *)
-  mpg123_tellframe: Function(mh: mpg123_handle_p): off_t; cdecl;
-  mpg123_tellframe_32: Function(mh: mpg123_handle_p): off32_t; cdecl;
-  mpg123_tellframe_64: Function(mh: mpg123_handle_p): off64_t; cdecl;
+  mpg123_tellframe: Function(mh: mpg123_handle_p): off_t; cdecl = nil;
+  mpg123_tellframe_32: Function(mh: mpg123_handle_p): off32_t; cdecl = nil;
+  mpg123_tellframe_64: Function(mh: mpg123_handle_p): off64_t; cdecl = nil;
 
 (** Returns the current byte offset in the input stream.
  *  \param mh handle
  *  \return byte offset or MPG123_ERR (null handle)
  *)
-  mpg123_tell_stream: Function(mh: mpg123_handle_p): off_t; cdecl;
-  mpg123_tell_stream_32: Function(mh: mpg123_handle_p): off32_t; cdecl;
-  mpg123_tell_stream_64: Function(mh: mpg123_handle_p): off64_t; cdecl;
+  mpg123_tell_stream: Function(mh: mpg123_handle_p): off_t; cdecl = nil;
+  mpg123_tell_stream_32: Function(mh: mpg123_handle_p): off32_t; cdecl = nil;
+  mpg123_tell_stream_64: Function(mh: mpg123_handle_p): off64_t; cdecl = nil;
 
 (** Seek to a desired sample offset.
  *  Usage is modelled afer the standard lseek().
@@ -780,9 +780,9 @@ var
  * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
  * \return The resulting offset >= 0 or error/message code
  *)
-  mpg123_seek: Function(mh: mpg123_handle_p; samleoff: off_t; whence: int): off_t; cdecl;
-  mpg123_seek_32: Function(mh: mpg123_handle_p; samleoff: off32_t; whence: int): off32_t; cdecl;
-  mpg123_seek_64: Function(mh: mpg123_handle_p; samleoff: off64_t; whence: int): off64_t; cdecl;
+  mpg123_seek: Function(mh: mpg123_handle_p; samleoff: off_t; whence: int): off_t; cdecl = nil;
+  mpg123_seek_32: Function(mh: mpg123_handle_p; samleoff: off32_t; whence: int): off32_t; cdecl = nil;
+  mpg123_seek_64: Function(mh: mpg123_handle_p; samleoff: off64_t; whence: int): off64_t; cdecl = nil;
 
 (** Seek to a desired sample offset in data feeding mode. 
  *  This just prepares things to be right only if you ensure that the next chunk of input data will be from input_offset byte position.
@@ -792,9 +792,9 @@ var
  *  \param input_offset The position it expects to be at the 
  *                      next time data is fed to mpg123_decode().
  *  \return The resulting offset >= 0 or error/message code *)
-  mpg123_feedseek: Function(mh: mpg123_handle_p; samleoff: off_t; whence: int; input_offset: poff_t): off_t; cdecl;
-  mpg123_feedseek_32: Function(mh: mpg123_handle_p; samleoff: off32_t; whence: int; input_offset: poff32_t): off32_t; cdecl;
-  mpg123_feedseek_64: Function(mh: mpg123_handle_p; samleoff: off64_t; whence: int; input_offset: poff64_t): off64_t; cdecl;
+  mpg123_feedseek: Function(mh: mpg123_handle_p; samleoff: off_t; whence: int; input_offset: poff_t): off_t; cdecl = nil;
+  mpg123_feedseek_32: Function(mh: mpg123_handle_p; samleoff: off32_t; whence: int; input_offset: poff32_t): off32_t; cdecl = nil;
+  mpg123_feedseek_64: Function(mh: mpg123_handle_p; samleoff: off64_t; whence: int; input_offset: poff64_t): off64_t; cdecl = nil;
 
 (** Seek to a desired MPEG frame offset.
  *  Usage is modelled afer the standard lseek().
@@ -802,16 +802,16 @@ var
  * \param frameoff offset in MPEG frames
  * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
  * \return The resulting offset >= 0 or error/message code *)
-  mpg123_seek_frame: Function(mh: mpg123_handle_p; frameoff: off_t; whence: int): off_t; cdecl;
-  mpg123_seek_frame_32: Function(mh: mpg123_handle_p; frameoff: off32_t; whence: int): off32_t; cdecl;
-  mpg123_seek_frame_64: Function(mh: mpg123_handle_p; frameoff: off64_t; whence: int): off64_t; cdecl;
+  mpg123_seek_frame: Function(mh: mpg123_handle_p; frameoff: off_t; whence: int): off_t; cdecl = nil;
+  mpg123_seek_frame_32: Function(mh: mpg123_handle_p; frameoff: off32_t; whence: int): off32_t; cdecl = nil;
+  mpg123_seek_frame_64: Function(mh: mpg123_handle_p; frameoff: off64_t; whence: int): off64_t; cdecl = nil;
 
 (** Return a MPEG frame offset corresponding to an offset in seconds.
  *  This assumes that the samples per frame do not change in the file/stream, which is a good assumption for any sane file/stream only.
  *  \return frame offset >= 0 or error/message code *)
-  mpg123_timeframe: Function(mh: mpg123_handle_p; dec: Double): off_t; cdecl;
-  mpg123_timeframe_32: Function(mh: mpg123_handle_p; dec: Double): off32_t; cdecl;
-  mpg123_timeframe_64: Function(mh: mpg123_handle_p; dec: Double): off64_t; cdecl;
+  mpg123_timeframe: Function(mh: mpg123_handle_p; dec: Double): off_t; cdecl = nil;
+  mpg123_timeframe_32: Function(mh: mpg123_handle_p; dec: Double): off32_t; cdecl = nil;
+  mpg123_timeframe_64: Function(mh: mpg123_handle_p; dec: Double): off64_t; cdecl = nil;
 
 (** Give access to the frame index table that is managed for seeking.
  *  You are asked not to modify the values... Use mpg123_set_index to set the
@@ -822,9 +822,9 @@ var
  *  \param fill number of recorded index offsets; size of the array
  *  \return MPG123_OK on success
  *)
-  mpg123_index: Function(mh: mpg123_handle_p; offsets: ppoff_t; step: poff_t; fill: psize_t): int; cdecl;
-  mpg123_index_32: Function(mh: mpg123_handle_p; offsets: ppoff32_t; step: poff32_t; fill: psize_t): int; cdecl;
-  mpg123_index_64: Function(mh: mpg123_handle_p; offsets: ppoff64_t; step: poff64_t; fill: psize_t): int; cdecl;
+  mpg123_index: Function(mh: mpg123_handle_p; offsets: ppoff_t; step: poff_t; fill: psize_t): int; cdecl = nil;
+  mpg123_index_32: Function(mh: mpg123_handle_p; offsets: ppoff32_t; step: poff32_t; fill: psize_t): int; cdecl = nil;
+  mpg123_index_64: Function(mh: mpg123_handle_p; offsets: ppoff64_t; step: poff64_t; fill: psize_t): int; cdecl = nil;
 
 (** Set the frame index table
  *  Setting offsets to NULL and fill > 0 will allocate fill entries. Setting offsets
@@ -835,9 +835,9 @@ var
  *  \param fill    number of recorded index offsets; size of the array
  *  \return MPG123_OK on success
  *)
-  mpg123_set_index: Function(mh: mpg123_handle_p; offsets: poff_t; step: off_t; fill: size_t): int; cdecl;
-  mpg123_set_index_32: Function(mh: mpg123_handle_p; offsets: poff32_t; step: off32_t; fill: size_t): int; cdecl;
-  mpg123_set_index_64: Function(mh: mpg123_handle_p; offsets: poff64_t; step: off64_t; fill: size_t): int; cdecl;
+  mpg123_set_index: Function(mh: mpg123_handle_p; offsets: poff_t; step: off_t; fill: size_t): int; cdecl = nil;
+  mpg123_set_index_32: Function(mh: mpg123_handle_p; offsets: poff32_t; step: off32_t; fill: size_t): int; cdecl = nil;
+  mpg123_set_index_64: Function(mh: mpg123_handle_p; offsets: poff64_t; step: off64_t; fill: size_t): int; cdecl = nil;
 
 (** An old crutch to keep old mpg123 binaries happy.
  *  WARNING: This function is there only to avoid runtime linking errors with
@@ -846,9 +846,9 @@ var
  *  for various cases (p.ex. 24 bit output). Do never use. It might eventually
  *  be purged from the library.
  *)
-  mpg123_position: Function(mh: mpg123_handle_p; frame_offset, buffered_bytes: off_t; current_frame, frames_left: poff_t; current_seconds, seconds_left: PDouble): int; cdecl;
-  mpg123_position_32: Function(mh: mpg123_handle_p; frame_offset, buffered_bytes: off32_t; current_frame, frames_left: poff32_t; current_seconds, seconds_left: PDouble): int; cdecl;
-  mpg123_position_64: Function(mh: mpg123_handle_p; frame_offset, buffered_bytes: off64_t; current_frame, frames_left: poff64_t; current_seconds, seconds_left: PDouble): int; cdecl;
+  mpg123_position: Function(mh: mpg123_handle_p; frame_offset, buffered_bytes: off_t; current_frame, frames_left: poff_t; current_seconds, seconds_left: PDouble): int; cdecl = nil;
+  mpg123_position_32: Function(mh: mpg123_handle_p; frame_offset, buffered_bytes: off32_t; current_frame, frames_left: poff32_t; current_seconds, seconds_left: PDouble): int; cdecl = nil;
+  mpg123_position_64: Function(mh: mpg123_handle_p; frame_offset, buffered_bytes: off64_t; current_frame, frames_left: poff64_t; current_seconds, seconds_left: PDouble): int; cdecl = nil;
 
 (*@}*)
 
@@ -875,20 +875,20 @@ const
  *  \return MPG123_OK on success
  *)
 var
-  mpg123_eq: Function(mh: mpg123_handle_p; channel: mpg123_channels_t; band: int; val: Double): int; cdecl;
+  mpg123_eq: Function(mh: mpg123_handle_p; channel: mpg123_channels_t; band: int; val: Double): int; cdecl = nil;
 
 (** Get the 32 Band Audio Equalizer settings.
  *  \param mh handle
  *  \param channel Can be MPG123_LEFT, MPG123_RIGHT or MPG123_LEFT|MPG123_RIGHT for (arithmetic mean of) both.
  *  \param band The equaliser band to change (from 0 to 31)
  *  \return The (linear) adjustment factor (zero for pad parameters) *)
-  mpg123_geteq: Function(mh: mpg123_handle_p; channel: mpg123_channels_t; band: int): Double; cdecl;
+  mpg123_geteq: Function(mh: mpg123_handle_p; channel: mpg123_channels_t; band: int): Double; cdecl = nil;
 
 (** Reset the 32 Band Audio Equalizer settings to flat
  *  \param mh handle
  *  \return MPG123_OK on success
  *)
-  mpg123_reset_eq: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_reset_eq: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Set the absolute output volume including the RVA setting,
  *  vol<0 just applies (a possibly changed) RVA setting.
@@ -896,14 +896,14 @@ var
  *  \param vol volume value (linear factor)
  *  \return MPG123_OK on success
  *)
-  mpg123_volume: Function(mh: mpg123_handle_p; vol: Double): int; cdecl;
+  mpg123_volume: Function(mh: mpg123_handle_p; vol: Double): int; cdecl = nil;
 
 (** Adjust output volume including the RVA setting by chosen amount
  *  \param mh handle
  *  \param change volume value (linear factor increment)
  *  \return MPG123_OK on success
  *)
-  mpg123_volume_change: Function(mh: mpg123_handle_p; change: Double): int; cdecl;
+  mpg123_volume_change: Function(mh: mpg123_handle_p; change: Double): int; cdecl = nil;
 
 (** Return current volume setting, the actual value due to RVA, and the RVA
  *  adjustment itself. It's all as double float value to abstract the sample 
@@ -915,7 +915,7 @@ var
  *  \param rva_db return address for RVA value (decibels)
  *  \return MPG123_OK on success
  *)
-  mpg123_getvolume: Function(mh: mpg123_handle_p; base, really, rva_db: PDouble): int; cdecl;
+  mpg123_getvolume: Function(mh: mpg123_handle_p; base, really, rva_db: PDouble): int; cdecl = nil;
 
 (* TODO: Set some preamp in addition / to replace internal RVA handling? *)
 
@@ -991,13 +991,13 @@ type
  *  \return MPG123_OK on success
  *)
 var
-  mpg123_info: Function(mh: mpg123_handle_p; mi: mpg123_frameinfo_p): int; cdecl;
+  mpg123_info: Function(mh: mpg123_handle_p; mi: mpg123_frameinfo_p): int; cdecl = nil;
 
 (** Get the safe output buffer size for all cases
  *  (when you want to replace the internal buffer)
  *  \return safe buffer size
  *)
-  mpg123_safe_buffer: Function: size_t; cdecl;
+  mpg123_safe_buffer: Function: size_t; cdecl = nil;
 
 (** Make a full parsing scan of each frame in the file. ID3 tags are found. An
  *  accurate length value is stored. Seek index will be filled. A seek back to
@@ -1006,23 +1006,23 @@ var
  *  \param mh handle
  *  \return MPG123_OK on success
  *)
-  mpg123_scan: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_scan: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Return, if possible, the full (expected) length of current track in frames.
  * \param mh handle
  * \return length >= 0 or MPG123_ERR if there is no length guess possible.
  *)
-  mpg123_framelength: Function(mh: mpg123_handle_p): off_t; cdecl;
-  mpg123_framelength_32: Function(mh: mpg123_handle_p): off32_t; cdecl;
-  mpg123_framelength_64: Function(mh: mpg123_handle_p): off64_t; cdecl;
+  mpg123_framelength: Function(mh: mpg123_handle_p): off_t; cdecl = nil;
+  mpg123_framelength_32: Function(mh: mpg123_handle_p): off32_t; cdecl = nil;
+  mpg123_framelength_64: Function(mh: mpg123_handle_p): off64_t; cdecl = nil;
 
 (** Return, if possible, the full (expected) length of current track in samples.
  * \param mh handle
  * \return length >= 0 or MPG123_ERR if there is no length guess possible.
  *)
-  mpg123_length: Function(mh: mpg123_handle_p): off_t; cdecl;
-  mpg123_length_32: Function(mh: mpg123_handle_p): off32_t; cdecl;
-  mpg123_length_64: Function(mh: mpg123_handle_p): off64_t; cdecl;
+  mpg123_length: Function(mh: mpg123_handle_p): off_t; cdecl = nil;
+  mpg123_length_32: Function(mh: mpg123_handle_p): off32_t; cdecl = nil;
+  mpg123_length_64: Function(mh: mpg123_handle_p): off64_t; cdecl = nil;
 
 (** Override the value for file size in bytes.
  *  Useful for getting sensible track length values in feed mode or for HTTP streams.
@@ -1030,27 +1030,27 @@ var
  *  \param size file size in bytes
  *  \return MPG123_OK on success
  *)
-  mpg123_set_filesize: Function(mh: mpg123_handle_p; size: off_t): int; cdecl;
-  mpg123_set_filesize_32: Function(mh: mpg123_handle_p; size: off32_t): int; cdecl;
-  mpg123_set_filesize_64: Function(mh: mpg123_handle_p; size: off64_t): int; cdecl;
+  mpg123_set_filesize: Function(mh: mpg123_handle_p; size: off_t): int; cdecl = nil;
+  mpg123_set_filesize_32: Function(mh: mpg123_handle_p; size: off32_t): int; cdecl = nil;
+  mpg123_set_filesize_64: Function(mh: mpg123_handle_p; size: off64_t): int; cdecl = nil;
 
 (** Get MPEG frame duration in seconds.
  *  \param mh handle
  *  \return frame duration in seconds, <0 on error
  *)
-  mpg123_tpf: Function(mh: mpg123_handle_p): Double; cdecl;
+  mpg123_tpf: Function(mh: mpg123_handle_p): Double; cdecl = nil;
 
 (** Get MPEG frame duration in samples.
  *  \param mh handle
  *  \return samples per frame for the most recently parsed frame; <0 on errors
  *)
-  mpg123_spf: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_spf: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Get and reset the clip count.
  *  \param mh handle
  *  \return count of clipped samples
  *)
-  mpg123_clip: Function(mh: mpg123_handle_p): long; cdecl;
+  mpg123_clip: Function(mh: mpg123_handle_p): long; cdecl = nil;
 
 (** The key values for state information from mpg123_getstate(). *)
 type
@@ -1071,7 +1071,7 @@ const
  *  \return MPG123_OK on success
  *)
 var
-  mpg123_getstate: Function(mh: mpg123_handle_p; key: mpg123_state_t; val: plong; fval: PDouble): int; cdecl;
+  mpg123_getstate: Function(mh: mpg123_handle_p; key: mpg123_state_t; val: plong; fval: PDouble): int; cdecl = nil;
 
 (*@}*)
 
@@ -1098,19 +1098,19 @@ type
  *  \param sb string handle (address of existing structure on your side)
  *)
 var
-  mpg123_init_string: procedure(sb: mpg123_string_p); cdecl;
+  mpg123_init_string: procedure(sb: mpg123_string_p); cdecl = nil;
 
 (** Free-up mempory for an existing mpg123_string
  *  \param sb string handle
  *)
-  mpg123_free_string: procedure(sb: mpg123_string_p); cdecl;
+  mpg123_free_string: procedure(sb: mpg123_string_p); cdecl = nil;
 
 (** Change the size of a mpg123_string
  *  \param sb string handle
  *  \param news new size in bytes
  *  \return 0 on error, 1 on success
  *)
-  mpg123_resize_string: Function(sb: mpg123_string_p; news: size_t): int; cdecl;
+  mpg123_resize_string: Function(sb: mpg123_string_p; news: size_t): int; cdecl = nil;
 
 (** Increase size of a mpg123_string if necessary (it may stay larger).
  *  Note that the functions for adding and setting in current libmpg123
@@ -1121,7 +1121,7 @@ var
  *  \param news new minimum size
  *  \return 0 on error, 1 on success
  *)
-  mpg123_grow_string: Function(sb: mpg123_string_p; news: size_t): int; cdecl;
+  mpg123_grow_string: Function(sb: mpg123_string_p; news: size_t): int; cdecl = nil;
 
 (** Copy the contents of one mpg123_string string to another.
  *  Yes the order of arguments is reversed compated to memcpy().
@@ -1129,14 +1129,14 @@ var
  *  \param to string handle
  *  \return 0 on error, 1 on success
  *)
-  mpg123_copy_string: Function(from, _to: mpg123_string_p): int; cdecl;
+  mpg123_copy_string: Function(from, _to: mpg123_string_p): int; cdecl = nil;
 
 (** Append a C-String to an mpg123_string
  *  \param sb string handle
  *  \param stuff to append
  *  \return 0 on error, 1 on success
  *)
-  mpg123_add_string: Function(sb: mpg123_string_p; stuff: PAnsiChar): int; cdecl;
+  mpg123_add_string: Function(sb: mpg123_string_p; stuff: PAnsiChar): int; cdecl = nil;
 
 (** Append a C-substring to an mpg123 string
  *  \param sb string handle
@@ -1145,14 +1145,14 @@ var
  *  \param count number of characters to copy (a null-byte is always appended)
  *  \return 0 on error, 1 on success
  *)
-  mpg123_add_substring: Function(sb: mpg123_string_p; stuff: PAnsiChar; from, count: size_t): int; cdecl;
+  mpg123_add_substring: Function(sb: mpg123_string_p; stuff: PAnsiChar; from, count: size_t): int; cdecl = nil;
 
 (** Set the content of a mpg123_string to a C-string
  *  \param sb string handle
  *  \param stuff content to copy
  *  \return 0 on error, 1 on success
  *)
-  mpg123_set_string: Function(sb: mpg123_string_p; stuff: PAnsiChar): int; cdecl;
+  mpg123_set_string: Function(sb: mpg123_string_p; stuff: PAnsiChar): int; cdecl = nil;
 
 (** Set the content of a mpg123_string to a C-substring
  *  \param sb string handle
@@ -1161,7 +1161,7 @@ var
  *  \param count number of characters to copy (a null-byte is always appended)
  *  \return 0 on error, 1 on success
  *)
-  mpg123_set_substring: Function(sb: mpg123_string_p; stuff: PAnsiChar; from, count: size_t): int; cdecl;
+  mpg123_set_substring: Function(sb: mpg123_string_p; stuff: PAnsiChar; from, count: size_t): int; cdecl = nil;
 
 (** Count characters in a mpg123 string (non-null bytes or UTF-8 characters).
  *  Even with the fill property, the character count is not obvious as there could be multiple trailing null bytes.
@@ -1169,13 +1169,13 @@ var
  *  \param utf8 a flag to tell if the string is in utf8 encoding
  *  \return character count
 *)
-  mpg123_strlen: Function(sb: mpg123_string_p; utf8: int): size_t; cdecl;
+  mpg123_strlen: Function(sb: mpg123_string_p; utf8: int): size_t; cdecl = nil;
 
 (** Remove trailing \\r and \\n, if present.
  *  \param sb string handle
  *  \return 0 on error, 1 on success
  *)
-  mpg123_chomp_string: Function(sb: mpg123_string_p): int; cdecl;
+  mpg123_chomp_string: Function(sb: mpg123_string_p): int; cdecl = nil;
 
 (** The mpg123 text encodings. This contains encodings we encounter in ID3 tags or ICY meta info. *)
 type
@@ -1214,7 +1214,7 @@ const
  *  \return the mpg123 encoding index
  *)
 var
-  mpg123_enc_from_id3: Function(id3_enc_byte: Byte): mpg123_text_encoding_t; cdecl;
+  mpg123_enc_from_id3: Function(id3_enc_byte: Byte): mpg123_text_encoding_t; cdecl = nil;
 
 (** Store text data in string, after converting to UTF-8 from indicated encoding
  *  A prominent error can be that you provided an unknown encoding value, or this build of libmpg123 lacks support for certain encodings (ID3 or ICY stuff missing).
@@ -1225,7 +1225,7 @@ var
  *  \param source_size number of bytes in the source buffer
  *  \return 0 on error, 1 on success (on error, mpg123_free_string is called on sb)
  *)
-  mpg123_store_utf8: Function(sb: mpg123_string_p; enc: mpg123_text_encoding_t; source: PByte; source_size: size_t): int; cdecl;
+  mpg123_store_utf8: Function(sb: mpg123_string_p; enc: mpg123_text_encoding_t; source: PByte; source_size: size_t): int; cdecl = nil;
 
 (** Sub data structure for ID3v2, for storing various text fields (including comments).
  *  This is for ID3v2 COMM, TXXX and all the other text fields.
@@ -1335,31 +1335,31 @@ const
  *  \return combination of flags, 0 on error (same as "nothing new")
  *)
 var
-  mpg123_meta_check: Function(mh: mpg123_handle_p): int; cdecl;
+  mpg123_meta_check: Function(mh: mpg123_handle_p): int; cdecl = nil;
 
 (** Clean up meta data storage (ID3v2 and ICY), freeing memory.
  *  \param mh handle
  *)
-  mpg123_meta_free: procedure(mh: mpg123_handle_p); cdecl;
+  mpg123_meta_free: procedure(mh: mpg123_handle_p); cdecl = nil;
 
 (** Point v1 and v2 to existing data structures wich may change on any next read/decode function call.
  *  v1 and/or v2 can be set to NULL when there is no corresponding data.
  *  \return MPG123_OK on success
  *)
-  mpg123_id3: Function(mh: mpg123_handle_p; v1: mpg123_id3v1_pp; v2: mpg123_id3v2_pp): int; cdecl;
+  mpg123_id3: Function(mh: mpg123_handle_p; v1: mpg123_id3v1_pp; v2: mpg123_id3v2_pp): int; cdecl = nil;
 
 (** Point icy_meta to existing data structure wich may change on any next read/decode function call.
  *  \param mh handle
  *  \param icy_meta return address for ICY meta string (set to NULL if nothing there)
  *  \return MPG123_OK on success
  *)
-  mpg123_icy: Function(mh: mpg123_handle_p; icy_meta: PPAnsiChar): int; cdecl;
+  mpg123_icy: Function(mh: mpg123_handle_p; icy_meta: PPAnsiChar): int; cdecl = nil;
 
 (** Decode from windows-1252 (the encoding ICY metainfo used) to UTF-8.
  *  Note that this is very similar to mpg123_store_utf8(&sb, mpg123_text_icy, icy_text, strlen(icy_text+1)) .
  *  \param icy_text The input data in ICY encoding
  *  \return pointer to newly allocated buffer with UTF-8 data (You free() it!) *)
-  mpg123_icy2utf8: Function(icy_text: PAnsiChar): PAnsiChar; cdecl;
+  mpg123_icy2utf8: Function(icy_text: PAnsiChar): PAnsiChar; cdecl = nil;
 {$IFDEF LEAK_WARNINGS}
   {$MESSAGE WARN 'Function mpg123_icy2utf8 is allocating buffer that cannot be freed. Use it with caution!'}
 {$ENDIF}
@@ -1398,32 +1398,32 @@ type
  *  \return mpg123 handle
  *)
 var
-  mpg123_parnew: Function(mp: mpg123_pars_p; decoder: PAnsiChar; error: pint): mpg123_handle_p; cdecl;
+  mpg123_parnew: Function(mp: mpg123_pars_p; decoder: PAnsiChar; error: pint): mpg123_handle_p; cdecl = nil;
 
 (** Allocate memory for and return a pointer to a new mpg123_pars
  *  \param error error code return address
  *  \return new parameter handle
  *)
-  mpg123_new_pars: Function(error: pint): mpg123_pars_p; cdecl;
+  mpg123_new_pars: Function(error: pint): mpg123_pars_p; cdecl = nil;
 
 (** Delete and free up memory used by a mpg123_pars data structure
  *  \param mp parameter handle
  *)
-  mpg123_delete_pars: procedure(mp: mpg123_pars_p); cdecl;
+  mpg123_delete_pars: procedure(mp: mpg123_pars_p); cdecl = nil;
 
 (** Configure mpg123 parameters to accept no output format at all, 
  *  use before specifying supported formats with mpg123_format
  *  \param mp parameter handle
  *  \return MPG123_OK on success
  *)
-  mpg123_fmt_none: Function(mp: mpg123_pars_p): int; cdecl;
+  mpg123_fmt_none: Function(mp: mpg123_pars_p): int; cdecl = nil;
 
 (** Configure mpg123 parameters to accept all formats 
  *  (also any custom rate you may set) -- this is default. 
  *  \param mp parameter handle
  *  \return MPG123_OK on success
  *)
-  mpg123_fmt_all: Function(mp: mpg123_pars_p): int; cdecl;
+  mpg123_fmt_all: Function(mp: mpg123_pars_p): int; cdecl = nil;
 
 (** Set the audio format support of a mpg123_pars in detail:
  * \param mp parameter handle
@@ -1434,7 +1434,7 @@ var
  *                  support).
  * \return MPG123_OK on success
 *)
-  mpg123_fmt: Function(mp: mpg123_pars_p; rate: long; channels, encodings: int): int; cdecl;
+  mpg123_fmt: Function(mp: mpg123_pars_p; rate: long; channels, encodings: int): int; cdecl = nil;
 
 (** Check to see if a specific format at a specific rate is supported
  *  by mpg123_pars.
@@ -1443,7 +1443,7 @@ var
  *  \param encoding encoding
  *  \return 0 for no support (that includes invalid parameters), MPG123_STEREO, 
  *          MPG123_MONO or MPG123_STEREO|MPG123_MONO. *)
-  mpg123_fmt_support: Function(mp: mpg123_pars_p; rate: long; encoding: int): int; cdecl;
+  mpg123_fmt_support: Function(mp: mpg123_pars_p; rate: long; encoding: int): int; cdecl = nil;
 
 (** Set a specific parameter, for a specific mpg123_pars, using a parameter 
  *  type key chosen from the mpg123_parms enumeration, to the specified value.
@@ -1453,7 +1453,7 @@ var
  *  \param fvalue floating point value
  *  \return MPG123_OK on success
  *)
-  mpg123_par: Function(mp: mpg123_pars_p; _type: mpg123_parms_t; value: long; fvalue: Double): int; cdecl;
+  mpg123_par: Function(mp: mpg123_pars_p; _type: mpg123_parms_t; value: long; fvalue: Double): int; cdecl = nil;
 
 (** Get a specific parameter, for a specific mpg123_pars. 
  *  See the mpg123_parms enumeration for a list of available parameters.
@@ -1463,7 +1463,7 @@ var
  *  \param fvalue floating point value return address
  *  \return MPG123_OK on success
  *)
-  mpg123_getpar: Function(mp: mpg123_pars_p; _type: mpg123_parms_t; value: plong; fvalue: PDouble): int; cdecl;
+  mpg123_getpar: Function(mp: mpg123_pars_p; _type: mpg123_parms_t; value: plong; fvalue: PDouble): int; cdecl = nil;
 
 (* @} *)
 
@@ -1497,14 +1497,14 @@ type
   * \return MPG123_OK on success
   *)
 var
-  mpg123_replace_buffer: Function(mh: mpg123_handle_p; data: PByte; size: size_t): int; cdecl;
+  mpg123_replace_buffer: Function(mh: mpg123_handle_p; data: PByte; size: size_t): int; cdecl = nil;
 
 (** The max size of one frame's decoded output with current settings.
  *  Use that to determine an appropriate minimum buffer size for decoding one frame.
  *  \param mh handle
  *  \return maximum decoded data size in bytes
  *)
-  mpg123_outblock: Function(mh: mpg123_handle_p): size_t; cdecl;
+  mpg123_outblock: Function(mh: mpg123_handle_p): size_t; cdecl = nil;
 
 (** Replace low-level stream access functions; read and lseek as known in POSIX.
  *  You can use this to make any fancy file opening/closing yourself, 
@@ -1519,9 +1519,9 @@ var
  * \param r_lseek callback for seeking (like POSIX lseek)
  * \return MPG123_OK on success
  *)
-  mpg123_replace_reader: Function(mh: mpg123_handle_p; r_read: TIntRead; r_lseek: TIntSeek): int; cdecl;
-  mpg123_replace_reader_32: Function(mh: mpg123_handle_p; r_read: TIntRead; r_lseek: TIntSeek32): int; cdecl;
-  mpg123_replace_reader_64: Function(mh: mpg123_handle_p; r_read: TIntRead; r_lseek: TIntSeek64): int; cdecl;
+  mpg123_replace_reader: Function(mh: mpg123_handle_p; r_read: TIntRead; r_lseek: TIntSeek): int; cdecl = nil;
+  mpg123_replace_reader_32: Function(mh: mpg123_handle_p; r_read: TIntRead; r_lseek: TIntSeek32): int; cdecl = nil;
+  mpg123_replace_reader_64: Function(mh: mpg123_handle_p; r_read: TIntRead; r_lseek: TIntSeek64): int; cdecl = nil;
 
 (** Replace I/O functions with your own ones operating on some kind of
  *  handle instead of integer descriptors.
@@ -1537,9 +1537,9 @@ var
  *         can be NULL for none (you take care of cleaning your handles).
  * \return MPG123_OK on success
  *)
-  mpg123_replace_reader_handle: Function(mh: mpg123_handle_p; r_read: TPtrRead; r_lseek: TPtrSeek; cleanup: TPtrClean): int; cdecl;
-  mpg123_replace_reader_handle_32: Function(mh: mpg123_handle_p; r_read: TPtrRead; r_lseek: TPtrSeek32; cleanup: TPtrClean): int; cdecl;
-  mpg123_replace_reader_handle_64: Function(mh: mpg123_handle_p; r_read: TPtrRead; r_lseek: TPtrSeek64; cleanup: TPtrClean): int; cdecl;
+  mpg123_replace_reader_handle: Function(mh: mpg123_handle_p; r_read: TPtrRead; r_lseek: TPtrSeek; cleanup: TPtrClean): int; cdecl = nil;
+  mpg123_replace_reader_handle_32: Function(mh: mpg123_handle_p; r_read: TPtrRead; r_lseek: TPtrSeek32; cleanup: TPtrClean): int; cdecl = nil;
+  mpg123_replace_reader_handle_64: Function(mh: mpg123_handle_p; r_read: TPtrRead; r_lseek: TPtrSeek64; cleanup: TPtrClean): int; cdecl = nil;
 
 (* @} *)
 
@@ -1548,6 +1548,7 @@ var
 const
   mpg123_LibFileName = 'mpg123.dll';
 
+Function mpg123_Initialized: Boolean;
 Function mpg123_Initialize(const LibPath: String = mpg123_LibFileName; InitLib: Boolean = True): Boolean;
 procedure mpg123_Finalize(FinalLib: Boolean = True);
 
@@ -1557,7 +1558,14 @@ uses
   DynLibUtils;
 
 var
-  Libcontext: TDLULibraryContext;
+  mpg123_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
+
+//------------------------------------------------------------------------------  
+
+Function mpg123_Initialized: Boolean;
+begin
+Result := CheckLibrary(mpg123_LibraryHandle);
+end;
 
 //------------------------------------------------------------------------------
 
@@ -1566,7 +1574,7 @@ const
   // function name suffix for large files support  
   LFS_DEF_SUFFIX = {$IFDEF LARGE_FILES_SUPPORT}'_64'{$ELSE}''{$ENDIF};  
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,LibContext,[
+Result := OpenLibraryAndResolveSymbols(LibPath,mpg123_LibraryHandle,[
   // mpg123 library and handle setup - - - - - - - - - - - - - - - - - - - - - -
   Symbol(@@mpg123_init                    ,'mpg123_init'),
   Symbol(@@mpg123_exit                    ,'mpg123_exit'),
@@ -1726,14 +1734,9 @@ end;
 
 procedure mpg123_Finalize(FinalLib: Boolean = True);
 begin   
-If FinalLib then
+If FinalLib and Assigned(mpg123_exit) then
   mpg123_exit;
-CloseLibrary(LibContext);
+CloseLibrary(mpg123_LibraryHandle);
 end;
-
-//==============================================================================
-
-initialization
-  LibContext := DefaultLibraryContext;
 
 end.
