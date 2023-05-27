@@ -72,7 +72,7 @@
       is in the set returned by STSC_SupportedFeatures), the frequency is truly
       constant over all power states and can therefore be used for time keeping.
 
-    In any way, obtaining current frequency of the TSC can be a mayor headache,
+    In any way, obtaining current frequency of the TSC can be a major headache,
     therefore this library does not provide it.
 
     Given all that, SimpleTSC was not created to be a universal time measurement
