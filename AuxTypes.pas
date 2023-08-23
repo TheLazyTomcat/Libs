@@ -12,9 +12,9 @@
     Some types (eg. integers of defined size) that are not guaranteed to be
     declared in all compilers.
 
-  version 1.1 (2021-12-11)
+  version 1.1.1 (2023-08-11)
 
-  Last change 2023-03-26
+  Last change 2023-08-11
 
   ©2015-2023 František Milt
 
@@ -42,6 +42,7 @@ interface
 
 {$H+}
 
+const // the const is here for FPC (don't ask, it is... complicated)
 {$UNDEF Bool64_NotNative}
 {$IF not Declared(QWordBool)}
   {$DEFINE Bool64_NotNative}
@@ -55,9 +56,16 @@ interface
   {$IFEND}
 {$IFEND}
 
-const
-  NativeBool64 = {$IFDEF Bool64_NotNative}False{$ELSE}True{$ENDIF};
-  NativeUInt64 = {$IFDEF UInt64_NotNative}False{$ELSE}True{$ENDIF};
+{$IF SizeOf(Extended) = 10}
+  {$UNDEF Float80_NotNative}
+{$ELSEIF SizeOf(Extended) = 8}
+  {$DEFINE Float80_NotNative}
+{$ELSE}
+  {$MESSAGE FATAL 'Wrong size of type Extended'}
+{$IFEND}
+  NativeBool64  =  {$IFDEF Bool64_NotNative}False{$ELSE}True{$ENDIF};
+  NativeUInt64  =  {$IFDEF UInt64_NotNative}False{$ELSE}True{$ENDIF};
+  NativeFloat80 = {$IFDEF Float80_NotNative}False{$ELSE}True{$ENDIF};
 
 type
 //== Bools =====================================================================
@@ -81,7 +89,7 @@ type
 {
   AFAIK there is no universal 64 bits wide boolean type available in all
   compilers (namely Delphi).
-  If it is currently not Declared, let's declare a placeholder so 64bit
+  If it is currently not declared, let's declare a placeholder so 64bit
   booleans can be used at least for I/O.
 }
   QWordBool = Int64;
@@ -200,12 +208,12 @@ type
 {$IFEND}
   Float64 = Double;       PFloat64 = ^Float64;        PPFloat64 = ^PFloat64;
 
-{$IF SizeOf(Extended) = 10}
-  Float80 = Extended;
-{$ELSE}
+{$IFDEF Float80_NotNative}
   // only for I/O operations, cannot be used in arithmetics
   Float80 = packed array[0..9] of UInt8;
-{$IFEND}
+{$ELSE}
+  Float80 = Extended;
+{$ENDIF}
   PFloat80  = ^Float80;
   PPFloat80 = ^PFloat80;
 
@@ -243,7 +251,7 @@ type
               - first character is at index 0
               - last character must be explicitly set to 0 (but all functions
                 should be able to process strings that are not conforming to
-                this as long as they work with full string, not pointer to
+                this as long as they work with full string, not pointer to the
                 first character)
               - last character (terminating zero) is at index Length - 1
               - last character that is part of the string is at index Length - 2
