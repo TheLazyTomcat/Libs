@@ -65,7 +65,7 @@
 
   Version 1.0.1 (2022-10-26)
 
-  Last change 2023-01-26
+  Last change 2023-09-04
 
   ©2022-2023 František Milt
 
@@ -88,7 +88,6 @@
     AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
     BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
     StrRect         - github.com/TheLazyTomcat/Lib.StrRect
-    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
 
 ===============================================================================}
 unit TaggedBinaryData;
@@ -289,15 +288,15 @@ type
         while Reader.GetTag do
           case Reader.CurrentContext of
              0: case Reader.CurrentTag of
-                  0:  <value_C0_T0> := Stream_ReadInt16(Reader);
-                  1:  <value_C0_T1> := Stream_ReadFloat32(Reader);
-                  2:  <value_C0_T2> := Stream_ReadString(Reader);
+                  0:  <value_C0_T0> := Stream_GetInt16(Reader);
+                  1:  <value_C0_T1> := Stream_GetFloat32(Reader);
+                  2:  <value_C0_T2> := Stream_GetString(Reader);
                 end;
              1: If Reader.CurrentTag = 0 then
-                  <value_C1_T0> := Stream_ReadAnsiChar(Reader);
+                  <value_C1_T0> := Stream_GetAnsiChar(Reader);
             22: case Reader.CurrentTag of
-                  100:  <value_C22_T100> := Stream_ReadInt64(Reader);
-                  200:  <value_C22_T200> := Stream_ReadInt64(Reader);
+                  100:  <value_C22_T100> := Stream_GetInt64(Reader);
+                  200:  <value_C22_T200> := Stream_GetInt64(Reader);
                 end;
           end;
       finally
@@ -527,7 +526,7 @@ else
 }
 If (fSource.Size - fSource.Position) >= 6 {4B signature, 2B closing sequence} then
   begin
-    Temp := Stream_ReadUInt32(fSource);
+    Temp := Stream_GetUInt32(fSource);
     fEndOfDataReached := Temp <> TBD_SIGNATURE;
     If fEndOfDataReached then
       fSource.Seek(-SizeOf(UInt32),soCurrent);
@@ -628,14 +627,14 @@ If not fEndOfDataReached then
     If (fSource.Size - fSource.Position) >= SizeOf(TTBDTag) then
       begin
         // tag can fit in the rest of the stream after current position
-        fCurrentTag := Stream_ReadUInt8(fSource);
+        fCurrentTag := Stream_GetUInt8(fSource);
         If fCurrentTag = TBD_TAG_CONTEXT then
           begin
             If (fSource.Size - fSource.Position) >= SizeOf(TTBDContextFlags) then
-              If (Stream_ReadUInt8(fSource) and TBD_CTXFLAGS_FLAG_CLOSE) = 0 then
+              If (Stream_GetUInt8(fSource) and TBD_CTXFLAGS_FLAG_CLOSE) = 0 then
                 If (fSource.Size - fSource.Position) >= SizeOf(TTBDContextID) then
                   begin
-                    fCurrentContext := Stream_ReadUInt16(fSource);
+                    fCurrentContext := Stream_GetUInt16(fSource);
                     DoContextChange;
                   {
                     Recursively call GetTag again to read next thing after the

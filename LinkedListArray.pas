@@ -21,7 +21,7 @@
 
   Version 1.0.2 (2023-01-25)
 
-  Last change 2023-01-25
+  Last change 2023-09-04
 
   ©2018-2023 František Milt
 
@@ -40,12 +40,11 @@
       github.com/TheLazyTomcat/Lib.LinkedListArray
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    ListSorters     - github.com/TheLazyTomcat/Lib.ListSorters
+    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
 
 ===============================================================================}
 (*******************************************************************************
@@ -2007,7 +2006,7 @@ try
   // disable calling of PayloadInit and PayloadFinal from SetCount and SetCapacity
   fLoading := True;
   try
-    Count := Integer(Stream_ReadInt32(Stream));
+    Count := Integer(Stream_GetInt32(Stream));
   finally
     fLoading := False;
   end;
@@ -2120,7 +2119,7 @@ end;
 
 procedure TIntegerLinkedListArray.PayloadRead(Payload: PLLAPayload; Stream: TStream);
 begin
-Integer(Pointer(Payload)^) := Integer(Stream_ReadInt32(Stream));
+Integer(Pointer(Payload)^) := Integer(Stream_GetInt32(Stream));
 end;
 
 {-------------------------------------------------------------------------------

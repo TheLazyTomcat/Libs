@@ -24,7 +24,7 @@
 
   Version 1.2.2 (2023-01-24)
 
-  Last change 2023-01-24
+  Last change 2023-09-04
 
   ©2016-2023 František Milt
 
@@ -43,12 +43,11 @@
       github.com/TheLazyTomcat/Lib.MemVector
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    ListSorters     - github.com/TheLazyTomcat/Lib.ListSorters
+    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
 
 ===============================================================================}
 (*******************************************************************************
@@ -1191,7 +1190,7 @@ If fOwnsMemory then
     }
       fLoading := True;
       try
-        Count := Integer(Stream_ReadInt32(Stream));
+        Count := Integer(Stream_GetInt32(Stream));
       finally
         fLoading := False;
       end;
@@ -1306,7 +1305,7 @@ end;
 
 procedure TIntegerVector.ItemRead(Item: Pointer; Stream: TStream);
 begin
-Integer(Item^) := Integer(Stream_ReadInt32(Stream));
+Integer(Item^) := Integer(Stream_GetInt32(Stream));
 end;
 
 {-------------------------------------------------------------------------------

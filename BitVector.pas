@@ -11,7 +11,7 @@
 
   Version 1.3.4 (2023-01-25)
 
-  Last change 2023-05-01
+  Last change 2023-09-04
 
   ©2015-2023 František Milt
 
@@ -30,14 +30,13 @@
       github.com/TheLazyTomcat/Lib.BitVector
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM        - github.com/TheLazyTomcat/Lib.BasicUIM
+    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    BitOps          - github.com/TheLazyTomcat/Lib.BitOps
+  * SimpleCPUID     - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
 
     SimpleCPUID might not be needed, see BitOps library for details.
 
@@ -1204,7 +1203,7 @@ If CheckMemoryEditable('LoadFromStream') then
     BeginChanging;
     try
       // read and set number of bits
-      Count := Integer(Stream_ReadInt32(Stream));
+      Count := Integer(Stream_GetInt32(Stream));
       // read data
       Stream.ReadBuffer(fMemory^,Ceil(fCount / 8));
       ScanForPopCount;

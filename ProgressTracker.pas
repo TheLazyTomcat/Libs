@@ -44,7 +44,7 @@
 
   Version 2.0.2 (2023-01-24)
 
-  Last change 2023-01-24
+  Last change 2023-09-04
 
   ©2017-2023 František Milt
 
@@ -63,12 +63,11 @@
       github.com/TheLazyTomcat/Lib.ProgressTracker
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
+    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
+    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils     - github.com/TheLazyTomcat/Lib.UInt64Utils
 
 ===============================================================================}
 unit ProgressTracker;
@@ -2672,12 +2671,12 @@ procedure TProgressTracker.LoadFromStream(Stream: TStream);
     NewNodeID:      TPTStageID;
     NewNodeAbsLen:  Double;
   begin
-    For i := 1 to Stream_ReadInt32(Stream) do
+    For i := 1 to Stream_GetInt32(Stream) do
       begin
-        NewNodeID := TPTStageID(Stream_ReadInt32(Stream));
-        NewNodeAbsLen := Stream_ReadFloat64(Stream);
+        NewNodeID := TPTStageID(Stream_GetInt32(Stream));
+        NewNodeAbsLen := Stream_GetFloat64(Stream);
         NewNodeID := AddIn(Node.ID,NewNodeAbsLen,NewNodeID);
-        SetStageMaximum(NewNodeID,Stream_ReadUInt64(Stream));
+        SetStageMaximum(NewNodeID,Stream_GetUInt64(Stream));
         ReadNode(StageNodes[NewNodeID]);
       end;
   end;
