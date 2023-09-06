@@ -42,7 +42,7 @@
 
   Version 1.0 (2023-08-22)
 
-  Last change 2023-08-22
+  Last change 2023-09-06
 
   ©2023 František Milt
 
@@ -173,7 +173,7 @@ type
     RandomFloat
 
     When parameter Normalized is se to true (default), then the function
-    returns a floating point number from interval <0,1), with at most 32 bits
+    returns a floating point number from interval [0,1), with at most 32 bits
     of precision.
     Otherwise a completely random number is returned. But note that this number
     will be valid and internally normalized - ie. no NaN, infinity or denormal.
@@ -196,8 +196,8 @@ type
     Random*(Range)
 
     For positive values of parameter Range, the returned number will be from
-    interval <0,Range).
-    For negative values, it will be from interval (Range,0>.
+    interval [0,Range).
+    For negative values, it will be from interval (Range,0].
     If range is set to zero, then zero is returned.
   }
     Function RandomInt(Range: Int32): Int32; overload; virtual;
@@ -208,7 +208,7 @@ type
   {
     RandomRange*
 
-    These functions will always return a number from interval <from,to),
+    These functions will always return a number from interval [from,to),
     irrespective of sign or relative magnitude of limits.
 
     For example, for limits 10 (from) and -50 (to), numbers between 10 and -49

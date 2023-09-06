@@ -22,7 +22,7 @@
 
   Version 1.0 alpha (2023-05-09)
 
-  Last change 2023-05-09
+  Last change 2023-09-06
 
   ©2023 František Milt
 
@@ -601,7 +601,7 @@ var
 begin
 {
   This function assumes that destination and source are at completely different
-  memory locations (they do not overlap) and DstBitOffset is in interval <0,7>.
+  memory locations (they do not overlap) and DstBitOffset is in interval [0,7].
 }
 If (DstBitOffset <> 0) or ((BitCount and 7) <> 0) then
   begin
@@ -667,7 +667,7 @@ Function LoadIntegerBits(var Source: PUInt8; SrcBitOffset,BitCount: TMemSize): I
 var
   DstBitOffset: TMemSize;
 begin
-// This function assumes that SrcBitOffset is in interval <0,7>.
+// This function assumes that SrcBitOffset is in interval [0,7].
 If BitCount < 64 then
   begin
     If BitCount > 0 then
