@@ -18,7 +18,7 @@
     order can also be selected, but it has no effect on the result (a common
     code is called).
 
-      WARNING - the endianess is not stored with the data, it is up to you
+      WARNING - the endianness is not stored with the data, it is up to you
                 to use proper loading function for the byte order used during
                 saving.  
 
@@ -89,9 +89,9 @@
     read (does not apply to Get* functions, as they are returning the value
     being read).
 
-  Version 2.0 (2023-09-03)
+  Version 2.0.1 (2023-09-15)
 
-  Last change 2023-09-03
+  Last change 2023-09-15
 
   ©2015-2023 František Milt
 
@@ -207,7 +207,7 @@ type
   EBSUnknownItem        = class(EBSException);
 
 {===============================================================================
-    Endianess - declaration
+    Endianness - declaration
 ===============================================================================}
 type
   TEndian = (endLittle,endBig,endSystem,endDefault{endLittle});
@@ -216,10 +216,25 @@ const
   SysEndian = {$IFDEF ENDIAN_BIG}endBig{$ELSE}endLittle{$ENDIF};
 
 {
+  ProbeEndian
+
+  Performs runtime test of endianness - it returns the actual true byte order,
+  not whatever was assigned to SysEndian during compilation (though these two
+  values should normally match).
+
+  It can only return endLittle or endBig, if the probing shows anything else
+  (eg. mixed endianness or differing endianness depending on a variable type),
+  then the function will raise an EBSInvalidValue exception.
+
+  The byte order is tested on a 4-byte (32bit) signed integer and 4-byte float.
+}
+Function ProbeEndian: TEndian;
+
+{
   ResolveEndian
 
-  Resolves enSystem to a value of constant SysEndian and enDefault to enLittle,
-  other values are returned unchanged.
+  Resolves endSystem to a value of constant SysEndian and endDefault to
+  endLittle, other values are returned unchanged.
 }
 Function ResolveEndian(Endian: TEndian): TEndian;
 
@@ -2972,7 +2987,7 @@ var
   i:        TStrSize;
 begin
 {
-  Buffering might not be needed when operating in TCustomMemoryStream and its
+  Buffering might not be needed when operating on TCustomMemoryStream and its
   descendants, but it should not hurt.
 }
 Result := 0;
@@ -3176,14 +3191,53 @@ Result := Value;
 end;
 
 {===============================================================================
-    Endianess - implementation
+    Endianness - implementation
 ===============================================================================}
+
+Function ProbeEndian: TEndian;
+var
+  TestVar: packed record
+    case integer of
+      0:  (TestArr:     array[0..3] of Byte);
+      1:  (TestInt32:   Int32);
+      2:  (TestFloat32: Float32)
+  end;
+begin
+// init for integer test
+TestVar.TestArr[0] := $01;
+TestVar.TestArr[1] := $02;
+TestVar.TestArr[2] := $03;
+TestVar.TestArr[3] := $04;
+// test integer
+If TestVar.TestInt32 = $04030201 then
+  begin
+    // integer is little endian, test whether float is also little...
+    TestVar.TestFloat32 := 0.1234;  // 0x3DFCB924
+    If TestVar.TestInt32 = $3DFCB924 then
+      Result := endLittle
+    else
+      raise EBSInvalidValue.Create('ProbeEndian: Unsupported byte order.');
+  end
+else If TestVar.TestInt32 = $01020304 then
+  begin
+    // integer is big endian, test float...
+    TestVar.TestFloat32 := 0.1234;
+    If TestVar.TestInt32 = $3DFCB924 {the order here is correct!} then
+      Result := endBig
+    else
+      raise EBSInvalidValue.Create('ProbeEndian: Unsupported byte order.');
+  end
+else
+  raise EBSInvalidValue.Create('ProbeEndian: Unsupported byte order.');
+end;
+
+//------------------------------------------------------------------------------
 
 Function ResolveEndian(Endian: TEndian): TEndian;
 begin
 case Endian of
   endSystem:  Result := SysEndian;
-  endDefault: Result := endLittle;  
+  endDefault: Result := endLittle;
 else
   Result := Endian;
 end;

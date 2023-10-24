@@ -14,6 +14,10 @@
 
       NOTE - this register is present only on IA-32 and AMD64 processors.
 
+    Because proper use of TSC requires manipulation of thread affinity and
+    potentially also priority, a set of auxiliary functions manipulation those
+    thread properties is also provided.
+
     The TSC register is 64 bits wide, but time-stamp type used here is declared
     as Int64 (that is, a signed value). This could pose problems in comparisons
     and arithmetics, if the bit 63 of the TSC would be set. Therefore, all time-
@@ -87,9 +91,9 @@
     measurement runs the whole time only on one processor core (use provided
     auxiliary functions to set thread affinity).
 
-  Version 1.0 (2023-04-07)
+  Version 1.1 (2023-10-22)
 
-  Last change (2023-04-07)
+  Last change (2023-10-22)
 
   ©2023 František Milt
 
@@ -159,7 +163,7 @@ unit SimpleTSC;
 interface
 
 uses
-  SysUtils,
+  SysUtils, {$IFNDEF Windows}baseunix,{$ENDIF}
   AuxTypes;
 
 {===============================================================================
@@ -174,6 +178,11 @@ type
   ESTSCSystemError        = class(ESTSCException);
   ESTSCCallNotImplemented = class(ESTSCException);
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                                  TSC functions
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     Core functions - declaration
 ===============================================================================}
@@ -274,6 +283,7 @@ Function STSC_GetTSCFence: TSTSCTimeStamp; register; assembler;
 }
 Function STSC_TicksBetween(TimeStampNow,TimeStampThen: TSTSCTimeStamp): TSTSCTimeStamp;
 
+
 {===============================================================================
     Continuous measurement - declaration
 ===============================================================================}
@@ -354,6 +364,7 @@ procedure STSC_TimePoint(var Measurement: TSTSCMeasurement; TimePointIndex: Inte
 }
 procedure STSC_End(var Measurement: TSTSCMeasurement);
 
+
 {===============================================================================
     Call measurement - declaration
 ===============================================================================}
@@ -395,8 +406,14 @@ procedure STSC_MeasureCall(Call: TSTSCMeasuredCall; CallParam: Pointer; out Time
 }
 Function STSC_MeasureCall(Call: TSTSCMeasuredCall; CallParam: Pointer): Int64; overload;
 
+
 {===============================================================================
-    Auxiliary functions - declaration
+--------------------------------------------------------------------------------
+                               Auxiliary functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    CPU affinity functions - declaration
 ===============================================================================}
 type
 {$IFDEF Windows}
@@ -406,7 +423,12 @@ type
 {$ENDIF}
   PSTSCProcessorMask = ^TSTSCProcessorMask;
 
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  TSTSCProcessID = {$IFDEF Windows}DWORD{$ELSE}pid_t{$ENDIF};
+  TSTSCThreadID  = {$IFDEF Windows}DWORD{$ELSE}pid_t{$ENDIF};
+
+{-------------------------------------------------------------------------------
+    CPU affinity functions - processor mask manipulation
+-------------------------------------------------------------------------------}
 {
   STSC_GetProcessorMaskBit
 
@@ -437,7 +459,9 @@ procedure STSC_SetProcessorMaskBit(var ProcessorMask: TSTSCProcessorMask; Bit: I
 }
 procedure STSC_ClrProcessorMaskBit(var ProcessorMask: TSTSCProcessorMask; Bit: Integer);
 
-//------------------------------------------------------------------------------
+{-------------------------------------------------------------------------------
+    CPU affinity functions - logical processor availability
+-------------------------------------------------------------------------------}
 {
   STSC_GetNumberOfProcessors
 
@@ -463,7 +487,9 @@ Function STSC_GetAvailableProcessors: TSTSCProcessorMask;
 }
 Function STSC_ProcessorAvailable(ProcessorID: Integer): Boolean;
 
-//------------------------------------------------------------------------------
+{-------------------------------------------------------------------------------
+    CPU affinity functions - thread affinity
+-------------------------------------------------------------------------------}
 {
   STSC_GetThreadAffinity
 
@@ -485,20 +511,25 @@ Function STSC_SetThreadAffinity(AffinityMask: TSTSCProcessorMask): TSTSCProcesso
   Returns processor ID (number) that executed this call (more precisely, the
   system call that obtained the value).
 
-  In Linux, the number is obtained by function sched_getcpu.
+  Linux
 
-  In Windows, it is... complicated.
+    The number is obtained using function sched_getcpu.
+
+  Windows
 
     There is a function GetCurrentProcessorNumber exported by kernel32.dll, but
     it is available only from Windows Vista onwards (Windows XP 64bit also
     seems to have it), and since I am writing this library so it can run in
-    Windows XP too, use of that function cannot be hardcoded.
-    So, in unit initialization, the kernel32.dll is probed for this funtion.
-    When it is there, is gets binded and is then used to ontain the number.
+    Windows XP 32bit too, use of that function cannot be hardcoded. So, in unit
+    initialization, the kernel32.dll is probed for this funtion.
+
+    When it is there, is gets binded and is then used to obtain the number.
+
     If it is not present, then the number is obtained using SimpleCPUID library
-    (which is required by this unit anyway), more specifically from local APIC
-    ID (Info.AdditionalInfo.LocalAPICID). But note that this number might not
-    necessarily correspond to an ID used by the system - be aware of that.
+    (which is required by this unit anyway), more specifically from a mapping
+    of local APIC IDs to processor numbers (this mapping is constructed at the
+    unit initialization). If the APIC ID cannot be mapped then processor 0 is
+    returned.
 }
 Function STSC_GetThreadProcessor: Integer;
 
@@ -514,9 +545,16 @@ Function STSC_GetThreadProcessor: Integer;
 }
 Function STSC_SetThreadProcessor(ProcessorID: Integer): TSTSCProcessorMask;
 
-//------------------------------------------------------------------------------
+{===============================================================================
+    Priority funtions - declaration
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Priority funtions - process priority
+-------------------------------------------------------------------------------}
 type
 {
+  TSCSCPriorityClass
+
   Priority classes are meaningless in Linux.
   
   Values pcProcModeBcgrBegin and pcProcModeBcgrEnd are never returned as
@@ -525,45 +563,8 @@ type
 }
   TSCSCPriorityClass = (pcIdle,pcBelowNormal,pcNormal,pcAboveNormal,pcHigh,
                         pcRealtime,pcProcModeBcgrBegin,pcProcModeBcgrEnd);
-                        
-{
-  Only values from tpIdle up to tpTimeCritical are valid in Linux. They
-  correspond to a "nice" value as such:
 
-                          getting priority         setting priority
-      tpIdle                    19                       19
-      tpLowest                10..18                     18
-      tpBelowNormal            1..9                       9
-      tpNormal                   0                        0
-      tpAboveNormal          -10..-1                    -10
-      tpHighest              -19..-11                   -19
-      tpTimeCritical           -20                      -20
-
-    If you use tpThrdModeBcgrBegin or tpThrdModeBcgrEnd, then an exception of
-    class ESTSCInvalidValue will be raised.
-
-    Values tpLowestRTx are silently converted to tpLowest and tpHighestRTx are
-    converted to tpHighest.
-
-  All values can be used in Windows, but note that current version might not
-  support all of them (consult Windows SDK documentation for details).
-
-    Values tpThrdModeBcgrBegin and tpThrdModeBcgrEnd are never returned as
-    thread priority value, but can be used when setting thread priority.
-
-    Values tpLowestRTx and tpHighestRTx are returned and can be set only when
-    the current process has pcRealtime priority class (when you set them for
-    a different class, an ESTSCInvalidValue exception is raised).
-    Number in the name corresponds to a numerical value of underlying system
-    thread priority (negative value for tpLowestRTx and positive value for
-    tpHighestRTx).
-}
-  TSTSCThreadPriority = (tpIdle,tpLowest,tpBelowNormal,tpNormal,tpAboveNormal,
-    tpHighest,tpTimeCritical,tpThrdModeBcgrBegin,tpThrdModeBcgrEnd,tpLowestRT7,
-    tpLowestRT6,tpLowestRT5,tpLowestRT4,tpLowestRT3,tpHighestRT3,tpHighestRT4,
-    tpHighestRT5,tpHighestRT6);
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+//------------------------------------------------------------------------------
 {
   STSC_GetPriorityClass
 
@@ -585,31 +586,93 @@ Function STSC_GetPriorityClass: TSCSCPriorityClass;
 }
 Function STSC_SetPriorityClass(PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass;
 
+{-------------------------------------------------------------------------------
+    Priority funtions - thread priority
+-------------------------------------------------------------------------------}
+type
+{
+  TSTSCSchedPolicy
+
+  Scheduling policy has meaning only in Linux. There is nothing even vaguely
+  similar in Windows.
+
+  For details about sheduling policies, please refer Linux manual.
+
+    NOTE - spNormal and spOther are denoting the same policy (SCHED_OTHER).
+}
+  TSTSCSchedPolicy = (spUnknown,spNormal,spOther,spBatch,spIdle,spFifo,spRR,spDeadline);
+
+//------------------------------------------------------------------------------
+{
+  STSC_GetThreadSchedulingPolicy
+
+  Returns current scheduling policy of the calling thread. Has meaning only in
+  Linux, in Windows it will always return spUnknown.
+}
+Function STSC_GetThreadSchedulingPolicy: TSTSCSchedPolicy;
+
+{
+  STSC_SetThreadSchedulingPolicy
+
+  Sets selected scheduling policy for the calling thread and returns the
+  previous one. Has meaning only in Linux, in Windows it does nothing and
+  always returns spUnknown.
+
+  When setting spFifo or spRR policy, the scheduling priority is set to 50.
+  In all other cases it is set to zero.
+
+  Note that spDeadline policy cannot be selected using this function (if will
+  fail).
+
+    WARNING - Unprivileged process might not be able to change its own
+              scheduling policy, depending on current and selected policy
+              (eg. it seems to be possible to change from SCHED_OTHER to
+              SCHED_IDLE or SCHED_BATCH, I need to do some research into this).
+}
+Function STSC_SetThreadSchedulingPolicy(SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy;
+
+//==============================================================================
 {
   STSC_GetSysThreadPriority
 
   Returns priority of the calling thread as it is represented in the system.
-  In Windows, higher number means higher priority, whereas in Linux higher
-  number means lower priority. In both systems 0 is normal (default) priority.
-  For allowable range and meaning of specific values, consult Windows SDK or
-  Linux manual.
 
-    NOTE - Priority in Linux is manipulated by changing a "nice" value. But
-           according to POSIX specification, nice is per-process setting, not
-           per-thread.
-           Most (if not all) current Linux implementations diverge from this
-           and implement nice per-thread, meaning each thread in a process can
-           have different nice value. But note that this can change in the
-           future if Linux moves closer to the standard.
+  Windows
 
-    WARNING - In Linux, unprivileged process/thread cannot increase its own
-              priority, even if it was lowered previously and now is only
-              returned to original value.
-              Since kernel 2.6.12 is should be posssible to increase the
-              priority (decrease nice value) from unprivileged process depending
-              on a soft limit RLIMIT_NICE. But this limit is usually zero
-              anyway, and again only privileged process can change this limit,
-              so not much changes.
+    Higher number means higher priority. Numerical value of the priority can
+    be in range -15..+15. Value of 0 is normal priority.
+
+    For more details, consult Windows SDK.
+
+  Linux
+
+    Number returned in Linux highly depends on current scheduling priority.
+
+    For spNormal and spOther (which is the same), a value of nice is returned.
+    This can be from interval +19..-20, where lower number means higher
+    priority. Value of 0 is normal priority.
+
+      NOTE - According to POSIX specification, nice is a per-process setting,
+             not per-thread. Most (if not all) current Linux implementations
+             diverge from this and implement nice per-thread, meaning each
+             thread in a process can have different nice value. But note that
+             this can change in the future if Linux moves closer to the
+             standard.
+
+      WARNING - Unprivileged process/thread cannot increase its own nice value,
+                even if it was lowered previously and now is only returned to
+                original value.
+                Since kernel 2.6.12, it should be posssible to decrease nice
+                value from an unprivileged process depending on a soft limit
+                RLIMIT_NICE. But this limit is usually zero anyway, and again
+                only privileged process can change this limit, so not much
+                changes.
+
+    For spFifo and spRR, the scheduling priority is returned. This can range
+    from 1 up to 99, where higher value means higher priority. Value of 50 can
+    be considered a normal priority.
+
+    For all other policies, zero is returned as they do not have priorities.
 }
 Function STSC_GetSysThreadPriority: Integer;
 
@@ -618,10 +681,65 @@ Function STSC_GetSysThreadPriority: Integer;
 
   Sets priority of calling thread and returns its previous value.
 
-  For details refer to STSC_GetSysThreadPriority.
+  For details about usable values, refer to STSC_GetSysThreadPriority.
 }
 Function STSC_SetSysThreadPriority(SysThreadPriority: Integer): Integer;
 
+//------------------------------------------------------------------------------
+type
+{
+  TSTSCThreadPriority
+
+  Windows
+
+    All values from this enum can be used in Windows, but note that version of
+    Windows running the program might not support all of them (consult Windows
+    SDK documentation for details).
+
+      Values tpThrdModeBcgrBegin and tpThrdModeBcgrEnd are never returned as
+      thread priority value, but can be used when setting thread priority.
+
+      Values tpLowestRTx and tpHighestRTx are returned and can be set only when
+      the current process has pcRealtime priority class (when you set them for
+      a different class, an ESTSCInvalidValue exception is raised).
+      Number in the name corresponds to a numerical value of underlying system
+      thread priority (negative value for tpLowestRTx and positive value for
+      tpHighestRTx).
+
+  Linux
+
+    Only values from tpIdle up to tpTimeCritical are valid in Linux.
+
+    If you use tpThrdModeBcgrBegin or tpThrdModeBcgrEnd, then an exception of
+    class ESTSCInvalidValue will be raised.
+
+    Values tpLowestRTx are silently converted to tpLowest and tpHighestRTx are
+    converted to tpHighest.
+
+    Following table shows how system priority value (either nice or scheduling
+    priority) is converted to (getting priority) and from (setting priority)
+    type TSTSCThreadPriority. When converting from system value, a range of
+    values is converted to a single enum, when converting to system value, the
+    enum is converted to a single numerical value.
+
+                      |     getting priority    ||     setting priority    |
+                      |-----------------------------------------------------
+                      |    nice    |    prio    ||    nice    |    prio    |
+    ------------------------------------------------------------------------
+      tpIdle          |     19     |      1     ||     19     |      1     |
+      tpLowest        |   10..18   |    2..25   ||     18     |      2     |
+      tpBelowNormal   |    1..9    |   26..49   ||      9     |     26     |
+      tpNormal        |      0     |     50     ||      0     |     50     |
+      tpAboveNormal   |  -10..-1   |   51..74   ||    -10     |     74     |
+      tpHighest       |  -19..-11  |   75..98   ||    -19     |     98     |
+      tpTimeCritical  |    -20     |     99     ||    -20     |     99     |
+}
+  TSTSCThreadPriority = (tpIdle,tpLowest,tpBelowNormal,tpNormal,tpAboveNormal,
+    tpHighest,tpTimeCritical,tpThrdModeBcgrBegin,tpThrdModeBcgrEnd,tpLowestRT7,
+    tpLowestRT6,tpLowestRT5,tpLowestRT4,tpLowestRT3,tpHighestRT3,tpHighestRT4,
+    tpHighestRT5,tpHighestRT6);
+
+//------------------------------------------------------------------------------
 {
   STSC_GetThreadPriority
 
@@ -646,82 +764,15 @@ uses
 {$IFDEF Windows}
   Windows,
 {$ELSE}
-  baseunix,
+  syscall, pthreads,
 {$ENDIF}
   SimpleCPUID;
 
 {===============================================================================
-    Declaration of external functions
+--------------------------------------------------------------------------------
+                                  TSC functions
+--------------------------------------------------------------------------------
 ===============================================================================}
-
-{$IFDEF Windows}
-
-Function GetProcessAffinityMask(hProcess: THandle; lpProcessAffinityMask,lpSystemAffinityMask: PPtrUInt): BOOL; stdcall; external kernel32;
-procedure GetNativeSystemInfo(lpSystemInfo: PSystemInfo); stdcall; external kernel32;
-
-var
-  VAR_GetCurrentProcessorNumber: Function: DWORD; stdcall = nil;
-
-{$ELSE}
-
-Function getpid: pid_t; cdecl; external;
-
-Function errno_ptr: pcInt; cdecl; external name '__errno_location';
-
-Function sched_getaffinity(pid: pid_t; cpusetsize: size_t; mask: PCPUSet): cint; cdecl; external;
-Function sched_setaffinity(pid: pid_t; cpusetsize: size_t; mask: PCPUSet): cint; cdecl; external;
-Function sched_getcpu: cInt; cdecl; external;
-
-const
-  _SC_NPROCESSORS_ONLN = 84;
-
-Function sysconf(name: cInt): cLong; cdecl; external;
-
-Function getpriority(which: cInt; who: cInt): cInt; cdecl external;
-Function setpriority(which: cInt; who: cInt; prio: cInt): cInt; cdecl external;
-
-{$ENDIF}
-
-{===============================================================================
-    Internal functions
-===============================================================================}
-{$IFDEF Windows}
-
-Function GetCurrentProcessorNumberCPUID: DWORD; stdcall;
-begin
-with TSimpleCPUID.Create do
-try
-  Result := DWORD(Info.AdditionalInfo.LocalAPICID);
-finally
-  Free;
-end;
-end;
-
-//------------------------------------------------------------------------------
-{$ELSE}
-threadvar
-  ThrErrorCode: cInt;
-
-//------------------------------------------------------------------------------
-
-Function CheckErr(ReturnedValue: cInt): Boolean;
-begin
-Result := ReturnedValue = 0;
-If Result then
-  ThrErrorCode := 0
-else
-  ThrErrorCode := errno_ptr^;
-end;
-
-//------------------------------------------------------------------------------
-
-Function GetLastError: Integer;
-begin
-Result := Integer(ThrErrorCode);
-end;
-
-{$ENDIF}
-
 {===============================================================================
     Core functions - implementation
 ===============================================================================}
@@ -906,14 +957,14 @@ end;
 
 procedure STSC_MeasureCall(Call: TSTSCMeasuredCall; CallParam: Pointer; out TimeStamps: TSTSCTimeStamps);
 asm
-{
+{-------------------------------------------------------------------------------
   Parameters are passed as such:
 
                           Win32/Lin32   Win64     Lin64
                   Call        EAX        RCX       RDI
              CallParam        EDX        RDX       RSI
       Addr(TimeStamps)        ECX        R8        RDX
-}
+-------------------------------------------------------------------------------}
 {$IFDEF x64}
   {$IFDEF Windows}
     // 64bit Windows
@@ -958,7 +1009,8 @@ asm
     POP   RDI
     POP   RSI
 
-  {$ELSE}
+  {$ELSE}//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     // 64bit Linux
 
     PUSH  R12
@@ -999,7 +1051,8 @@ asm
     POP   R12
 
   {$ENDIF}
-{$ELSE}
+{$ELSE}//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     // 32bit Windows and Linux
 
     PUSH  ESI
@@ -1059,8 +1112,121 @@ end;
 
 
 {===============================================================================
-    Auxiliary functions - implementation
+--------------------------------------------------------------------------------
+                               Auxiliary functions
+--------------------------------------------------------------------------------
 ===============================================================================}
+{===============================================================================
+    External/system functions
+===============================================================================}
+
+{$IFDEF Windows}
+
+Function GetProcessAffinityMask(hProcess: THandle; lpProcessAffinityMask,lpSystemAffinityMask: PPtrUInt): BOOL; stdcall; external kernel32;
+procedure GetNativeSystemInfo(lpSystemInfo: PSystemInfo); stdcall; external kernel32;
+
+{$ELSE}
+
+Function getpid: pid_t; cdecl; external;
+
+Function errno_ptr: pcInt; cdecl; external name '__errno_location';
+
+Function sched_getaffinity(pid: pid_t; cpusetsize: size_t; mask: PCPUSet): cint; cdecl; external;
+Function sched_setaffinity(pid: pid_t; cpusetsize: size_t; mask: PCPUSet): cint; cdecl; external;
+Function sched_getcpu: cInt; cdecl; external;
+Function sched_getscheduler(pid: pid_t): cint; cdecl; external;
+Function sched_setscheduler(pid: pid_t; policy: cint; param: psched_param): cint; cdecl; external;
+Function sched_getparam(pid: pid_t; param: psched_param): cint; cdecl; external;
+Function sched_setparam(pid: pid_t; param: psched_param): cint; cdecl; external;
+
+Function sysconf(name: cInt): cLong; cdecl; external;
+
+Function getpriority(which: cInt; who: cInt): cInt; cdecl external;
+Function setpriority(which: cInt; who: cInt; prio: cInt): cInt; cdecl external;
+
+const
+  SCHED_OTHER    = 0;
+  SCHED_FIFO     = 1;
+  SCHED_RR       = 2;
+  SCHED_BATCH    = 3;
+  SCHED_IDLE     = 5;
+//SCHED_DEADLINE = ;  // need to get the number...
+
+  _SC_NPROCESSORS_ONLN = 84;
+
+{$ENDIF}
+
+{===============================================================================
+    Internal functions
+===============================================================================}
+{$IFDEF Windows}
+var
+  VAR_ProcessorIDMap: record
+    Available:  Boolean;
+    ProcNums:   array[Byte{Local APIC ID is used as index}] of Integer;
+  end;
+
+//------------------------------------------------------------------------------  
+
+Function GetCurrentProcessorNumberCPUID: DWORD; stdcall;
+var
+  CPUIDResult:  TCPUIDResult;
+  Temp:         Integer;
+begin
+If VAR_ProcessorIDMap.Available then
+  begin
+    // if VAR_ProcessorIDMap.Available is true then CPUID is supported
+    CPUID(1,@CPUIDResult);
+    Temp := VAR_ProcessorIDMap.ProcNums[Byte(CPUIDResult.EBX shr 24)];
+    If Temp >= 0 then
+      Result := DWORD(Temp)
+    else
+      Result := 0;
+  end
+else Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+var
+  VAR_GetCurrentProcessorNumber: Function: DWORD; stdcall = GetCurrentProcessorNumberCPUID;
+
+{$ELSE}//-----------------------------------------------------------------------
+
+Function gettid: pid_t;
+begin
+Result := do_syscall(syscall_nr_gettid);
+end;
+
+//------------------------------------------------------------------------------
+threadvar
+  ThrErrorCode: cInt;
+
+//------------------------------------------------------------------------------
+
+Function CheckErr(ReturnedValue: cInt): Boolean;
+begin
+Result := ReturnedValue = 0;
+If Result then
+  ThrErrorCode := 0
+else
+  ThrErrorCode := errno_ptr^;
+end;
+
+//------------------------------------------------------------------------------
+
+Function GetLastError: Integer;
+begin
+Result := Integer(ThrErrorCode);
+end;
+
+{$ENDIF}
+
+{===============================================================================
+    CPU affinity functions - implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    CPU affinity functions - processor mask manipulation
+-------------------------------------------------------------------------------}
 
 Function STSC_GetProcessorMaskBit(const ProcessorMask: TSTSCProcessorMask; Bit: Integer): Boolean;
 begin
@@ -1114,7 +1280,9 @@ else
   raise ESTSCInvalidValue.CreateFmt('STSC_ClrProcessorMaskBit: Invalid bit (%d) selected.',[Bit]);
 end;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    CPU affinity functions - logical processor availability
+-------------------------------------------------------------------------------}
 
 Function STSC_GetNumberOfProcessors: Integer;
 {$IFDEF Windows}
@@ -1160,7 +1328,9 @@ else
   Result := False;
 end;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    CPU affinity functions - thread affinity
+-------------------------------------------------------------------------------}
 
 Function STSC_GetThreadAffinity: TSTSCProcessorMask;
 begin
@@ -1224,7 +1394,13 @@ If STSC_ProcessorAvailable(ProcessorID) then
 else raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadProcessor: Selected processor (%d) not available.',[ProcessorID]);
 end;
 
-//==============================================================================
+
+{===============================================================================
+    Priority funtions - implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Priority funtions - process priority
+-------------------------------------------------------------------------------}
 {$IFDEF Windows}
 const
 {
@@ -1298,33 +1474,135 @@ Result := PriorityClass;
 end;
 {$ENDIF}
 
+{-------------------------------------------------------------------------------
+    Priority funtions - thread priority
+-------------------------------------------------------------------------------}
+
+Function STSC_GetThreadSchedulingPolicy: TSTSCSchedPolicy;
+{$IFNDEF Windows}
+var
+  SchedPolicy:  cInt;
+begin
+SchedPolicy := sched_getscheduler(0);
+case SchedPolicy of
+  -1:
+    raise ESTSCSystemError.CreateFmt('STSC_GetThreadSchedulingPolicy: Failed to obtain thread scheduling policy (%d).',[errno_ptr^]);
+  SCHED_OTHER:    Result := spOther;
+  SCHED_FIFO:     Result := spFifo;
+  SCHED_RR:       Result := spRR;
+  SCHED_BATCH:    Result := spBatch;
+  SCHED_IDLE:     Result := spIdle;
+//SCHED_DEADLINE: Result := spDeadline;
+else
+  raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadSchedulingPolicy: Unknown scheduling policy (%d)',[SchedPolicy]);
+end;
+{$ELSE}
+begin
+Result := spUnknown;
+{$ENDIF}
+end;
+
 //------------------------------------------------------------------------------
 
-Function STSC_GetSysThreadPriority: Integer;
+Function STSC_SetThreadSchedulingPolicy(SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy;
+{$IFNDEF Windows}
+var
+  SchedPolicy:  cInt;
+  Param:        sched_param;
 begin
+Result := STSC_GetThreadSchedulingPolicy;
+If Result <> SchedulingPolicy then
+  begin
+    case SchedulingPolicy of
+      spNormal,
+      spOther:    SchedPolicy := SCHED_OTHER;
+      spFifo:     SchedPolicy := SCHED_FIFO;
+      spRR:       SchedPolicy := SCHED_RR;
+      spBatch:    SchedPolicy := SCHED_BATCH;
+      spIdle:     SchedPolicy := SCHED_IDLE;
+    //spDeadline: SchedPolicy := SCHED_DEADLINE;
+    else
+      raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadSchedulingPolicy: Unknown scheduling policy (%d)',[Ord(SchedulingPolicy)]);
+    end;
+    If SchedulingPolicy in [spFifo,spRR] then
+      Param.sched_priority := 50
+    else
+      Param.sched_priority := 0;
+    If not CheckErr(sched_setscheduler(0,SchedPolicy,@Param)) then
+      raise ESTSCSystemError.CreateFmt('STSC_SetThreadSchedulingPolicy: Failed to set thread scheduling policy (%d).',[GetLastError]);
+  end;
+{$ELSE}
+begin
+SchedulingPolicy := spUnknown;
+Result := SchedulingPolicy;
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function STSC_GetSysThreadPriority: Integer;
 {$IFDEF Windows}
+begin
 Result := GetThreadPriority(GetCurrentThread);
 If Result = THREAD_PRIORITY_ERROR_RETURN then
   raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to get thread priority (%u).',[GetLastError]);
 {$ELSE}
-errno_ptr^ := 0;
-Result := Integer(getpriority(PRIO_PROCESS,0));
-If (Result = -1) and (errno_ptr^ <> 0) then
-  raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to get thread priority (%d).',[errno_ptr^]);
+var
+  SchedPolicy:  TSTSCSchedPolicy;
+  Param:        sched_param;
+begin
+SchedPolicy := STSC_GetThreadSchedulingPolicy;
+case SchedPolicy of
+  spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    begin
+      errno_ptr^ := 0;
+      Result := Integer(getpriority(PRIO_PROCESS,0));
+      If (Result = -1) and (errno_ptr^ <> 0) then
+        raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to get nice value (%d).',[errno_ptr^]);
+    end;
+  spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    If CheckErr(sched_getparam(0,@Param)) then
+      Result := Integer(Param.sched_priority)
+    else
+      raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to get scheduling priority (%d).',[GetLastError]);
+  spBatch,spIdle,spDeadline:  // - - - - - - - - - - - - - - - - - - - - - - - -
+    Result := 0;
+else
+  raise ESTSCInvalidValue.CreateFmt('STSC_GetSysThreadPriority: Unknown scheduling policy (%d)',[Ord(SchedPolicy)]);
+end;
 {$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function STSC_SetSysThreadPriority(SysThreadPriority: Integer): Integer;
+{$IFNDEF Windows}
+var
+  SchedPolicy:  TSTSCSchedPolicy;
+  Param:        sched_param;
+{$ENDIF}
 begin
 Result := STSC_GetSysThreadPriority;
 {$IFDEF Windows}
 If not SetThreadPriority(GetCurrentThread,SysThreadPriority) then
   raise ESTSCSystemError.CreateFmt('STSC_SetThreadPriority: Failed to set thread priority (%u).',[GetLastError]);
 {$ELSE}
-If not CheckErr(setpriority(PRIO_PROCESS,0,cInt(SysThreadPriority))) then
-  raise ESTSCSystemError.CreateFmt('STSC_SetSysThreadPriority: Failed to set thread priority (%d).',[GetLastError]);
+SchedPolicy := STSC_GetThreadSchedulingPolicy;
+case SchedPolicy of
+  spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    If not CheckErr(setpriority(PRIO_PROCESS,0,cInt(SysThreadPriority))) then
+      raise ESTSCSystemError.CreateFmt('STSC_SetSysThreadPriority: Failed to set nice value (%d).',[GetLastError]);
+  spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    begin
+      Param.sched_priority := cInt(SysThreadPriority);
+      If not CheckErr(sched_setparam(0,@Param)) then
+        raise ESTSCSystemError.CreateFmt('STSC_SetSysThreadPriority: Failed to set scheduling priority (%d).',[GetLastError]);
+    end;
+  spBatch,spIdle,spDeadline:  // - - - - - - - - - - - - - - - - - - - - - - - -
+    ; // do nothing, these policies do not support priority
+else
+  raise ESTSCInvalidValue.CreateFmt('STSC_GetSysThreadPriority: Unknown scheduling policy (%d)',[Ord(SchedPolicy)]);
+end;
 {$ENDIF}
 end;
 
@@ -1366,23 +1644,40 @@ end;
 end;
 {$ELSE}
 var
+  SchedPolicy:        TSTSCSchedPolicy;
   SysThreadPriority:  cInt;
 begin
+SchedPolicy := STSC_GetThreadSchedulingPolicy;
 SysThreadPriority := STSC_GetSysThreadPriority;
-case SysThreadPriority of
-  -20:  Result := tpTimeCritical;
-  -19..
-  -11:  Result := tpHighest;
-  -10..
-   -1:  Result := tpAboveNormal;
-    0:  Result := tpNormal;
-    1..
-    9:  Result := tpBelowNormal;
-   10..
-   18:  Result := tpLowest;
-   19:  Result := tpIdle;
+case SchedPolicy of
+  spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    case SysThreadPriority of
+           -20: Result := tpTimeCritical;
+      -19..-11: Result := tpHighest;
+       -10..-1: Result := tpAboveNormal;
+             0: Result := tpNormal;
+          1..9: Result := tpBelowNormal;
+        10..18: Result := tpLowest;
+            19: Result := tpIdle;
+    else
+      raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Invalid nice value (%d).',[SysThreadPriority]);
+    end;
+  spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    case SysThreadPriority of
+             1: Result := tpIdle;
+         2..25: Result := tpLowest;
+        26..49: Result := tpBelowNormal;
+            50: Result := tpNormal;
+        51..74: Result := tpAboveNormal;
+        75..98: Result := tpHighest;
+            99: Result := tpTimeCritical;
+    else
+      raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Invalid scheduling priority (%d).',[SysThreadPriority]);
+    end;
+  spBatch,spIdle,spDeadline:  // - - - - - - - - - - - - - - - - - - - - - - - -
+    Result := tpNormal;
 else
-  raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Unknown system thread priority (%d).',[SysThreadPriority]);
+  raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Unknown scheduling policy (%d)',[Ord(SchedPolicy)]);
 end;
 end;
 {$ENDIF}
@@ -1426,30 +1721,58 @@ STSC_SetSysThreadPriority(SysThreadPriority);
 end;
 {$ELSE}
 var
-  SysThreadPriority:  cInt;
+  SchedPolicy:  TSTSCSchedPolicy;
 begin
 Result := STSC_GetThreadPriority;
-case ThreadPriority of
-  tpIdle:         SysThreadPriority := 19;
-  tpLowestRT7,
-  tpLowestRT6,
-  tpLowestRT5,
-  tpLowestRT4,
-  tpLowestRT3,
-  tpLowest:       SysThreadPriority := 18;
-  tpBelowNormal:  SysThreadPriority := 9;
-  tpNormal:       SysThreadPriority := 0;
-  tpAboveNormal:  SysThreadPriority := -10;
-  tpHighestRT3,
-  tpHighestRT4,
-  tpHighestRT5,
-  tpHighestRT6,
-  tpHighest:      SysThreadPriority := -19;
-  tpTimeCritical: SysThreadPriority := -20;
+SchedPolicy := STSC_GetThreadSchedulingPolicy;
+case SchedPolicy of
+  spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    case ThreadPriority of
+      tpIdle:         STSC_SetSysThreadPriority(19);
+      tpLowestRT7,
+      tpLowestRT6,
+      tpLowestRT5,
+      tpLowestRT4,
+      tpLowestRT3,
+      tpLowest:       STSC_SetSysThreadPriority(18);
+      tpBelowNormal:  STSC_SetSysThreadPriority(9);
+      tpNormal:       STSC_SetSysThreadPriority(0);
+      tpAboveNormal:  STSC_SetSysThreadPriority(-10);
+      tpHighestRT3,
+      tpHighestRT4,
+      tpHighestRT5,
+      tpHighestRT6,
+      tpHighest:      STSC_SetSysThreadPriority(-19);
+      tpTimeCritical: STSC_SetSysThreadPriority(-20);
+    else
+      raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
+    end;
+  spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    case ThreadPriority of
+      tpIdle:         STSC_SetSysThreadPriority(1);
+      tpLowestRT7,
+      tpLowestRT6,
+      tpLowestRT5,
+      tpLowestRT4,
+      tpLowestRT3,
+      tpLowest:       STSC_SetSysThreadPriority(2);
+      tpBelowNormal:  STSC_SetSysThreadPriority(26);
+      tpNormal:       STSC_SetSysThreadPriority(50);
+      tpAboveNormal:  STSC_SetSysThreadPriority(74);
+      tpHighestRT3,
+      tpHighestRT4,
+      tpHighestRT5,
+      tpHighestRT6,
+      tpHighest:      STSC_SetSysThreadPriority(98);
+      tpTimeCritical: STSC_SetSysThreadPriority(99);
+    else
+      raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
+    end;
+  spBatch,spIdle,spDeadline:  // - - - - - - - - - - - - - - - - - - - - - - - -
+    ; // do nothing
 else
-  raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
+  raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Unknown scheduling policy (%d)',[Ord(SchedPolicy)]);
 end;
-STSC_SetSysThreadPriority(SysThreadPriority);
 end;
 {$ENDIF}
 
@@ -1474,6 +1797,36 @@ procedure CheckRDTSC; register; assembler;
 asm
     RDTSC
 end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF Windows}
+procedure BuildProcessorIDMap;
+var
+  AffinityMask: TSTSCProcessorMask;
+  i:            Integer;
+  CPUIDResult:  TCPUIDResult;
+begin
+FillChar(VAR_ProcessorIDMap,SizeOf(VAR_ProcessorIDMap),0);
+If CPUIDSupported then
+  begin
+    VAR_ProcessorIDMap.Available := True;
+    // init proc nums with invalid values
+    For i := Low(VAR_ProcessorIDMap.ProcNums) to High(VAR_ProcessorIDMap.ProcNums) do
+      VAR_ProcessorIDMap.ProcNums[i] := -1;
+    // get apic id to cpu number map
+    AffinityMask := 1;
+    For i := Low(VAR_ProcessorIDMap.ProcNums) to Pred(STSC_GetNumberOfProcessors) do
+      begin
+        STSC_SetThreadAffinity(AffinityMask);
+        CPUID(1,@CPUIDResult);
+        VAR_ProcessorIDMap.ProcNums[Byte(CPUIDResult.EBX shr 24)] := i;
+        AffinityMask := AffinityMask shl 1;
+      end;
+  end
+else VAR_ProcessorIDMap.Available := False;
+end;
+{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1505,7 +1858,6 @@ finally
   Free;
 end;
 {$IFDEF Windows}
-VAR_GetCurrentProcessorNumber := GetCurrentProcessorNumberCPUID;
 ModuleHandle := GetModuleHandle('kernel32.dll');
 If ModuleHandle <> 0 then
   begin
@@ -1514,7 +1866,8 @@ If ModuleHandle <> 0 then
       begin
         VAR_GetCurrentProcessorNumber := FunctionAddress;
         Include(VAR_SupportedFeatures,tscSysProcID);
-      end;
+      end
+    else BuildProcessorIDMap;
   end
 else raise ESTSCSystemError.CreateFmt('UnitInitialization: System library kernel32.dll not loaded (%u).',[GetLastError]);
 {$ELSE}

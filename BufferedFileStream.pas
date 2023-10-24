@@ -25,9 +25,9 @@
                 do so will raise an EBFSInvalidValue exception in the
                 constructor.
 
-  Version 1.0 (2023-01-19)
+  Version 1.1 (2023-10-24)
 
-  Last change 2023-01-19
+  Last change 2023-10-24
 
   ©2023 František Milt
 
@@ -119,10 +119,30 @@ type
     Function UnbufferedWrite(const Buffer; Count: LongInt): LongInt; virtual;
     procedure UnbufferedReadBuffer(var Buffer; Count: LongInt); virtual;
     procedure UnbufferedWriteBuffer(const Buffer; Count: LongInt); virtual;
+  {
+    Use auxiliary IO when you want to access some small distant data and then
+    continue with standard buffered operation at original location.
+
+    For example when writing data of unknown size and then storing their size
+    in front of them - you first write some placeholder data where the size
+    will be, then save the actual data using normal write that goes through
+    buffering, seek to position of the size, do auxliliary write of the size
+    and then seek back at the end of the data and continue next operation.
+
+    Aux methods optimize such operations by not invalidating and flushing
+    buffer when accesing data outside of it.    
+  }
+    Function AuxiliaryRead(var Buffer; Count: LongInt): LongInt; virtual;
+    Function AuxiliaryWrite(const Buffer; Count: LongInt): LongInt; virtual;
+    procedure AuxiliaryReadBuffer(var Buffer; Count: LongInt); virtual;
+    procedure AuxiliaryWriteBuffer(const Buffer; Count: LongInt); virtual;
     property BufferSize: TMemSize read fBufferSize;
   end;
 
 implementation
+
+uses
+  Math;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -303,9 +323,12 @@ If not fSettingSize then
     else
       raise EBFSInvalidValue.CreateFmt('TBufferedFileStream.Seek: Invalid seek origin (%d).',[Ord(Origin)]);
     end;
-    fBuffStreamPosition := Result;
+    If Result >= 0 then
+      fBuffStreamPosition := Result
+    else
+      Result := -1;
   end
-else Result := Inherited Seek(Offset,Origin);
+else Result := inherited Seek(Offset,Origin);
 end;
 
 //------------------------------------------------------------------------------
@@ -415,7 +438,7 @@ If Count > 0 then
               {$IFDEF FPCDWM}{$POP}{$ENDIF}
                 fBufferChanged := True;
               end;
-            fBufferBytes := fBufferSize;
+            fBufferBytes := Int64(fBufferSize);
             Inc(fBuffStreamPosition,Result);
             If fBuffStreamPosition > fBuffStreamSize then
               fBuffStreamSize := fBuffStreamPosition;
@@ -472,24 +495,32 @@ end;
 
 Function TBufferedFileStream.UnbufferedRead(var Buffer; Count: LongInt): LongInt;
 begin
-Flush(True);
-Result := inherited Read(Buffer,Count);
-Inc(fTrueStreamPosition,Result);
-Inc(fBuffStreamPosition,Result);
+If Count > 0 then
+  begin
+    Flush(True);
+    Result := inherited Read(Buffer,Count);
+    Inc(fTrueStreamPosition,Result);
+    Inc(fBuffStreamPosition,Result);
+  end
+else Result := 0;
 end;
 
 //------------------------------------------------------------------------------
 
 Function TBufferedFileStream.UnbufferedWrite(const Buffer; Count: LongInt): LongInt;
 begin
-Flush(True);
-Result := inherited Write(Buffer,Count);
-Inc(fTrueStreamPosition,Result);
-If fTrueStreamPosition > fTrueStreamSize then
-  fTrueStreamSize := fTrueStreamPosition;
-Inc(fBuffStreamPosition,Result);
-If fBuffStreamPosition > fBuffStreamSize then
-  fBuffStreamSize := fBuffStreamPosition;
+If Count > 0 then
+  begin
+    Flush(True);
+    Result := inherited Write(Buffer,Count);
+    Inc(fTrueStreamPosition,Result);
+    If fTrueStreamPosition > fTrueStreamSize then
+      fTrueStreamSize := fTrueStreamPosition;
+    Inc(fBuffStreamPosition,Result);
+    If fBuffStreamPosition > fBuffStreamSize then
+      fBuffStreamSize := fBuffStreamPosition;
+  end
+else Result := 0;
 end;
 
 //------------------------------------------------------------------------------
@@ -506,6 +537,170 @@ procedure TBufferedFileStream.UnbufferedWriteBuffer(const Buffer; Count: LongInt
 begin
 If UnbufferedWrite(Buffer,Count) <> Count then
   raise EWriteError.Create('TBufferedFileStream.UnbufferedWriteBuffer: Write result does not match count.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function TBufferedFileStream.AuxiliaryRead(var Buffer; Count: LongInt): LongInt;
+var
+  BytesToRead:  LongInt;
+  BytesRead:    LongInt;
+  MovingPtr:    PByte;
+begin
+If Count > 0 then
+  begin
+    If (fBuffStreamPosition >= fBufferStart) and
+       ((fBuffStreamPosition + Count) <= (fBufferStart + fBufferBytes)) then
+      begin
+        // entire read can be done from the buffer
+        Result := Read(Buffer,Count);
+      end
+    else If ((fBuffStreamPosition + Count) <= fBufferStart) or
+            (fBuffStreamPosition  >= (fBufferStart + fBufferBytes)) then
+      begin
+        // entire read is outside of the buffer
+        fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+        fBuffStreamPosition := fTrueStreamPosition;
+        Result := inherited Read(Buffer,Count);
+        Inc(fBuffStreamPosition,Result);
+        Inc(fTrueStreamPosition,Result);
+      end
+    else
+      begin
+        // there is partial overlap with the buffer
+        Result := 0;
+        MovingPtr := @Buffer;
+        // read bytes in front of buffer, if any
+        If fBuffStreamPosition < fBufferStart then
+          begin
+            fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+            fBuffStreamPosition := fTrueStreamPosition;
+            BytesToRead := fBufferStart - fBuffStreamPosition;
+            If inherited Read(MovingPtr^,BytesToRead) <> BytesToRead then
+              raise EReadError.Create('TBufferedFileStream.AuxiliaryRead: Failed to read data.');
+            Dec(Count,BytesToRead);
+            Inc(fBuffStreamPosition,BytesToRead);
+            Inc(fTrueStreamPosition,BytesToRead);
+            Inc(MovingPtr,BytesToRead);
+            Inc(Result,BytesToRead);
+          end;
+        // now read bytes from the buffer
+        BytesToRead := Min(Count,fBufferBytes - (fBuffStreamPosition - fBufferStart));
+        BytesRead := Read(MovingPtr^,BytesToRead);  // moves fBuffStreamPosition
+        Dec(Count,BytesRead);
+        Inc(MovingPtr,BytesRead);
+        Inc(Result,BytesRead);
+        // read bytes behind the buffer, if any
+        If Count > 0 then
+          begin
+            fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+            fBuffStreamPosition := fTrueStreamPosition;
+            BytesRead := inherited Read(MovingPtr^,Count);
+            Inc(fBuffStreamPosition,BytesRead);
+            Inc(fTrueStreamPosition,BytesRead);
+            Inc(Result,BytesRead);
+          end;
+      end;
+  end
+else Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TBufferedFileStream.AuxiliaryWrite(const Buffer; Count: LongInt): LongInt;
+var
+  BytesToWrite: LongInt;
+  BytesWritten: LongInt;
+  MovingPtr:    PByte;
+begin
+If Count > 0 then
+  begin
+    If (fBuffStreamPosition >= fBufferStart) and (fBuffStreamPosition <= (fBufferStart + fBufferBytes)) and
+       ((fBuffStreamPosition + Count) <= (fBufferStart + Int64(fBufferSize))) then
+      begin
+        // entire write goes into the buffer
+        Result := Write(Buffer,Count);
+      end
+    else If ((fBuffStreamPosition + Count) <= fBufferStart) or
+            (fBuffStreamPosition > (fBufferStart + fBufferBytes)) then
+      begin
+        // entire write is outside of the buffer
+        fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+        fBuffStreamPosition := fTrueStreamPosition;
+        Result := inherited Write(Buffer,Count);
+        Inc(fBuffStreamPosition,Result);
+        Inc(fTrueStreamPosition,Result);
+        // reload size, because it might have changed
+        fTrueStreamSize := inherited Seek(0,soEnd);
+        If fBuffStreamSize < fTrueStreamSize then
+          fBuffStreamSize := fTrueStreamSize;
+        fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+        fBuffStreamPosition := fTrueStreamPosition;
+      end
+    else
+      begin
+        // partial overlap
+        Result := 0;
+        MovingPtr := @Buffer;
+        // write in front of the buffer
+        If fBuffStreamPosition < fBufferStart then
+          begin
+            fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+            fBuffStreamPosition := fTrueStreamPosition;
+            BytesToWrite := fBufferStart - fBuffStreamPosition;
+            If inherited Write(MovingPtr^,BytesToWrite) <> BytesToWrite then
+              raise EReadError.Create('TBufferedFileStream.AuxiliaryWrite: Failed to write data.');
+            Dec(Count,BytesToWrite);
+            Inc(fBuffStreamPosition,BytesToWrite);
+            Inc(fTrueStreamPosition,BytesToWrite);
+            Inc(MovingPtr,BytesToWrite);
+            Inc(Result,BytesToWrite);
+          end;
+        // write into the buffer
+        BytesToWrite := Min(Count,Int64(fBufferSize) - (fBuffStreamPosition - fBufferStart));
+        BytesWritten := Write(MovingPtr^,BytesToWrite);
+        Dec(Count,BytesWritten);
+        Inc(MovingPtr,BytesWritten);
+        Inc(Result,BytesWritten);
+        // write behind the buffer
+        If Count > 0 then
+          begin
+            fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+            fBuffStreamPosition := fTrueStreamPosition;
+            BytesWritten := inherited Write(MovingPtr^,Count);
+            Inc(fBuffStreamPosition,BytesWritten);
+            Inc(fTrueStreamPosition,BytesWritten);
+            Inc(Result,BytesWritten);
+          end;
+        // reload size
+        fTrueStreamSize := inherited Seek(0,soEnd);
+        If fBuffStreamSize < fTrueStreamSize then
+          fBuffStreamSize := fTrueStreamSize;
+        If Count > 0 then
+          begin
+            fTrueStreamPosition := inherited Seek(fBuffStreamPosition,soBeginning);
+            fBuffStreamPosition := fTrueStreamPosition;
+          end
+        else fTrueStreamPosition := inherited Seek(fTrueStreamPosition,soBeginning);
+      end;
+  end
+else Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TBufferedFileStream.AuxiliaryReadBuffer(var Buffer; Count: LongInt);
+begin
+If AuxiliaryRead(Buffer,Count) <> Count then
+  raise EReadError.Create('TBufferedFileStream.AuxiliaryReadBuffer: Read result does not match count.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TBufferedFileStream.AuxiliaryWriteBuffer(const Buffer; Count: LongInt);
+begin
+If AuxiliaryWrite(Buffer,Count) <> Count then
+  raise EWriteError.Create('TBufferedFileStream.AuxiliaryWriteBuffer: Write result does not match count.');
 end;
 
 end.
