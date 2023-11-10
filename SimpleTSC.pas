@@ -91,9 +91,9 @@
     measurement runs the whole time only on one processor core (use provided
     auxiliary functions to set thread affinity).
 
-  Version 1.1 (2023-10-22)
+  Version 1.1.1 (2023-11-05)
 
-  Last change (2023-10-22)
+  Last change (2023-11-05)
 
   ©2023 František Milt
 
@@ -596,11 +596,11 @@ type
   Scheduling policy has meaning only in Linux. There is nothing even vaguely
   similar in Windows.
 
-  For details about sheduling policies, please refer Linux manual.
+  For details about sheduling policies, please refer to Linux manual.
 
     NOTE - spNormal and spOther are denoting the same policy (SCHED_OTHER).
 }
-  TSTSCSchedPolicy = (spUnknown,spNormal,spOther,spBatch,spIdle,spFifo,spRR,spDeadline);
+  TSTSCSchedPolicy = (spUnknown,spNormal,spOther,spFifo,spRR,spBatch,spIso,spIdle,spDeadline);
 
 //------------------------------------------------------------------------------
 {
@@ -1145,12 +1145,13 @@ Function getpriority(which: cInt; who: cInt): cInt; cdecl external;
 Function setpriority(which: cInt; who: cInt; prio: cInt): cInt; cdecl external;
 
 const
-  SCHED_OTHER    = 0;
+  SCHED_NORMAL   = 0;
   SCHED_FIFO     = 1;
   SCHED_RR       = 2;
   SCHED_BATCH    = 3;
+  SCHED_ISO      = 4; // afaik currently not implemented
   SCHED_IDLE     = 5;
-//SCHED_DEADLINE = ;  // need to get the number...
+  SCHED_DEADLINE = 6;
 
   _SC_NPROCESSORS_ONLN = 84;
 
@@ -1487,12 +1488,13 @@ SchedPolicy := sched_getscheduler(0);
 case SchedPolicy of
   -1:
     raise ESTSCSystemError.CreateFmt('STSC_GetThreadSchedulingPolicy: Failed to obtain thread scheduling policy (%d).',[errno_ptr^]);
-  SCHED_OTHER:    Result := spOther;
+  SCHED_NORMAL:   Result := spNormal;
   SCHED_FIFO:     Result := spFifo;
   SCHED_RR:       Result := spRR;
   SCHED_BATCH:    Result := spBatch;
+  SCHED_ISO:      Result := spIso;
   SCHED_IDLE:     Result := spIdle;
-//SCHED_DEADLINE: Result := spDeadline;
+  SCHED_DEADLINE: Result := spDeadline;
 else
   raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadSchedulingPolicy: Unknown scheduling policy (%d)',[SchedPolicy]);
 end;
@@ -1515,12 +1517,13 @@ If Result <> SchedulingPolicy then
   begin
     case SchedulingPolicy of
       spNormal,
-      spOther:    SchedPolicy := SCHED_OTHER;
+      spOther:    SchedPolicy := SCHED_NORMAL;
       spFifo:     SchedPolicy := SCHED_FIFO;
       spRR:       SchedPolicy := SCHED_RR;
       spBatch:    SchedPolicy := SCHED_BATCH;
+      spIso:      SchedPolicy := SCHED_ISO;
       spIdle:     SchedPolicy := SCHED_IDLE;
-    //spDeadline: SchedPolicy := SCHED_DEADLINE;
+      spDeadline: SchedPolicy := SCHED_DEADLINE;
     else
       raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadSchedulingPolicy: Unknown scheduling policy (%d)',[Ord(SchedulingPolicy)]);
     end;

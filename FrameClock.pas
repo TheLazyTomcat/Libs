@@ -89,11 +89,11 @@
               it is not guaranteed to work reliably. Measuring across system
               reboots will straight-up fail to produce anything sensible.
 
-  Version 1.0.1 (2020-06-07)
+  Version 1.0.2 (2023-11-05)
 
-  Last change 2022-09-24
+  Last change 2023-11-05
 
-  ©2020-2022 František Milt
+  ©2020-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -975,7 +975,10 @@ If TimeStampCheckIndex(Index) then
     fTimeStamps[Index].UserData := UserData;
     Inc(fTimeStampCount);
   end
-else TimeStampAdd(Name,Value,UserData);
+else If Index = fTimeStampCount then
+  TimeStampAdd(Name,Value,UserData)
+else
+  raise EFCIndexOutOfBounds.CreateFmt('TFrameClockEx.TimeStampInsert: Index (%d) out of bounds.',[Index]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1152,7 +1155,10 @@ If AccumulatorCheckIndex(Index) then
     fAccumulators[Index].UserData := UserData;
     Inc(fAccumulatorCount);
   end
-else AccumulatorAdd(Name,InitialValue,UserData);
+else If Index = fAccumulatorCount then
+  AccumulatorAdd(Name,InitialValue,UserData)
+else
+  raise EFCIndexOutOfBounds.CreateFmt('TFrameClockEx.AccumulatorInsert: Index (%d) out of bounds.',[Index]);
 end;
 
 //------------------------------------------------------------------------------

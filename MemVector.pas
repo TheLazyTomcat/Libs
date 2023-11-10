@@ -22,9 +22,9 @@
     to be inherited from in a descendant class that implements vector for a
     specific item type. An integer vector is implemented as an example.
 
-  Version 1.2.2 (2023-01-24)
+  Version 1.2.3 (2023-11-05)
 
-  Last change 2023-09-04
+  Last change 2023-11-05
 
   ©2016-2023 František Milt
 
@@ -841,7 +841,10 @@ If fOwnsMemory then
         Inc(fCount);
         DoChange;
       end
-    else Add(Item);
+    else If Index = fCount then
+      Add(Item)
+    else
+      raise EMVIndexOutOfBounds.CreateFmt('TMemVector.Insert: Index (%d) out of bounds.',[Index]);
   end
 else raise EMVForeignMemory.Create('TMemVector.Insert: Operation not alloved on foreign memory.');
 end;

@@ -19,9 +19,9 @@
     A specialized class (TIntegerLinkedListArray) with Integer item type is
     implemented and provided as an example.
 
-  Version 1.0.2 (2023-01-25)
+  Version 1.0.3 (2023-11-05)
 
-  Last change 2023-09-04
+  Last change 2023-11-05
 
   ©2018-2023 František Milt
 
@@ -400,6 +400,7 @@ type
     procedure Decouple(ArrayIndex: TLLAArrayIndex); virtual;
     procedure InternalDelete(ArrayIndex: TLLAArrayIndex); virtual;
     procedure ArrayIndices(ListIndex1,ListIndex2: TLLAListIndex; out ArrayIndex1,ArrayIndex2: TLLAArrayIndex); virtual;
+    procedure InitializeAllItems; virtual;
     procedure FinalizeAllItems; virtual;
     procedure ReadFromStreamInternal(Stream: TStream; Buffered: Boolean); virtual;
   public
@@ -1070,6 +1071,28 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TLinkedListArray.InitializeAllItems;
+var
+  i:  Integer;
+begin
+For i := LowArrayIndex to HighArrayIndex do
+  with GetItemPtr(i)^ do
+    begin
+      If i > LowArrayIndex then Prev := i - 1
+        else Prev := -1;
+      If i < HighArrayIndex then Next := i + 1
+        else Next := -1;
+      Flags := 0;
+    end;
+fFirstFree := LowArrayIndex;
+fLastFree := HighArrayIndex;
+fFirstUsed := -1;
+fLastUsed := -1;
+fCount := 0;
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TLinkedListArray.FinalizeAllItems;
 var
   i:        TLLAArrayIndex;
@@ -1477,7 +1500,10 @@ If CheckListIndex(ListIndex) then
         DoChange;
       end;
   end
-else Add(Item);
+else If ListIndex = fCount then
+  Add(Item)
+else
+  raise ELLAListIndexOutOfBounds.CreateFmt('TLinkedListArray.Insert: List index (%d) out of bounds.',[ListIndex]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1645,26 +1671,11 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TLinkedListArray.Clear;
-var
-  i:  TLLAArrayIndex;
 begin
 If fCapacity > 0 then
   begin
     FinalizeAllItems;
-    For i := LowArrayIndex to HighArrayIndex do
-      with GetItemPtr(i)^ do
-        begin
-          If i > LowArrayIndex then Prev := i - 1
-            else Prev := -1;
-          If i < HighArrayIndex then Next := i + 1
-            else Next := -1;
-          Flags := 0;
-        end;
-    fCount := 0;
-    fFirstFree := LowArrayIndex;
-    fLastFree := HighArrayIndex;
-    fFirstUsed := -1;
-    fLastUsed := -1;
+    InitializeAllItems;
     Shrink;  
     DoChange;
   end;
@@ -1810,7 +1821,7 @@ If fCount > 0 then
     fLastUsed := TLLAArrayIndex(HighListIndex);
     DoChange;
   end
-else Clear; // this will just reinitialize the empty space
+else InitializeAllItems;
 end;
 
 //------------------------------------------------------------------------------
