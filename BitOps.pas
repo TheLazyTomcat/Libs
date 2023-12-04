@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.18.2 (2023-04-15)
+  Version 1.18.3 (2023-11-26)
 
-  Last change (2023-04-15)
+  Last change (2023-11-26)
 
   ©2014-2023 František Milt
 
@@ -953,8 +953,9 @@ type
   so do not assume anything about the numerical value or position of any enum
   value.
 }
-  TMemoryAlignment = (ma8bit,ma16bit,ma32bit,ma64bit,ma128bit,ma256bit,ma512bit,ma1024bit,ma2048bit,
-                      ma1byte,ma2byte,ma4byte,ma8byte,ma16byte,ma32byte,ma64byte,ma128byte,ma256byte);
+  TMemoryAlignment = (maNone,
+    ma8bit,ma16bit,ma32bit,ma64bit,ma128bit,ma256bit,ma512bit,ma1024bit,ma2048bit,
+    ma1byte,ma2byte,ma4byte,ma8byte,ma16byte,ma32byte,ma64byte,ma128byte,ma256byte);
 
 //------------------------------------------------------------------------------
 
@@ -984,7 +985,7 @@ Function Misalignment(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;{
   AlignedMemory checks provided memory address for requested alignment. When
   the address is properly aligned, it is returned and nothing more is done.
   When is is not properly aligned, then this functions will return closest
-  properly aligned memory address that is not smaler than the provided address.
+  properly aligned memory address that is not smaller than the provided address.
 
     WARNING - this function does NOT do any (re)allocation, it merely returns
               an aligned pointer closest to a given one.
@@ -6868,6 +6869,7 @@ end;
 Function AlignmentBytes(Alignment: TMemoryAlignment): TMemSize;
 begin
 case Alignment of
+  maNone,
   ma8bit,ma1byte:       Result := 1;
   ma16bit,ma2byte:      Result := 2;
   ma32bit,ma4byte:      Result := 4;
@@ -6903,9 +6905,13 @@ end;
 //------------------------------------------------------------------------------
 
 Function AlignedMemory(Address: Pointer; Alignment: TMemoryAlignment): Pointer;
+var
+  AlignBytes: TMemSize;
 begin
+// to remove a need for two calls to AlignmentBytes...
+AlignBytes := AlignmentBytes(Alignment);
 {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := Pointer((PtrUInt(Address) + PtrUInt(Pred(AlignmentBytes(Alignment)))) and not PtrUInt(Pred(AlignmentBytes(Alignment))));
+Result := Pointer((PtrUInt(Address) + PtrUInt(Pred(AlignBytes))) and not PtrUInt(Pred(AlignBytes)));
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 

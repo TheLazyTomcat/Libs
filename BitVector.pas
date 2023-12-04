@@ -12,9 +12,9 @@
     Provides classes that can be used to access individual bits of memory in
     a list-like manner.
 
-  Version 1.4 (2023-11-10)
+  Version 1.4.1 (2023-11-27)
 
-  Last change 2023-11-10
+  Last change 2023-11-27
 
   ©2015-2023 František Milt
 
@@ -732,7 +732,7 @@ begin
 inherited Create;
 Initialize;
 fOwnsMemory := False;
-fMemSize := (fCount + 7) shr 3;
+fMemSize := (Count + 7) shr 3;
 fMemory := Memory;
 fCount := Count;
 ScanForPopCount;

@@ -11,9 +11,9 @@
 
     This file contains main classes template used by AuxClasses library.
 
-  Version 1.2 (2023-03-24)
+  Version 1.2.1 (2023-11-12)
 
-  Last change 2023-03-24
+  Last change 2023-11-12
 
   ©2018-2023 František Milt
 
@@ -424,7 +424,7 @@ If Count >= Capacity then
             Delta := Trunc(Capacity * fListGrowSettings.GrowFactor);
       else
        {gmSlow}
-       Delta := 1;
+        Delta := 1;
       end;
     If Delta < MinDelta then
       Delta := MinDelta;
@@ -443,7 +443,8 @@ If Capacity > 0 then
     smNormal:
       If Count <= 0 then
         Capacity := 0
-      else If Count <= Trunc(Capacity * fListGrowSettings.ShrinkFactor) then
+      else If (Capacity > fListGrowSettings.ShrinkLimit) and
+              (Count <= Trunc(Capacity * fListGrowSettings.ShrinkFactor)) then
         Capacity := Max(Trunc(Capacity * fListGrowSettings.ShrinkFactor),fListGrowSettings.ShrinkLimit);
     smToCount:
       Capacity := Count;
@@ -716,7 +717,7 @@ If CheckList(List) then
                 Delta := Trunc(Capacity[List] * fListGrowSettings[List].GrowFactor);
           else
            {gmSlow}
-           Delta := 1;
+            Delta := 1;
           end;
         If Delta < MinDelta then
           Delta := MinDelta;
@@ -736,13 +737,14 @@ If CheckList(List) then
   begin
     If Capacity[List] > 0 then
       case fListGrowSettings[List].ShrinkMode of
+        smToCount:
+          Capacity[List] := Count[List];
         smNormal:
           If Count[List] <= 0 then
             Capacity[List] := 0
-          else If Count[List] <= Trunc(Capacity[List] * fListGrowSettings[List].ShrinkFactor) then
+          else If (Capacity[List] > fListGrowSettings[List].ShrinkFactor) and
+                  (Count[List] <= Trunc(Capacity[List] * fListGrowSettings[List].ShrinkFactor)) then
             Capacity[List] := Max(Trunc(Capacity[List] * fListGrowSettings[List].ShrinkFactor),fListGrowSettings[List].ShrinkLimit);
-        smToCount:
-          Capacity[List] := Count[List];
       else
         {smKeepCap}
         //do nothing

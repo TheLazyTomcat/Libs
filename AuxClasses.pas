@@ -9,9 +9,9 @@
 
   Auxiliary classes and other class-related things
 
-  Version 1.2 (2023-03-24)
+  Version 1.2.1 (2023-11-12)
 
-  Last change 2023-03-24
+  Last change 2023-11-12
 
   ©2018-2023 František Milt
 
@@ -147,9 +147,10 @@ type
   smKeepCap - list is not shrinked, capacity is preserved
   smNormal  - if count is zero (or lower), then the capacity is set to zero,
               when count is greater than zero but lower than or equal to
-              capacity * ShrinkFactor, then capacity is set either to
-              capacity * ShrinkFactor or ShrinkLimit, whichever is bigger, in
-              other cases the capacity is preserved
+              capacity * ShrinkFactor, and at the same time capacity is higher
+              than ShrinkLimit, then capacity is set either to capacity *
+              ShrinkFactor or ShrinkLimit, whichever is bigger, in all other
+              cases the capacity is preserved
   smToCount - capacity is set to count
 }
   TShrinkMode = (smKeepCap, smNormal, smToCount);
@@ -176,7 +177,7 @@ const
     GrowLimit:    128 * 1024 * 1024;
     ShrinkMode:   smNormal;
     ShrinkFactor: 0.5;
-    ShrinkLimit:  256);
+    ShrinkLimit:  32);
 
 {===============================================================================
     Public functions - declaration
