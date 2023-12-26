@@ -23,9 +23,9 @@
 
   Version 1.1.1 (2022-09-28)
 
-  Last change 2022-09-28
+  Last change 2023-12-19
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -666,6 +666,11 @@ uses
     {$DEFINE W5058:={$WARN 5058 OFF}}   // Variable "$1" does not seem to be initialized
     {$DEFINE W5092:=}
   {$IFEND}
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
   {$POP}
 {$ENDIF}
 
@@ -751,6 +756,7 @@ Result := WStr;
 If not UTF8AnsiDefaultStrings then
   begin
     // CP ansi strings - bare FPC or Delphi
+    Result := '';
     SetLength(Result,WideCharToMultiByte(AnsiCodePage,0,PWideChar(WStr),Length(WStr),nil,0,nil,nil));
     WideCharToMultiByte(AnsiCodePage,0,PWideChar(WStr),Length(WStr),PAnsiChar(Result),Length(Result) * SizeOf(AnsiChar),nil,nil);
     // a wrong codepage might be stored, try translation with default cp
@@ -1712,6 +1718,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}{$ENDIF}
 procedure TWinFileInfo.Initialize(const FileName: String);
 var
   LastError:  {$IFDEF Windows}Integer{$ELSE}cint{$ENDIF};
@@ -1796,6 +1803,7 @@ else
   end;
 {$ENDIF}
 end;
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1820,6 +1828,7 @@ var
   ModuleFileName: String;
 {$IFDEF Windows}
 begin
+ModuleFileName := '';
 SetLength(ModuleFileName,MAX_PATH);
 SetLength(ModuleFileName,GetModuleFileNameEx(GetCurrentProcess,hInstance,PChar(ModuleFileName),Length(ModuleFileName)));
 ModuleFileName := WinToStr(ModuleFileName);

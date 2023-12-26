@@ -14,7 +14,9 @@
     compilers (Delphi, FPC 2.x.x, FPC 3.x.x) without a need for symbol checks.
 
     It also provides set of functions for string comparison that encapsulates
-    some of the intricacies given by different approach in different compilers.
+    some of the intricacies given by different approach in different compilers,
+    and functions returning index of first and last character (can be used when
+    iterating the string).
 
     For details about encodings refer to file encoding_notes.txt that should
     be distributed with this library.
@@ -23,11 +25,18 @@
 
       Delphi 7 Personal (non-unicode, Windows)
       Delphi 10.1 Berlin Personal (unicode, Windows)
+
       Lazarus 1.4.4 - FPC 2.6.4 (non-unicode, Windows)
+      
       Lazarus 2.0.8 - FPC 3.0.4 (non-unicode, Windows)
       Lazarus 2.0.8 - FPC 3.0.4 (non-unicode, Linux)
       Lazarus 2.0.8 - FPC 3.0.4 (unicode, Windows)
       Lazarus 2.0.8 - FPC 3.0.4 (unicode, Linux)
+
+      Lazarus 2.2.6 - FPC 3.2.2 (non-unicode, Windows)
+      Lazarus 2.2.6 - FPC 3.2.2 (non-unicode, Linux)
+      Lazarus 2.2.6 - FPC 3.2.2 (unicode, Windows)
+      Lazarus 2.2.6 - FPC 3.2.2 (unicode, Linux)
 
     Tested compatible FPC modes:
     
@@ -40,11 +49,11 @@
               Also, if you are certain that some part, in here marked as
               dubious, is actually correct, let the author know.
 
-  Version 1.4.3 (2022-04-17)
+  Version 1.5 (2023-12-19)
 
-  Last change 2022-04-17
+  Last change 2023-12-19
 
-  ©2017-2022 František Milt
+  ©2017-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -61,7 +70,7 @@
       github.com/TheLazyTomcat/Lib.StrRect
 
   Dependencies:
-    none
+    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
 
 ===============================================================================}
 {
@@ -76,8 +85,9 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
 
 {$IFDEF FPC}
   // do not set $MODE, leave the unit mode-agnostic
-  {$MODESWITCH RESULT+}
-  {$MODESWITCH DEFAULTPARAMETERS+}
+  {$MODESWITCH Result+}
+  {$MODESWITCH DefaultParameters+}
+  {$MODESWITCH InitFinal+}
   {$INLINE ON}
   {$DEFINE CanInline}
   {$DEFINE FPC_DisableWarns}
@@ -108,14 +118,27 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
 {$ENDIF}
 {$H+} // explicitly activate long strings
 
+{$IF Defined(FPC) or (CompilerVersion >= 17)}
+{
+  I have no idea when Delphi started seeing UTF8String as a separate type from
+  AnsiString, but it sure is not in D7 (ambiguous overload).
+  For now I am assuming Delphi 2005 and newer are ok with it. If not, please
+  let me know.
+}
+  {$DEFINE UTF8StringSeparateType}
+{$ELSE}
+  {$UNDEF UTF8StringSeparateType}
+{$IFEND}
+
 interface
 
-type
-{$IF not Declared(UnicodeString)}
-  UnicodeString = WideString;
+uses
+  AuxTypes;
+
+{$IF Declared(UnicodeIsWideE)}
+  {$UNDEF UnicodeStringSeparateType}
 {$ELSE}
-  // don't ask, it must be here
-  UnicodeString = System.UnicodeString;
+  {$DEFINE UnicodeStringSeparateType}
 {$IFEND}
 
 {$IFNDEF FPC}
@@ -221,32 +244,32 @@ type
 
 //------------------------------------------------------------------------------
 
-Function StrToShort(const Str: String): ShortString;{$IF Defined(CanInline) and Defined(FPC)} inline; {$IFEND}
-Function ShortToStr(const Str: ShortString): String;{$IF Defined(CanInline) and Defined(FPC)} inline; {$IFEND}
+Function StrToShort(const Str: String): ShortString;
+Function ShortToStr(const Str: ShortString): String;
 
-Function StrToAnsi(const Str: String): AnsiString;{$IF Defined(CanInline) and Defined(FPC)} inline; {$IFEND}
-Function AnsiToStr(const Str: AnsiString): String;{$IF Defined(CanInline) and Defined(FPC)} inline; {$IFEND}
+Function StrToAnsi(const Str: String): AnsiString;
+Function AnsiToStr(const Str: AnsiString): String;
 
-Function StrToUTF8(const Str: String): UTF8String;{$IFDEF CanInline} inline; {$ENDIF}
-Function UTF8ToStr(const Str: UTF8String): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function StrToUTF8(const Str: String): UTF8String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
+Function UTF8ToStr(const Str: UTF8String): String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
-Function StrToWide(const Str: String): WideString;{$IFDEF CanInline} inline; {$ENDIF}
-Function WideToStr(const Str: WideString): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function StrToWide(const Str: String): WideString;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
+Function WideToStr(const Str: WideString): String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
-Function StrToUnicode(const Str: String): UnicodeString;{$IFDEF CanInline} inline; {$ENDIF}
-Function UnicodeToStr(const Str: UnicodeString): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function StrToUnicode(const Str: String): UnicodeString;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
+Function UnicodeToStr(const Str: UnicodeString): String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
 Function StrToUCS4(const Str: String): UCS4String;{$IFDEF CanInline} inline; {$ENDIF}
 Function UCS4ToStr(const Str: UCS4String): String;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function StrToRTL(const Str: String): TRTLString;{$IFDEF CanInline} inline; {$ENDIF}
-Function RTLToStr(const Str: TRTLString): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function StrToRTL(const Str: String): TRTLString;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
+Function RTLToStr(const Str: TRTLString): String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
-Function StrToGUI(const Str: String): TGUIString;{$IFDEF CanInline} inline; {$ENDIF}
-Function GUIToStr(const Str: TGUIString): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function StrToGUI(const Str: String): TGUIString;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
+Function GUIToStr(const Str: TGUIString): String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
-Function StrToWinA(const Str: String): AnsiString;{$IF Defined(CanInline) and Defined(FPC)} inline; {$IFEND}
-Function WinAToStr(const Str: AnsiString): String;{$IF Defined(CanInline) and Defined(FPC)} inline; {$IFEND}
+Function StrToWinA(const Str: String): AnsiString;
+Function WinAToStr(const Str: AnsiString): String;
 
 Function StrToWinW(const Str: String): WideString;{$IFDEF CanInline} inline; {$ENDIF}
 Function WinWToStr(const Str: WideString): String;{$IFDEF CanInline} inline; {$ENDIF}
@@ -254,11 +277,11 @@ Function WinWToStr(const Str: WideString): String;{$IFDEF CanInline} inline; {$E
 Function StrToWin(const Str: String): TWinString;{$IFDEF CanInline} inline; {$ENDIF}
 Function WinToStr(const Str: TWinString): String;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function StrToCsl(const Str: String): TCSLString;{$IFDEF CanInline} inline; {$ENDIF}
-Function CslToStr(const Str: TCSLString): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function StrToCsl(const Str: String): TCSLString;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
+Function CslToStr(const Str: TCSLString): String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
-Function StrToSys(const Str: String): TSysString;{$IFDEF CanInline} inline; {$ENDIF}
-Function SysToStr(const Str: TSysString): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function StrToSys(const Str: String): TSysString;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
+Function SysToStr(const Str: TSysString): String;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
 {===============================================================================
     Explicit string comparison
@@ -271,6 +294,34 @@ Function WideStringCompare(const A,B: WideString; CaseSensitive: Boolean): Integ
 Function UnicodeStringCompare(const A,B: UnicodeString; CaseSensitive: Boolean): Integer;
 Function UCS4StringCompare(const A,B: UCS4String; CaseSensitive: Boolean): Integer;{$IFDEF CanInline} inline; {$ENDIF}
 Function StringCompare(const A,B: String; CaseSensitive: Boolean): Integer;
+
+{===============================================================================
+    String indexing helpers
+===============================================================================}
+
+Function StrLow(const Str: ShortString): TStrOff; overload;
+Function StrLow(const Str: AnsiString): TStrOff; overload;
+{$IFDEF UTF8StringSeparateType}
+Function StrLow(const Str: UTF8String): TStrOff; overload;
+{$ENDIF}
+Function StrLow(const Str: WideString): TStrOff; overload;
+{$IFDEF UnicodeStringSeparateType}
+Function StrLow(const Str: UnicodeString): TStrOff; overload;
+{$ENDIF}
+Function StrLow(const Str: UCS4String): TStrOff; overload;{$IFDEF CanInline} inline; {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function StrHigh(const Str: ShortString): TStrOff; overload;
+Function StrHigh(const Str: AnsiString): TStrOff; overload;
+{$IFDEF UTF8StringSeparateType}   
+Function StrHigh(const Str: UTF8String): TStrOff; overload;
+{$ENDIF}
+Function StrHigh(const Str: WideString): TStrOff; overload;
+{$IFDEF UnicodeStringSeparateType}
+Function StrHigh(const Str: UnicodeString): TStrOff; overload;
+{$ENDIF}
+Function StrHigh(const Str: UCS4String): TStrOff; overload;
 
 implementation
 
@@ -286,7 +337,15 @@ uses
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W4045:={$WARN 4045 OFF}} // Comparison might be always true due to range of constant and expression
+  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
   {$DEFINE W6018:={$WARN 6018 OFF}} // unreachable code
+  {$PUSH}{$WARN 2005 OFF}           // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
 {$ENDIF}
 
 {===============================================================================
@@ -387,6 +446,7 @@ If Length(Str) > 0 then
         Inc(ResLen);
       end;
   end;
+Result := nil;
 SetLength(Result,ResLen + 1);
 Result[High(Result)] := 0;  // explicitly set terminating zero
 // do conversion
@@ -440,6 +500,7 @@ If Length(Str) > 0 then
       Inc(ResLen, 1 + IfThenElse((Str[i] > $FFFF) and (Str[i] <= $10FFFF),1,0));
     {$IFDEF FPCDWM}{$POP}{$ENDIF}
     // preallocation
+    Result := '';
     SetLength(Result,ResLen);
     // do conversion
     ResLen := 1;
@@ -481,6 +542,7 @@ Function UnicodeToAnsiCP(const Str: UnicodeString; CodePage: UINT = CP_ACP): Ans
 begin
 If Length (Str) > 0 then
   begin
+    Result := '';
     SetLength(Result,WideCharToMultiByte(CodePage,0,PUnicodeChar(Str),Length(Str),nil,0,nil,nil));
     WideCharToMultiByte(CodePage,0,PUnicodeChar(Str),Length(Str),PAnsiChar(Result),Length(Result) * SizeOf(AnsiChar),nil,nil);
   {$IF Defined(FPC) and (FPC_FULLVERSION >= 20701)}
@@ -516,6 +578,7 @@ If Length (Str) > 0 then
             Flags := 0;
             Break{For i};
           end;
+    Result := '';
     SetLength(Result,MultiByteToWideChar(CodePage,Flags,PAnsiChar(Str),Length(Str) * SizeOf(AnsiChar),nil,0));
     MultiByteToWideChar(CodePage,Flags,PAnsiChar(Str),Length(Str) * SizeOf(AnsiChar),PUnicodeChar(Result),Length(Result));
   end
@@ -1581,6 +1644,7 @@ end;
     Explicit string comparison
 ===============================================================================}
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function ShortStringCompare(const A,B: ShortString; CaseSensitive: Boolean): Integer;
 begin
 If CaseSensitive then
@@ -1594,9 +1658,11 @@ else
   Result := SysUtils.AnsiCompareText(ShortToStr(A),ShortToStr(B));
 {$IFEND}
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function AnsiStringCompare(const A,B: AnsiString; CaseSensitive: Boolean): Integer;
 begin
 If CaseSensitive then
@@ -1616,6 +1682,7 @@ else
 {$IFEND}
 {$ENDIF}
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1680,6 +1747,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function StringCompare(const A,B: String; CaseSensitive: Boolean): Integer;
 begin
 If CaseSensitive then
@@ -1693,5 +1761,140 @@ else
   Result := SysUtils.AnsiCompareText(A,B)
 {$IFEND}
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+
+{===============================================================================
+    String indexing helpers
+===============================================================================}
+var
+  VAR_STRIDXOFF: Integer;
+
+procedure StrIdxOff_Init;
+const
+  TestStr = #1#0;
+begin
+// initialized once and then only read, so no need for thread protection
+VAR_STRIDXOFF := Ord(TestStr[1]);
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function StrLow(const Str: ShortString): TStrOff;
+begin
+Result := VAR_STRIDXOFF;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function StrLow(const Str: AnsiString): TStrOff;
+begin
+Result := VAR_STRIDXOFF;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF UTF8StringSeparateType}
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function StrLow(const Str: UTF8String): TStrOff;
+begin
+Result := VAR_STRIDXOFF;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function StrLow(const Str: WideString): TStrOff;
+begin
+Result := VAR_STRIDXOFF;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF UnicodeStringSeparateType}
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function StrLow(const Str: UnicodeString): TStrOff;
+begin
+Result := VAR_STRIDXOFF;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function StrLow(const Str: UCS4String): TStrOff;
+begin
+Result := Low(Str);
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function StrHigh(const Str: ShortString): TStrOff;
+begin
+Result := Pred(Length(Str)) + VAR_STRIDXOFF;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function StrHigh(const Str: AnsiString): TStrOff;
+begin
+Result := Pred(Length(Str)) + VAR_STRIDXOFF;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF UTF8StringSeparateType}
+Function StrHigh(const Str: UTF8String): TStrOff;
+begin
+Result := Pred(Length(Str)) + VAR_STRIDXOFF;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function StrHigh(const Str: WideString): TStrOff;
+begin
+Result := Pred(Length(Str)) + VAR_STRIDXOFF;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF UnicodeStringSeparateType}
+Function StrHigh(const Str: UnicodeString): TStrOff;
+begin
+Result := Pred(Length(Str)) + VAR_STRIDXOFF;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function StrHigh(const Str: UCS4String): TStrOff;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[High(Str)] = 0 then
+      Result := Pred(High(Str))
+    else
+      Result := High(Str);
+  end
+else Result := -1;
+end;
+
+
+{===============================================================================
+    Unit initialization and finalization
+===============================================================================}
+
+initialization
+  StrIdxOff_Init;
 
 end.

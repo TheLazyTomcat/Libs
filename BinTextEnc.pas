@@ -22,7 +22,7 @@
 
   Version 2.1.2 (2023-04-17)
 
-  Last change 2023-04-17
+  Last change 2023-12-19
 
   ©2015-2023 František Milt
 
@@ -1309,6 +1309,7 @@ class Function TBTETranscoder.CreateEncodingTable(const Source: array of Char): 
 var
   i:  Integer;
 begin
+Result := nil;
 SetLength(Result,Length(Source));
 For i := Low(Result) to High(Result) do
   Result[i] := Source[i];
@@ -1320,6 +1321,7 @@ class Function TBTETranscoder.CreateEncodingTable(const Source: String): TBTEEnc
 var
   i:  Integer;
 begin
+Result := nil;
 SetLength(Result,Length(Source));
 For i := Low(Result) to High(Result) do
   Result[i] := Source[i + 1];

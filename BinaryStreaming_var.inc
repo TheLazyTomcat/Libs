@@ -9,9 +9,9 @@
 
   Binary streaming - variants streaming template
 
-  Version 2.0 (2023-09-03)
+  Version 2.0.2 (2023-12-24)
 
-  Last change 2023-09-03
+  Last change 2023-12-24
 
   ©2015-2023 František Milt
 
@@ -85,6 +85,7 @@ If VarIsArray(Value) then
   }
     If Dimensions > 0 then
       begin
+        Indices := nil;
         SetLength(Indices,Dimensions);
         Inc(Result,WriteVarArrayDimension(1));
       end;
@@ -179,12 +180,14 @@ If VariantTypeInt and BS_VARTYPENUM_ARRAY <> 0 then
     If Dimensions > 0 then
       begin
         // read indices bounds
+        IndicesBounds := nil;
         SetLength(IndicesBounds,Dimensions * 2);
         For i := Low(IndicesBounds) to High(IndicesBounds) do
           IndicesBounds[i] := PtrInt({$IFDEF BS_INC_M}{$IFDEF BS_INC_L}Ptr_GetInt32_LE{$ELSE}Ptr_GetInt32_BE{$ENDIF}(Ptr{$ELSE}{$IFDEF BS_INC_L}Stream_GetInt32_LE{$ELSE}Stream_GetInt32_BE{$ENDIF}(Stream{$ENDIF},True));
         // create the array
         Value := VarArrayCreate(IndicesBounds,IntToVarType(VariantTypeInt and BS_VARTYPENUM_TYPEMASK));
         // read individual dimensions/items
+        Indices := nil;
         SetLength(Indices,Dimensions);
         Inc(Result,ReadVarArrayDimension(1));
       end;

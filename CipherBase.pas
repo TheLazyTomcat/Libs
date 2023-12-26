@@ -16,9 +16,9 @@
 
   Version 1.0.5 (2022-10-25)
 
-  Last change 2022-10-25
+  Last change 2023-12-19
 
-  ©2021-2022 František Milt
+  ©2021-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -992,6 +992,7 @@ var
   InLen:  TStrSize;
 begin
 InLen := Length(InStr);
+OutStr := '';
 SetLength(OutStr,OutputSize(InLen * SizeOf(Char)) div SizeOf(Char));
 ProcessMemory(PChar(InStr),InLen * SizeOf(Char),PChar(OutStr));
 end;
@@ -1014,6 +1015,7 @@ var
   InLen:  TStrSize;
 begin
 InLen := Length(InStr);
+OutStr := '';
 SetLength(OutStr,OutputSize(InLen * SizeOf(AnsiChar)) div SizeOf(AnsiChar));
 ProcessMemory(PAnsiChar(InStr),InLen * SizeOf(AnsiChar),PAnsiChar(OutStr));
 end;
@@ -1036,6 +1038,7 @@ var
   InLen:  TStrSize;
 begin
 InLen := Length(InStr);
+OutStr := '';
 SetLength(OutStr,OutputSize(InLen * SizeOf(WideChar)) div SizeOf(WideChar));
 ProcessMemory(PWideChar(InStr),InLen * SizeOf(WideChar),PWideChar(OutStr));
 end;

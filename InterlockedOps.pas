@@ -30,8 +30,9 @@
     EnableVal64onSys32 is defined (see symbols define section for more
     information). In 64bit environment, they are always available.
 
-    There are also some funtions accepting 128bit variables, but these are only
-    available in 64bit environment and only when symbol EnableVal128 is defined.
+    There are also some functions accepting 128bit variables, but these are
+    only available in 64bit environment and only when symbol EnableVal128 is
+    defined.
 
     Unless noted otherwise in function description, there are no requirements
     for memory alignment of any of the passed parameters (as-per Intel
@@ -46,9 +47,9 @@
 
   Version 1.4.2 (2022-02-21)
 
-  Last change 2022-10-23
+  Last change 2023-12-26
 
-  ©2021-2022 František Milt
+  ©2021-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1664,7 +1665,7 @@ procedure ReadBarrier; register; assembler;
 
 -------------------------------------------------------------------------------}
 
-procedure WriteBarrier; register assembler;
+procedure WriteBarrier; register; assembler;
 
 {-------------------------------------------------------------------------------
 
@@ -1676,7 +1677,7 @@ procedure WriteBarrier; register assembler;
 
 -------------------------------------------------------------------------------}
 
-procedure ReadWriteBarrier; register assembler;
+procedure ReadWriteBarrier; register; assembler;
 
 implementation
 
@@ -1706,9 +1707,16 @@ uses
 
 Function SAR3(Value: PtrInt): PtrInt; register; assembler;
 asm
-          SAR   Value, 3
 {$IFDEF x64}
-          MOV   RAX, Value
+  {$IFDEF Windows}
+    SAR   RCX, 3
+    MOV   RAX, RCX
+  {$ELSE}
+    SAR   RDI,3
+    MOV   RAX, RDI
+  {$ENDIF}
+{$ELSE}
+    SAR   EAX, 3
 {$ENDIF}
 end;
 
@@ -1721,7 +1729,15 @@ end;
 Function InterlockedIncrement8(I: Pointer): UInt8;
 asm
           MOV   DL, 1
-    LOCK  XADD  byte ptr [I], DL
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  XADD  byte ptr [RDI], DL
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  byte ptr [EAX], DL
+{$ENDIF}
           MOV   AL, DL
           INC   AL
 end;
@@ -1731,7 +1747,15 @@ end;
 Function InterlockedIncrement16(I: Pointer): UInt16;
 asm
           MOV   DX, 1
-    LOCK  XADD  word ptr [I], DX
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  word ptr [RCX], DX
+  {$ELSE}
+    LOCK  XADD  word ptr [RDI], DX
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  word ptr [EAX], DX
+{$ENDIF}
           MOV   AX, DX
           INC   AX
 end;
@@ -1741,7 +1765,15 @@ end;
 Function InterlockedIncrement32(I: Pointer): UInt32;
 asm
           MOV   EDX, 1
-    LOCK  XADD  dword ptr [I], EDX
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  XADD  dword ptr [RDI], EDX
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  dword ptr [EAX], EDX
+{$ENDIF}
           MOV   EAX, EDX
           INC   EAX
 end;
@@ -1755,7 +1787,11 @@ asm
 {$IFDEF x64}
 
           MOV   RDX, 1
-    LOCK  XADD  qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  XADD  qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  XADD  qword ptr [RDI], RDX
+  {$ENDIF}
           MOV   RAX, RDX
           INC   RAX
 
@@ -1882,7 +1918,15 @@ end;
 Function InterlockedDecrement8(I: Pointer): UInt8;
 asm
           MOV   DL, byte(-1)
-    LOCK  XADD  byte ptr [I], DL
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  XADD  byte ptr [RDI], DL
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  byte ptr [EAX], DL
+{$ENDIF}
           MOV   AL, DL
           DEC   AL
 end;
@@ -1892,7 +1936,15 @@ end;
 Function InterlockedDecrement16(I: Pointer): UInt16;
 asm
           MOV   DX, word(-1)
-    LOCK  XADD  word ptr [I], DX
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  word ptr [RCX], DX
+  {$ELSE}
+    LOCK  XADD  word ptr [RDI], DX
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  word ptr [EAX], DX
+{$ENDIF}
           MOV   AX, DX
           DEC   AX
 end;
@@ -1902,7 +1954,15 @@ end;
 Function InterlockedDecrement32(I: Pointer): UInt32;
 asm
           MOV   EDX, dword(-1)
-    LOCK  XADD  dword ptr [I], EDX
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  XADD  dword ptr [RDI], EDX
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  dword ptr [EAX], EDX
+{$ENDIF}
           MOV   EAX, EDX
           DEC   EAX
 end;
@@ -1916,7 +1976,11 @@ asm
 {$IFDEF x64}
 
           MOV   RDX, qword(-1)
-    LOCK  XADD  qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  XADD  qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  XADD  qword ptr [RDI], RDX
+  {$ENDIF}
           MOV   RAX, RDX
           DEC   RAX
 
@@ -2090,7 +2154,11 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
           MOV   DL, AL
 
           TEST  DL, DL
@@ -2100,7 +2168,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2135,7 +2207,11 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
           MOV   DL, AL
 
           CMP   DL, 0
@@ -2145,7 +2221,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2180,7 +2260,11 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [I]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
           MOV   DX, AX
 
           TEST  DX, DX
@@ -2190,7 +2274,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG word ptr [I], DX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], DX
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], DX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2225,7 +2313,11 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [I]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
           MOV   DX, AX
 
           CMP   DX, 0
@@ -2235,7 +2327,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG word ptr [I], DX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], DX
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], DX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2270,7 +2366,11 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [I]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
           MOV   EDX, EAX
 
           TEST  EDX, EDX
@@ -2280,7 +2380,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG dword ptr [I], EDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], EDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2315,7 +2419,11 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [I]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
           MOV   EDX, EAX
 
           CMP   EDX, 0
@@ -2325,7 +2433,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG dword ptr [I], EDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], EDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2362,7 +2474,11 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [I]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
           MOV   RDX, RAX
 
           TEST  RDX, RDX
@@ -2372,7 +2488,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], RDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2420,7 +2540,11 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [I]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
           MOV   RDX, RAX
 
           CMP   RDX, 0
@@ -2430,7 +2554,11 @@ asm
 
     @CompareEx:
 
-    LOCK  CMPXCHG qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], RDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2502,11 +2630,19 @@ end;
 Function InterlockedAdd8(A: Pointer; B: UInt8): UInt8;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AL, B
-    LOCK  XADD  byte ptr [A], AL
-          ADD   AL, B
+          MOV   AL, DL
+    LOCK  XADD  byte ptr [RCX], AL
+          ADD   AL, DL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AL, SIL
+    LOCK  XADD  byte ptr [RDI], AL
+          ADD   AL, SIL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           MOV   CL, DL
@@ -2522,11 +2658,19 @@ end;
 Function InterlockedAdd16(A: Pointer; B: UInt16): UInt16;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AX, B
-    LOCK  XADD  word ptr [A], AX
-          ADD   AX, B
+          MOV   AX, DX
+    LOCK  XADD  word ptr [RCX], AX
+          ADD   AX, DX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AX, SI
+    LOCK  XADD  word ptr [RDI], AX
+          ADD   AX, SI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           MOV   CX, DX
@@ -2542,11 +2686,19 @@ end;
 Function InterlockedAdd32(A: Pointer; B: UInt32): UInt32;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   EAX, B
-    LOCK  XADD  dword ptr [A], EAX
-          ADD   EAX, B
+          MOV   EAX, EDX
+    LOCK  XADD  dword ptr [RCX], EAX
+          ADD   EAX, EDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   EAX, ESI
+    LOCK  XADD  dword ptr [RDI], EAX
+          ADD   EAX, ESI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           MOV   ECX, EDX
@@ -2564,11 +2716,19 @@ end;
 Function InterlockedAdd64(A: Pointer; B: UInt64): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   RAX, B
-    LOCK  XADD  qword ptr [A], RAX
-          ADD   RAX, B
+          MOV   RAX, RDX
+    LOCK  XADD  qword ptr [RCX], RAX
+          ADD   RAX, RDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   RAX, RSI
+    LOCK  XADD  qword ptr [RDI], RAX
+          ADD   RAX, RSI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -2712,12 +2872,21 @@ end;
 Function InterlockedSub8(A: Pointer; B: UInt8): UInt8;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AL, B
+          MOV   AL, DL
           NEG   AL
-    LOCK  XADD  byte ptr [A], AL
-          SUB   AL, B
+    LOCK  XADD  byte ptr [RCX], AL
+          SUB   AL, DL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AL, SIL
+          NEG   AL
+    LOCK  XADD  byte ptr [RDI], AL
+          SUB   AL, SIL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           MOV   CL, DL
@@ -2734,12 +2903,21 @@ end;
 Function InterlockedSub16(A: Pointer; B: UInt16): UInt16;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AX, B
+          MOV   AX, DX
           NEG   AX
-    LOCK  XADD  word ptr [A], AX
-          SUB   AX, B
+    LOCK  XADD  word ptr [RCX], AX
+          SUB   AX, DX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AX, SI
+          NEG   AX
+    LOCK  XADD  word ptr [RDI], AX
+          SUB   AX, SI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           MOV   CX, DX
@@ -2756,12 +2934,21 @@ end;
 Function InterlockedSub32(A: Pointer; B: UInt32): UInt32;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   EAX, B
+          MOV   EAX, EDX
           NEG   EAX
-    LOCK  XADD  dword ptr [A], EAX
-          SUB   EAX, B
+    LOCK  XADD  dword ptr [RCX], EAX
+          SUB   EAX, EDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   EAX, ESI
+          NEG   EAX
+    LOCK  XADD  dword ptr [RDI], EAX
+          SUB   EAX, ESI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           MOV   ECX, EDX
@@ -2780,12 +2967,21 @@ end;
 Function InterlockedSub64(A: Pointer; B: UInt64): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   RAX, B
+          MOV   RAX, RDX
           NEG   RAX
-    LOCK  XADD  qword ptr [A], RAX
-          SUB   RAX, B
+    LOCK  XADD  qword ptr [RCX], RAX
+          SUB   RAX, RDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   RAX, RSI
+          NEG   RAX
+    LOCK  XADD  qword ptr [RDI], RAX
+          SUB   RAX, RSI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -2932,12 +3128,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   DL, AL
           NEG   DL
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -2971,12 +3175,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [I]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   DX, AX
           NEG   DX
 
-    LOCK  CMPXCHG word ptr [I], DX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], DX
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], DX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3010,12 +3222,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [I]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   EDX, EAX
           NEG   EDX
 
-    LOCK  CMPXCHG dword ptr [I], EDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], EDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3051,12 +3271,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [I]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   RDX, RAX
           NEG   RDX
 
-    LOCK  CMPXCHG qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], RDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3188,12 +3416,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   DL, AL
           NOT   DL
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3227,12 +3463,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [I]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   DX, AX
           NOT   DX
 
-    LOCK  CMPXCHG word ptr [I], DX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], DX
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], DX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3266,12 +3510,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [I]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   EDX, EAX
           NOT   EDX
 
-    LOCK  CMPXCHG dword ptr [I], EDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], EDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3307,12 +3559,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [I]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   RDX, RAX
           NOT   RDX
 
-    LOCK  CMPXCHG qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], RDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3372,13 +3632,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   DL, AL
           NOT   DL
           AND   DL, 1
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3492,12 +3760,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           AND   R8B, B
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3535,12 +3811,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [A]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   R8W, AX
           AND   R8W, B
 
-    LOCK  CMPXCHG word ptr [A], R8W
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], R8W
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], R8W
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3578,12 +3862,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [A]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8D, EAX
           AND   R8D, B
 
-    LOCK  CMPXCHG dword ptr [A], R8D
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], R8D
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], R8D
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3623,12 +3915,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [A]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8, RAX
           AND   R8, B
 
-    LOCK  CMPXCHG qword ptr [A], R8
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], R8
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], R8
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3688,13 +3988,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           AND   R8B, B
           AND   R8B, 1
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3812,12 +4120,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           OR    R8B, B
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3855,12 +4171,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [A]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   R8W, AX
           OR    R8W, B
 
-    LOCK  CMPXCHG word ptr [A], R8W
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], R8W
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], R8W
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3898,12 +4222,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [A]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8D, EAX
           OR    R8D, B
 
-    LOCK  CMPXCHG dword ptr [A], R8D
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], R8D
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], R8D
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -3943,12 +4275,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [A]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8, RAX
           OR    R8, B
 
-    LOCK  CMPXCHG qword ptr [A], R8
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], R8
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], R8
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4008,13 +4348,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           OR    R8B, B
           AND   R8B, 1
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4132,12 +4480,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
-          Xor    R8B, B
+          XOR   R8B, B
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4154,7 +4510,7 @@ asm
           MOV   AL, byte ptr [ECX]
 
           MOV   BL, AL
-          Xor    BL, DL
+          XOR   BL, DL
 
     LOCK  CMPXCHG byte ptr [ECX], BL
 
@@ -4175,12 +4531,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [A]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   R8W, AX
           XOR   R8W, B
 
-    LOCK  CMPXCHG word ptr [A], R8W
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], R8W
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], R8W
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4218,12 +4582,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [A]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8D, EAX
           XOR   R8D, B
 
-    LOCK  CMPXCHG dword ptr [A], R8D
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], R8D
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], R8D
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4263,12 +4635,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [A]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8, RAX
           XOR   R8, B
 
-    LOCK  CMPXCHG qword ptr [A], R8
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], R8
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], R8
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4328,13 +4708,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           XOR   R8B, B
           AND   R8B, 1
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4448,24 +4836,72 @@ end;
 
 Function InterlockedExchange8(A: Pointer; B: UInt8): UInt8;
 asm
-    LOCK  XCHG  byte ptr [A], B
-          MOV   AL, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XCHG  byte ptr [RCX], DL
+          MOV   AL, DL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  byte ptr [RDI], SIL
+          MOV   AL, SIL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  byte ptr [EAX], DL
+          MOV   AL, DL
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedExchange16(A: Pointer; B: UInt16): UInt16;
 asm
-    LOCK  XCHG  word ptr [A], B
-          MOV   AX, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XCHG  word ptr [RCX], DX
+          MOV   AX, DX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  word ptr [RDI], SI
+          MOV   AX, SI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  word ptr [EAX], DX
+          MOV   AX, DX
+          
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedExchange32(A: Pointer; B: UInt32): UInt32;
 asm
-    LOCK  XCHG  dword ptr [A], B
-          MOV   EAX, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XCHG  dword ptr [RCX], EDX
+          MOV   EAX, EDX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  dword ptr [RDI], ESI
+          MOV   EAX, ESI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  dword ptr [EAX], EDX
+          MOV   EAX, EDX
+          
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -4475,10 +4911,17 @@ end;
 Function InterlockedExchange64(A: Pointer; B: UInt64): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-    LOCK  XCHG  qword ptr [A], B
-          MOV   RAX, B
+    LOCK  XCHG  qword ptr [RCX], RDX
+          MOV   RAX, RDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  qword ptr [RDI], RSI
+          MOV   RAX, RSI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -4609,24 +5052,72 @@ end;
 
 Function InterlockedExchangeAdd8(A: Pointer; B: UInt8): UInt8;
 asm
-    LOCK  XADD  byte ptr [A], B
-          MOV   AL, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XADD  byte ptr [RCX], DL
+          MOV   AL, DL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XADD  byte ptr [RDI], SIL
+          MOV   AL, SIL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XADD  byte ptr [EAX], DL
+          MOV   AL, DL
+          
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedExchangeAdd16(A: Pointer; B: UInt16): UInt16;
 asm
-    LOCK  XADD  word ptr [A], B
-          MOV   AX, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XADD  word ptr [RCX], DX
+          MOV   AX, DX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XADD  word ptr [RDI], SI
+          MOV   AX, SI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XADD  word ptr [EAX], DX
+          MOV   AX, DX
+          
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedExchangeAdd32(A: Pointer; B: UInt32): UInt32;
 asm
-    LOCK  XADD  dword ptr [A], B
-          MOV   EAX, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XADD  dword ptr [RCX], EDX
+          MOV   EAX, EDX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XADD  dword ptr [RDI], ESI
+          MOV   EAX, ESI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XADD  dword ptr [EAX], EDX
+          MOV   EAX, EDX
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -4636,10 +5127,17 @@ end;
 Function InterlockedExchangeAdd64(A: Pointer; B: UInt64): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-    LOCK  XADD  qword ptr [A], B
-          MOV   RAX, B
+    LOCK  XADD  qword ptr [RCX], RDX
+          MOV   RAX, RDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XADD  qword ptr [RDI], RSI
+          MOV   RAX, RSI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -4779,27 +5277,80 @@ end;
 
 Function InterlockedExchangeSub8(A: Pointer; B: UInt8): UInt8;
 asm
-          NEG   B
-    LOCK  XADD  byte ptr [A], B
-          MOV   AL, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          NEG   DL
+    LOCK  XADD  byte ptr [RCX], DL
+          MOV   AL, DL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          NEG   SIL
+    LOCK  XADD  byte ptr [RDI], SIL
+          MOV   AL, SIL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          NEG   DL
+    LOCK  XADD  byte ptr [EAX], DL
+          MOV   AL, DL
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedExchangeSub16(A: Pointer; B: UInt16): UInt16;
 asm
-          NEG   B
-    LOCK  XADD  word ptr [A], B
-          MOV   AX, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          NEG   DX
+    LOCK  XADD  word ptr [RCX], DX
+          MOV   AX, DX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          NEG   SI
+    LOCK  XADD  word ptr [RDI], SI
+          MOV   AX, SI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          NEG   DX
+    LOCK  XADD  word ptr [EAX], DX
+          MOV   AX, DX
+          
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedExchangeSub32(A: Pointer; B: UInt32): UInt32;
 asm
-          NEG   B
-    LOCK  XADD  dword ptr [A], B
-          MOV   EAX, B
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          NEG   EDX
+    LOCK  XADD  dword ptr [RCX], EDX
+          MOV   EAX, EDX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          NEG   ESI
+    LOCK  XADD  dword ptr [RDI], ESI
+          MOV   EAX, ESI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          NEG   EDX
+    LOCK  XADD  dword ptr [EAX], EDX
+          MOV   EAX, EDX
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -4809,11 +5360,19 @@ end;
 Function InterlockedExchangeSub64(A: Pointer; B: UInt64): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          NEG   B
-    LOCK  XADD  qword ptr [A], B
-          MOV   RAX, B
+          NEG   RDX
+    LOCK  XADD  qword ptr [RCX], RDX
+          MOV   RAX, RDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          NEG   RSI
+    LOCK  XADD  qword ptr [RDI], RSI
+          MOV   RAX, RSI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -4957,12 +5516,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   DL, AL
           NEG   DL
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -4992,12 +5559,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [I]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   DX, AX
           NEG   DX
 
-    LOCK  CMPXCHG word ptr [I], DX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], DX
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], DX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5027,12 +5602,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [I]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   EDX, EAX
           NEG   EDX
 
-    LOCK  CMPXCHG dword ptr [I], EDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], EDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5064,12 +5647,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [I]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   RDX, RAX
           NEG   RDX
 
-    LOCK  CMPXCHG qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], RDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5196,12 +5787,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   DL, AL
           NOT   DL
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5231,12 +5830,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [I]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   DX, AX
           NOT   DX
 
-    LOCK  CMPXCHG word ptr [I], DX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], DX
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], DX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5266,12 +5873,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [I]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   EDX, EAX
           NOT   EDX
 
-    LOCK  CMPXCHG dword ptr [I], EDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], EDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5303,12 +5918,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [I]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   RDX, RAX
           NOT   RDX
 
-    LOCK  CMPXCHG qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], RDX
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5363,13 +5986,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   DL, AL
           NOT   DL
           AND   DL, 1
 
-    LOCK  CMPXCHG byte ptr [I], DL
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], DL
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5479,12 +6110,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           AND   R8B, B
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5518,12 +6157,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [A]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   R8W, AX
           AND   R8W, B
 
-    LOCK  CMPXCHG word ptr [A], R8W
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], R8W
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], R8W
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5557,12 +6204,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [A]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8D, EAX
           AND   R8D, B
 
-    LOCK  CMPXCHG dword ptr [A], R8D
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], R8D
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], R8D
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5598,12 +6253,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [A]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8, RAX
           AND   R8, B
 
-    LOCK  CMPXCHG qword ptr [A], R8
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], R8
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], R8
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5658,13 +6321,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           AND   R8B, B
           AND   R8B, 1
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5778,12 +6449,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           OR    R8B, B
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5817,12 +6496,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [A]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   R8W, AX
           OR    R8W, B
 
-    LOCK  CMPXCHG word ptr [A], R8W
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], R8W
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], R8W
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5856,12 +6543,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [A]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8D, EAX
           OR    R8D, B
 
-    LOCK  CMPXCHG dword ptr [A], R8D
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], R8D
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], R8D
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5897,12 +6592,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [A]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8, RAX
           OR    R8, B
 
-    LOCK  CMPXCHG qword ptr [A], R8
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], R8
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], R8
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -5957,13 +6660,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           OR    R8B, B
           AND   R8B, 1
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -6077,12 +6788,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           XOR   R8B, B
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -6116,12 +6835,20 @@ asm
 
     @TryOutStart:
 
-          MOV   AX, word ptr [A]
+  {$IFDEF Windows}
+          MOV   AX, word ptr [RCX]
+  {$ELSE}
+          MOV   AX, word ptr [RDI]
+  {$ENDIF}
 
           MOV   R8W, AX
           XOR   R8W, B
 
-    LOCK  CMPXCHG word ptr [A], R8W
+  {$IFDEF Windows}
+    LOCK  CMPXCHG word ptr [RCX], R8W
+  {$ELSE}
+    LOCK  CMPXCHG word ptr [RDI], R8W
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -6155,12 +6882,20 @@ asm
 
     @TryOutStart:
 
-          MOV   EAX, dword ptr [A]
+  {$IFDEF Windows}
+          MOV   EAX, dword ptr [RCX]
+  {$ELSE}
+          MOV   EAX, dword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8D, EAX
           XOR   R8D, B
 
-    LOCK  CMPXCHG dword ptr [A], R8D
+  {$IFDEF Windows}
+    LOCK  CMPXCHG dword ptr [RCX], R8D
+  {$ELSE}
+    LOCK  CMPXCHG dword ptr [RDI], R8D
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -6196,12 +6931,20 @@ asm
 
     @TryOutStart:
 
-          MOV   RAX, qword ptr [A]
+  {$IFDEF Windows}
+          MOV   RAX, qword ptr [RCX]
+  {$ELSE}
+          MOV   RAX, qword ptr [RDI]
+  {$ENDIF}
 
           MOV   R8, RAX
           XOR   R8, B
 
-    LOCK  CMPXCHG qword ptr [A], R8
+  {$IFDEF Windows}
+    LOCK  CMPXCHG qword ptr [RCX], R8
+  {$ELSE}
+    LOCK  CMPXCHG qword ptr [RDI], R8
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -6256,13 +6999,21 @@ asm
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [A]
+  {$IFDEF Windows}
+          MOV   AL, byte ptr [RCX]
+  {$ELSE}
+          MOV   AL, byte ptr [RDI]
+  {$ENDIF}
 
           MOV   R8B, AL
           XOR   R8B, B
           AND   R8B, 1
 
-    LOCK  CMPXCHG byte ptr [A], R8B
+  {$IFDEF Windows}
+    LOCK  CMPXCHG byte ptr [RCX], R8B
+  {$ELSE}
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+  {$ENDIF}
 
           JNZ   @TryOutStart
 
@@ -6423,7 +7174,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange8(@A,NewValue,Result) = Result;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6435,7 +7186,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange8(@A,UInt8(NewValue),UInt8(Result)) = UInt8(Result);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6447,7 +7198,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange16(@A,NewValue,Result) = Result;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6459,7 +7210,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange16(@A,UInt16(NewValue),UInt16(Result)) = UInt16(Result);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6471,7 +7222,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange32(@A,NewValue,Result) = Result;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6483,7 +7234,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange32(@A,UInt32(NewValue),UInt32(Result)) = UInt32(Result);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6497,7 +7248,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange64(@A,NewValue,Result) = Result;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6509,7 +7260,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange64(@A,UInt64(NewValue),UInt64(Result)) = UInt64(Result);
 end;
 
 {$ENDIF}
@@ -6523,7 +7274,13 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+{$IFDEF Ptr64}
+until Pointer(InterlockedCompareExchange64(@A,UInt64(NewValue),UInt64(Result))) = Result;
+{$ELSE}
+until Pointer(InterlockedCompareExchange32(@A,UInt32(NewValue),UInt32(Result))) = Result;
+{$ENDIF}
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6535,7 +7292,7 @@ begin
 repeat
   Result := A;
   NewValue := Op(Result,B);
-until InterlockedCompareExchange(A,NewValue,Result) = Result;
+until InterlockedCompareExchange8(@A,UInt8(NewValue),UInt8(Result)) = UInt8(Result);
 end;
 
 
@@ -6548,13 +7305,23 @@ end;
 Function InterlockedCompareExchange8(Destination: Pointer; Exchange,Comparand: UInt8; out Exchanged: Boolean): UInt8;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AL, Comparand
+          MOV   AL, R8B
 
-    LOCK  CMPXCHG byte ptr [Destination], Exchange
+    LOCK  CMPXCHG byte ptr [RCX], DL
 
-          SETZ  byte ptr [Exchanged]
+          SETZ  byte ptr [R9]
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AL, DL
+
+    LOCK  CMPXCHG byte ptr [RDI], SIL
+
+          SETZ  byte ptr [RCX]
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XCHG  EAX, ECX
@@ -6572,13 +7339,23 @@ end;
 Function InterlockedCompareExchange16(Destination: Pointer; Exchange,Comparand: UInt16; out Exchanged: Boolean): UInt16;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AX, Comparand
+          MOV   AX, R8W
 
-    LOCK  CMPXCHG word ptr [Destination], Exchange
+    LOCK  CMPXCHG word ptr [RCX], DX
 
-          SETZ  byte ptr [Exchanged]
+          SETZ  byte ptr [R9]
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AX, DX
+
+    LOCK  CMPXCHG word ptr [RDI], SI
+
+          SETZ  byte ptr [RCX]
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XCHG  EAX, ECX
@@ -6596,13 +7373,23 @@ end;
 Function InterlockedCompareExchange32(Destination: Pointer; Exchange,Comparand: UInt32; out Exchanged: Boolean): UInt32;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   EAX, Comparand
+          MOV   EAX, R8D
 
-    LOCK  CMPXCHG dword ptr [Destination], Exchange
+    LOCK  CMPXCHG dword ptr [RCX], EDX
 
-          SETZ  byte ptr [Exchanged]
+          SETZ  byte ptr [R9]
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   EAX, EDX
+
+    LOCK  CMPXCHG dword ptr [RDI], ESI
+
+          SETZ  byte ptr [RCX]
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XCHG  EAX, ECX
@@ -6622,13 +7409,23 @@ end;
 Function InterlockedCompareExchange64(Destination: Pointer; Exchange,Comparand: UInt64; out Exchanged: Boolean): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   RAX, Comparand
+          MOV   RAX, R8
 
-    LOCK  CMPXCHG qword ptr [Destination], Exchange
+    LOCK  CMPXCHG qword ptr [RCX], RDX
 
-          SETZ  byte ptr [Exchanged]
+          SETZ  byte ptr [R9]
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   RAX, RDX
+
+    LOCK  CMPXCHG qword ptr [RDI], RSI
+
+          SETZ  byte ptr [RCX]
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -6840,11 +7637,19 @@ end;
 Function InterlockedCompareExchange8(Destination: Pointer; Exchange,Comparand: UInt8): UInt8;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AL, Comparand
+          MOV   AL, R8B
 
-    LOCK  CMPXCHG byte ptr [Destination], Exchange
+    LOCK  CMPXCHG byte ptr [RCX], DL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AL, DL
+
+    LOCK  CMPXCHG byte ptr [RDI], SIL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XCHG  EAX, ECX
@@ -6859,11 +7664,19 @@ end;
 Function InterlockedCompareExchange16(Destination: Pointer; Exchange,Comparand: UInt16): UInt16;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   AX, Comparand
+          MOV   AX, R8W
 
-    LOCK  CMPXCHG word ptr [Destination], Exchange
+    LOCK  CMPXCHG word ptr [RCX], DX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   AX, DX
+
+    LOCK  CMPXCHG word ptr [RDI], SI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XCHG  EAX, ECX
@@ -6878,11 +7691,19 @@ end;
 Function InterlockedCompareExchange32(Destination: Pointer; Exchange,Comparand: UInt32): UInt32;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   EAX, Comparand
+          MOV   EAX, R8D
 
-    LOCK  CMPXCHG dword ptr [Destination], Exchange
+    LOCK  CMPXCHG dword ptr [RCX], EDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   EAX, EDX
+
+    LOCK  CMPXCHG dword ptr [RDI], ESI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XCHG  EAX, ECX
@@ -6899,11 +7720,19 @@ end;
 Function InterlockedCompareExchange64(Destination: Pointer; Exchange,Comparand: UInt64): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          MOV   RAX, Comparand
+          MOV   RAX, R8
 
-    LOCK  CMPXCHG qword ptr [Destination], Exchange
+    LOCK  CMPXCHG qword ptr [RCX], EDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          MOV   RAX, RDX
+
+    LOCK  CMPXCHG qword ptr [RDI], RSI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -7088,22 +7917,34 @@ end;
 Function InterlockedBitTest8(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
           XOR   AL, AL
-    LOCK  XADD  byte ptr [I], AL
+    LOCK  XADD  byte ptr [RCX], AL
 
-          AND   Bit, 7
-          BT    AX, Bit
+          AND   DX, 7
+          BT    AX, DX
 
           SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          XOR   AL, AL
+    LOCK  XADD  byte ptr [RDI], AL
+
+          AND   SI, 7
+          BT    AX, SI
+
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XOR   CL, CL
     LOCK  XADD  byte ptr [EAX], CL
 
-          AND   Bit, 7
-          BT    CX, Bit
+          AND   DX, 7
+          BT    CX, DX
 
           SETC  AL
 
@@ -7115,20 +7956,31 @@ end;
 Function InterlockedBitTest16(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
           XOR   AX, AX
-    LOCK  XADD  word ptr [I], AX
+    LOCK  XADD  word ptr [RCX], AX
 
-          BT    AX, Bit
+          BT    AX, DX
 
           SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          XOR   AX, AX
+    LOCK  XADD  word ptr [RDI], AX
+
+          BT    AX, SI
+
+          SETC  AL
+          
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XOR   CX, CX
     LOCK  XADD  word ptr [EAX], CX
 
-          BT    CX, Bit
+          BT    CX, DX
 
           SETC  AL
 
@@ -7140,20 +7992,31 @@ end;
 Function InterlockedBitTest32(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
           XOR   EAX, EAX
-    LOCK  XADD  dword ptr [I], EAX
+    LOCK  XADD  dword ptr [RCX], EAX
 
-          BT    EAX, Bit
+          BT    EAX, EDX
 
           SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          XOR   EAX, EAX
+    LOCK  XADD  dword ptr [RDI], EAX
+
+          BT    EAX, ESI
+
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           XOR   ECX, ECX
     LOCK  XADD  dword ptr [EAX], ECX
 
-          BT    ECX, Bit
+          BT    ECX, DX
 
           SETC  AL
 
@@ -7167,14 +8030,25 @@ end;
 Function InterlockedBitTest64(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
           XOR   RAX, RAX
-    LOCK  XADD  qword ptr [I], RAX
+    LOCK  XADD  qword ptr [RCX], RAX
 
-          BT    RAX, Bit
+          BT    RAX, RDX
 
           SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          XOR   RAX, RAX
+    LOCK  XADD  qword ptr [RDI], RAX
+
+          BT    RAX, RSI
+
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -7315,43 +8189,63 @@ end;
 Function InterlockedBitTestAndSet8(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          AND   Bit, 7
+          AND   DX, 7
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+          MOV   AL, byte ptr [RCX]
 
           MOV   R8B, AL
-          BTS   R8W, Bit
+          BTS   R8W, DX
 
-    LOCK  CMPXCHG byte ptr [I], R8B
+    LOCK  CMPXCHG byte ptr [RCX], R8B
 
           JNZ   @TryOutStart
 
-          BT    AX, Bit
-          SETC  AL    
+          BT    AX, DX
+          SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   SI, 7
+
+    @TryOutStart:
+
+          MOV   AL, byte ptr [RDI]
+
+          MOV   R8B, AL
+          BTS   R8W, SI
+
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+
+          JNZ   @TryOutStart
+
+          BT    AX, SI
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
 
           MOV   ECX, EAX
 
-          AND   Bit, 7
+          AND   DX, 7
 
     @TryOutStart:
 
           MOV   AL, byte ptr [ECX]
 
           MOV   BL, AL
-          BTS   BX, Bit
+          BTS   BX, DX
 
     LOCK  CMPXCHG byte ptr [ECX], BL
 
           JNZ   @TryOutStart
 
-          BT    AX, Bit
+          BT    AX, DX
           SETC  AL
 
           POP   EBX
@@ -7363,18 +8257,54 @@ end;
 
 Function InterlockedBitTestAndSet16(I: Pointer; Bit: Integer): Boolean;
 asm
-          AND   Bit, 15
-    LOCK  BTS   word ptr [I], Bit
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          AND   DX, 15
+    LOCK  BTS   word ptr [RCX], DX
           SETC  AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   SI, 15
+    LOCK  BTS   word ptr [RDI], SI
+          SETC  AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   DX, 15
+    LOCK  BTS   word ptr [EAX], DX
+          SETC  AL
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedBitTestAndSet32(I: Pointer; Bit: Integer): Boolean;
 asm
-          AND   Bit, 31
-    LOCK  BTS   dword ptr [I], Bit
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          AND   EDX, 31
+    LOCK  BTS   dword ptr [RCX], EDX
           SETC  AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   ESI, 31
+    LOCK  BTS   dword ptr [RDI], ESI
+          SETC  AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   EDX, 31
+    LOCK  BTS   dword ptr [EAX], EDX
+          SETC  AL
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -7384,11 +8314,19 @@ end;
 Function InterlockedBitTestAndSet64(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          AND   Bit, 63
-    LOCK  BTS   qword ptr [I], Bit
+          AND   RDX, 63
+    LOCK  BTS   qword ptr [RCX], RDX
           SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   RSI, 63
+    LOCK  BTS   qword ptr [RDI], RSI
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -7521,7 +8459,15 @@ end;
 
 Function InterlockedBitTestAndSetStr16(Str: Pointer; BitOffset: Int16): Boolean;
 asm
-    LOCK  BTS   word ptr [Str], BitOffset
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  BTS   word ptr [RCX], DX
+  {$ELSE}
+    LOCK  BTS   word ptr [RDI], SI
+  {$ENDIF}
+{$ELSE}
+    LOCK  BTS   word ptr [EAX], DX
+{$ENDIF}
           SETC  AL
 end;
 
@@ -7529,7 +8475,15 @@ end;
 
 Function InterlockedBitTestAndSetStr32(Str: Pointer; BitOffset: Int32): Boolean;
 asm
-    LOCK  BTS   dword ptr [Str], BitOffset
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  BTS   dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  BTS   dword ptr [RDI], ESI
+  {$ENDIF}
+{$ELSE}
+    LOCK  BTS   dword ptr [EAX], EDX
+{$ENDIF}
           SETC  AL
 end;
 
@@ -7539,7 +8493,11 @@ end;
 
 Function InterlockedBitTestAndSetStr64(Str: Pointer; BitOffset: Int64): Boolean;
 asm
-    LOCK  BTS   qword ptr [Str], BitOffset
+  {$IFDEF Windows}
+    LOCK  BTS   qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  BTS   qword ptr [RDI], RSI
+  {$ENDIF}
           SETC  AL
 end;
 
@@ -7576,43 +8534,63 @@ end;
 Function InterlockedBitTestAndReset8(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          AND   Bit, 7
+          AND   DX, 7
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+          MOV   AL, byte ptr [RCX]
 
           MOV   R8B, AL
-          BTR   R8W, Bit
+          BTR   R8W, DX
 
-    LOCK  CMPXCHG byte ptr [I], R8B
+    LOCK  CMPXCHG byte ptr [RCX], R8B
 
           JNZ   @TryOutStart
 
-          BT    AX, Bit
-          SETC  AL    
+          BT    AX, DX
+          SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   SI, 7
+
+    @TryOutStart:
+
+          MOV   AL, byte ptr [RDI]
+
+          MOV   R8B, AL
+          BTR   R8W, SI
+
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+
+          JNZ   @TryOutStart
+
+          BT    AX, SI
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
 
           MOV   ECX, EAX
 
-          AND   Bit, 7
+          AND   DX, 7
 
     @TryOutStart:
 
           MOV   AL, byte ptr [ECX]
 
           MOV   BL, AL
-          BTR   BX, Bit
+          BTR   BX, DX
 
     LOCK  CMPXCHG byte ptr [ECX], BL
 
           JNZ   @TryOutStart
 
-          BT    AX, Bit
+          BT    AX, DX
           SETC  AL
 
           POP   EBX
@@ -7624,18 +8602,54 @@ end;
 
 Function InterlockedBitTestAndReset16(I: Pointer; Bit: Integer): Boolean;
 asm
-          AND   Bit, 15
-    LOCK  BTR   word ptr [I], Bit
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          AND   DX, 15
+    LOCK  BTR   word ptr [RCX], DX
           SETC  AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   SI, 15
+    LOCK  BTR   word ptr [RDI], SI
+          SETC  AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   DX, 15
+    LOCK  BTR   word ptr [EAX], DX
+          SETC  AL
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedBitTestAndReset32(I: Pointer; Bit: Integer): Boolean;
 asm
-          AND   Bit, 31
-    LOCK  BTR   dword ptr [I], Bit
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          AND   EDX, 31
+    LOCK  BTR   dword ptr [RCX], EDX
           SETC  AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   ESI, 31
+    LOCK  BTR   dword ptr [RDI], ESI
+          SETC  AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   EDX, 31
+    LOCK  BTR   dword ptr [EAX], EDX
+          SETC  AL
+          
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -7645,11 +8659,19 @@ end;
 Function InterlockedBitTestAndReset64(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          AND   Bit, 63
-    LOCK  BTR   qword ptr [I], Bit
+          AND   RDX, 63
+    LOCK  BTR   qword ptr [RCX], RDX
           SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   RSI, 63
+    LOCK  BTR   qword ptr [RDI], RSI
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -7782,7 +8804,15 @@ end;
 
 Function InterlockedBitTestAndResetStr16(Str: Pointer; BitOffset: Int16): Boolean;
 asm
-    LOCK  BTR   word ptr [Str], BitOffset
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  BTR   word ptr [RCX], DX
+  {$ELSE}
+    LOCK  BTR   word ptr [RDI], SI
+  {$ENDIF}
+{$ELSE}
+    LOCK  BTR   word ptr [EAX], DX
+{$ENDIF}
           SETC  AL
 end;
 
@@ -7790,7 +8820,15 @@ end;
 
 Function InterlockedBitTestAndResetStr32(Str: Pointer; BitOffset: Int32): Boolean;
 asm
-    LOCK  BTR   dword ptr [Str], BitOffset
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  BTR   dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  BTR   dword ptr [RDI], ESI
+  {$ENDIF}
+{$ELSE}
+    LOCK  BTR   dword ptr [EAX], EDX
+{$ENDIF}
           SETC  AL
 end;
 
@@ -7800,7 +8838,11 @@ end;
 
 Function InterlockedBitTestAndResetStr64(Str: Pointer; BitOffset: Int64): Boolean;
 asm
-    LOCK  BTR   qword ptr [Str], BitOffset
+  {$IFDEF Windows}
+    LOCK  BTR   qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  BTR   qword ptr [RDI], RSI
+  {$ENDIF}
           SETC  AL
 end;
 
@@ -7838,43 +8880,63 @@ end;
 Function InterlockedBitTestAndComplement8(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          AND   Bit, 7
+          AND   DX, 7
 
     @TryOutStart:
 
-          MOV   AL, byte ptr [I]
+          MOV   AL, byte ptr [RCX]
 
           MOV   R8B, AL
-          BTC   R8W, Bit
+          BTC   R8W, DX
 
-    LOCK  CMPXCHG byte ptr [I], R8B
+    LOCK  CMPXCHG byte ptr [RCX], R8B
 
           JNZ   @TryOutStart
 
-          BT    AX, Bit
-          SETC  AL    
+          BT    AX, DX
+          SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   SI, 7
+
+    @TryOutStart:
+
+          MOV   AL, byte ptr [RDI]
+
+          MOV   R8B, AL
+          BTC   R8W, SI
+
+    LOCK  CMPXCHG byte ptr [RDI], R8B
+
+          JNZ   @TryOutStart
+
+          BT    AX, SI
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
 
           MOV   ECX, EAX
 
-          AND   Bit, 7
+          AND   DX, 7
 
     @TryOutStart:
 
           MOV   AL, byte ptr [ECX]
 
           MOV   BL, AL
-          BTC   BX, Bit
+          BTC   BX, DX
 
     LOCK  CMPXCHG byte ptr [ECX], BL
 
           JNZ   @TryOutStart
 
-          BT    AX, Bit
+          BT    AX, DX
           SETC  AL
 
           POP   EBX
@@ -7886,18 +8948,54 @@ end;
 
 Function InterlockedBitTestAndComplement16(I: Pointer; Bit: Integer): Boolean;
 asm
-          AND   Bit, 15
-    LOCK  BTC   word ptr [I], Bit
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          AND   DX, 15
+    LOCK  BTC   word ptr [RCX], DX
           SETC  AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   SI, 15
+    LOCK  BTC   word ptr [RDI], SI
+          SETC  AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   DX, 15
+    LOCK  BTC   word ptr [EAX], DX
+          SETC  AL
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedBitTestAndComplement32(I: Pointer; Bit: Integer): Boolean;
 asm
-          AND   Bit, 31
-    LOCK  BTC   dword ptr [I], Bit
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+          AND   EDX, 31
+    LOCK  BTC   dword ptr [RCX], EDX
           SETC  AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   ESI, 31
+    LOCK  BTC   dword ptr [RDI], ESI
+          SETC  AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   EDX, 31
+    LOCK  BTC   dword ptr [EAX], EDX
+          SETC  AL
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -7907,11 +9005,19 @@ end;
 Function InterlockedBitTestAndComplement64(I: Pointer; Bit: Integer): Boolean;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-          AND   Bit, 63
-    LOCK  BTC   qword ptr [I], Bit
+          AND   RDX, 63
+    LOCK  BTC   qword ptr [RCX], RDX
           SETC  AL
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          AND   RSI, 63
+    LOCK  BTC   qword ptr [RDI], RSI
+          SETC  AL
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX
@@ -8044,7 +9150,15 @@ end;
 
 Function InterlockedBitTestAndComplementStr16(Str: Pointer; BitOffset: Int16): Boolean;
 asm
-    LOCK  BTC   word ptr [Str], BitOffset
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  BTC   word ptr [RCX], DX
+  {$ELSE}
+    LOCK  BTC   word ptr [RDI], SI
+  {$ENDIF}
+{$ELSE}
+    LOCK  BTC   word ptr [EAX], DX
+{$ENDIF}
           SETC  AL
 end;
 
@@ -8052,7 +9166,15 @@ end;
 
 Function InterlockedBitTestAndComplementStr32(Str: Pointer; BitOffset: Int32): Boolean;
 asm
-    LOCK  BTC   dword ptr [Str], BitOffset
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  BTC   dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  BTC   dword ptr [RDI], ESI
+  {$ENDIF}
+{$ELSE}
+    LOCK  BTC   dword ptr [EAX], EDX
+{$ENDIF}
           SETC  AL
 end;
 
@@ -8062,7 +9184,11 @@ end;
 
 Function InterlockedBitTestAndComplementStr64(Str: Pointer; BitOffset: Int64): Boolean;
 asm
-    LOCK  BTC   qword ptr [Str], BitOffset
+  {$IFDEF Windows}
+    LOCK  BTC   qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  BTC   qword ptr [RDI], RSI
+  {$ENDIF}
           SETC  AL
 end;
 
@@ -8100,7 +9226,15 @@ end;
 Function InterlockedLoad8(I: Pointer): UInt8;
 asm
           XOR   DL, DL
-    LOCK  XADD  byte ptr [I], DL
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  byte ptr [RCX], DL
+  {$ELSE}
+    LOCK  XADD  byte ptr [RDI], DL
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  byte ptr [EAX], DL
+{$ENDIF}
           MOV   AL, DL
 end;
 
@@ -8109,7 +9243,15 @@ end;
 Function InterlockedLoad16(I: Pointer): UInt16;
 asm
           XOR   DX, DX
-    LOCK  XADD  word ptr [I], DX
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  word ptr [RCX], DX
+  {$ELSE}
+    LOCK  XADD  word ptr [RDI], DX
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  word ptr [EAX], DX
+{$ENDIF}
           MOV   AX, DX
 end;
 
@@ -8118,7 +9260,15 @@ end;
 Function InterlockedLoad32(I: Pointer): UInt32;
 asm
           XOR   EDX, EDX
-    LOCK  XADD  dword ptr [I], EDX
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  XADD  dword ptr [RCX], EDX
+  {$ELSE}
+    LOCK  XADD  dword ptr [RDI], EDX
+  {$ENDIF}
+{$ELSE}
+    LOCK  XADD  dword ptr [EAX], EDX
+{$ENDIF}
           MOV   EAX, EDX
 end;
 
@@ -8131,7 +9281,11 @@ asm
 {$IFDEF x64}
 
           XOR   RDX, RDX
-    LOCK  XADD  qword ptr [I], RDX
+  {$IFDEF Windows}
+    LOCK  XADD  qword ptr [RCX], RDX
+  {$ELSE}
+    LOCK  XADD  qword ptr [RDI], RDX
+  {$ENDIF}
           MOV   RAX, RDX
 
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -8264,24 +9418,72 @@ end;
 
 Function InterlockedStore8(I: Pointer; NewValue: UInt8): UInt8;
 asm
-    LOCK  XCHG  byte ptr [I], NewValue
-          MOV   AL, NewValue
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XCHG  byte ptr [RCX], DL
+          MOV   AL, DL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  byte ptr [RDI], SIL
+          MOV   AL, SIL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  byte ptr [EAX], DL
+          MOV   AL, DL
+          
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedStore16(I: Pointer; NewValue: UInt16): UInt16;
 asm
-    LOCK  XCHG  word ptr [I], NewValue
-          MOV   AX, NewValue
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XCHG  word ptr [RCX], DX
+          MOV   AX, DX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  word ptr [RDI], SI
+          MOV   AX, SI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  word ptr [EAX], DX
+          MOV   AX, DX
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function InterlockedStore32(I: Pointer; NewValue: UInt32): UInt32;
 asm
-    LOCK  XCHG  dword ptr [I], NewValue
-          MOV   EAX, NewValue
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    LOCK  XCHG  dword ptr [RCX], EDX
+          MOV   EAX, EDX
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  dword ptr [RDI], ESI
+          MOV   EAX, ESI
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  dword ptr [EAX], EDX
+          MOV   EAX, EDX
+
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -8291,10 +9493,17 @@ end;
 Function InterlockedStore64(I: Pointer; NewValue: UInt64): UInt64;
 asm
 {$IFDEF x64}
+  {$IFDEF Windows}
 
-    LOCK  XCHG  qword ptr [I], NewValue
-          MOV   RAX, NewValue
+    LOCK  XCHG  qword ptr [RCX], RDX
+          MOV   RAX, RDX
 
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    LOCK  XCHG  qword ptr [RDI], RSI
+          MOV   RAX, RSI
+
+  {$ENDIF}
 {$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
           PUSH  EBX

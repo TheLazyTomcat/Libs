@@ -12,9 +12,9 @@
     Some types (eg. integers of defined size) that are not guaranteed to be
     declared in all compilers.
 
-  version 1.1.1 (2023-08-11)
+  version 1.1.2 (2023-12-19)
 
-  Last change 2023-08-11
+  Last change 2023-12-19
 
   ©2015-2023 František Milt
 
@@ -63,9 +63,24 @@ const // the const is here for FPC (don't ask, it is... complicated)
 {$ELSE}
   {$MESSAGE FATAL 'Wrong size of type Extended'}
 {$IFEND}
-  NativeBool64  =  {$IFDEF Bool64_NotNative}False{$ELSE}True{$ENDIF};
-  NativeUInt64  =  {$IFDEF UInt64_NotNative}False{$ELSE}True{$ENDIF};
-  NativeFloat80 = {$IFDEF Float80_NotNative}False{$ELSE}True{$ENDIF};
+
+  NativeBool64  = {$IFDEF Bool64_NotNative}False{$ELSE}True{$ENDIF};
+  NativeBool64N = {$IFDEF Bool64_NotNative}0{$ELSE}1{$ENDIF};
+{$IFNDEF Bool64_NotNative}
+  NativeBool64E = True;
+{$ENDIF}
+
+  NativeUInt64  = {$IFDEF UInt64_NotNative}False{$ELSE}True{$ENDIF};
+  NativeUInt64N = {$IFDEF UInt64_NotNative}0{$ELSE}1{$ENDIF};
+{$IFNDEF UInt64_NotNative}
+  NativeUInt64E =  True;
+{$ENDIF}
+
+  NativeFloat80  = {$IFDEF Float80_NotNative}False{$ELSE}True{$ENDIF};
+  NativeFloat80N = {$IFDEF Float80_NotNative}0{$ELSE}1{$ENDIF};
+{$IFNDEF Float80_NotNative}
+  NativeFloat80E = True;
+{$ENDIF}
 
 type
 //== Bools =====================================================================
@@ -219,11 +234,13 @@ type
 
 //== Strings ===================================================================
 
+{$UNDEF DeclaringUnicodeString}
 {$IF not Declared(UnicodeChar)}
   UnicodeChar    = WideChar;
 {$IFEND}
 {$IF not Declared(UnicodeString)}
   UnicodeString  = WideString;
+  {$DEFINE DeclaringUnicodeString}
 {$IFEND}
   PUnicodeChar   = ^UnicodeChar;      PPUnicodeChar   = ^PUnicodeChar;
   PUnicodeString = ^UnicodeString;    PPUnicodeString = ^PUnicodeString;
@@ -264,6 +281,13 @@ type
 {$IFEND}
   PUTF32Char   = ^UTF32Char;          PPUTF32Char   = ^PUTF32Char;
   PUTF32String = ^UTF32String;        PPUTF32String = ^PUTF32String;
+
+const
+  UnicodeIsWide = {$IFDEF DeclaringUnicodeString}True{$ELSE}False{$ENDIF};
+  UnicodeIsWideN = {$IFDEF DeclaringUnicodeString}1{$ELSE}0{$ENDIF};
+{$IFDEF DeclaringUnicodeString}
+  UnicodeIsWideE = True;
+{$ENDIF}
 
 implementation
 

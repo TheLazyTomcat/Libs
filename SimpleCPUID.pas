@@ -16,7 +16,7 @@
 
   Version 1.3 (2023-04-23)
 
-  Last change 2023-04-23
+  Last change 2023-12-17
 
   ©2016-2023 František Milt
 
@@ -938,6 +938,7 @@ var
 begin
 If Find($00000000,Index) then
   begin
+    Str := '';
     SetLength(Str,12);
     StrOverlay := Pointer(PAnsiChar(Str));
     Move(fLeafs[Index].Data.EBX,StrOverlay^[0],4);
@@ -1436,6 +1437,7 @@ var
   i:          Integer;
   Index:      Integer;
 begin
+Str := '';
 // get brand string
 SetLength(Str,48);
 StrOverlay := Pointer(PAnsiChar(Str));

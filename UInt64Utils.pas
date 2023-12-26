@@ -14,7 +14,7 @@
 
   Version 1.0.3 (2023-02-21)
 
-  Last change 2023-02-21
+  Last change 2023-12-19
 
   ©2018-2023 František Milt
 
@@ -173,6 +173,7 @@ var
     ii:       Integer;
     CharVal:  Integer;
   begin
+    Res := '';
     SetLength(Res,Length(S1));
     Result := 0;
     For ii := Length(S1) downto 1 do

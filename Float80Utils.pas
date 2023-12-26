@@ -46,9 +46,9 @@
 
   Version 1.1 (2021-02-03)
 
-  Last change 2022-09-13
+  Last change 2023-12-19
 
-  ©2020-2022 František Milt
+  ©2020-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -81,14 +81,22 @@ unit Float80Utils;
   {$DEFINE PurePascal}
 {$ENDIF}
 
-{$IF not(defined(CPU386) or defined(CPUX86_64) or defined(CPUX64))}
-  {$DEFINE PurePascal}
-{$IFEND}
-
 {$IFDEF ENDIAN_BIG}
   // sadly, I have no way of developing for BE systems :(
   {$MESSAGE FATAL 'Big-endian architecture not supported'}
 {$ENDIF}
+
+{$IF defined(CPUX86_64) or defined(CPUX64)}
+  {$DEFINE x64}
+{$ELSEIF defined(CPU386)}
+  {$DEFINE x86}
+{$ELSE}
+  {$DEFINE PurePascal}
+{$IFEND}
+
+{$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
+  {$DEFINE Windows}
+{$IFEND}
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -236,7 +244,7 @@ const
   Returns true when a real x87 status register is used, false when operating
   on an emulated local implementation of status word.
 }
-Function EmulatedX87StatusWord: Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+Function EmulatedX87StatusWord: Boolean;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND}
 
 {
   GetX87StatusWord
@@ -1027,7 +1035,15 @@ procedure SetX87ControlWord(NewValue: UInt16);
 var
   Temp: UInt16;
 asm
-    MOV     word ptr [Temp], NewValue
+{$IFDEF x64}
+  {$IFDEF Windows}
+    MOV     word ptr [Temp], CX
+  {$ELSE}
+    MOV     word ptr [Temp], DI
+  {$ENDIF}
+{$ELSE}
+    MOV     word ptr [Temp], AX
+{$ENDIF}
     FLDCW   word ptr [Temp]
 end;
 {$ELSE}
@@ -1767,8 +1783,18 @@ end;
 
 procedure Float64ToFloat80(Float64Ptr,Float80Ptr: Pointer);{$IFNDEF PurePascal} register; assembler;
 asm
-    FLD     qword ptr [Float64Ptr]
-    FSTP    tbyte ptr [Float80Ptr]
+{$IFDEF x64}
+  {$IFDEF Windows}
+    FLD     qword ptr [RCX]
+    FSTP    tbyte ptr [RDX]
+  {$ELSE}
+    FLD     qword ptr [RDI]
+    FSTP    tbyte ptr [RSI]
+  {$ENDIF}
+{$ELSE}
+    FLD     qword ptr [EAX]
+    FSTP    tbyte ptr [EDX]
+{$ENDIF}
     FWAIT
 end;
 {$ELSE}
@@ -1877,8 +1903,18 @@ end;
 
 procedure Float80ToFloat64(Float80Ptr,Float64Ptr: Pointer); register;{$IFNDEF PurePascal} assembler;
 asm
-    FLD     tbyte ptr [Float80Ptr]       
-    FSTP    qword ptr [Float64Ptr]
+{$IFDEF x64}
+  {$IFDEF Windows}
+    FLD     tbyte ptr [RCX]
+    FSTP    qword ptr [RDX]
+  {$ELSE}
+    FLD     tbyte ptr [RDI]
+    FSTP    qword ptr [RSI]
+  {$ENDIF}
+{$ELSE}
+    FLD     tbyte ptr [EAX]
+    FSTP    qword ptr [EDX]
+{$ENDIF}
     FWAIT
 end;
 {$ELSE}

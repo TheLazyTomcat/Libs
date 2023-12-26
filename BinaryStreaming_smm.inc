@@ -9,9 +9,9 @@
 
   Binary streaming - streamer macro-methods template
 
-  Version 2.0 (2023-09-03)
+  Version 2.0.2 (2023-12-24)
 
-  Last change 2023-09-03
+  Last change 2023-12-24
 
   ©2015-2023 František Milt
 
