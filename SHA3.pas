@@ -123,7 +123,7 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2023-05-01
+  Last change 2023-12-28
 
   ©2015-2023 František Milt
 
@@ -782,10 +782,10 @@ type
 
 Function ClassByFunction(HashFunction: TKeccakFunction): TKeccakHashClass;
 
-Function CreateByFunction(HashFunction: TKeccakFunction): TKeccakHash;{$IFDEF CanInline} inline; {$ENDIF}
+Function CreateByFunction(HashFunction: TKeccakFunction): TKeccakHash;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 
 Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccakHash): TKeccakHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
-Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccak): TKeccakHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccak): TKeccakHash; overload;{$IF Defined(CanInline) and not Defined(FPC)} inline; {$IFEND}
 Function CreateFromByFunction(Keccak: TKeccak): TKeccakHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 {===============================================================================
@@ -1002,6 +1002,7 @@ end;
 
 Function TKeccakHash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,0);
 end;
 
@@ -1170,6 +1171,7 @@ var
 begin
 If HashSize > 0 then
   begin
+    Temp := nil;
     SetLength(Temp,HashSize);
     SqueezeTo(Temp[0],HashSize);
     SetHashBuffer(Temp);
@@ -1460,6 +1462,7 @@ var
   Temp: TKeccakVar;
   i:    Integer;  
 begin
+Temp := nil;
 SetLength(Temp,Length(Str) div 2);
 For i := Low(Temp) to High(Temp) do
   Temp[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
@@ -1500,6 +1503,7 @@ procedure TKeccakHash.LoadFromStream(Stream: TStream; Endianness: THashEndiannes
 var
   Temp: TKeccakVar;
 begin
+Temp := nil;
 SetLength(Temp,HashSize);
 If Length(Temp) > 0 then
   begin
@@ -1662,6 +1666,7 @@ end;
 
 Function TKeccak224Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fKeccak224,Result[0],HashSize);
 end;
@@ -1798,6 +1803,7 @@ end;
 
 Function TKeccak256Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fKeccak256,Result[0],HashSize);
 end;
@@ -1933,6 +1939,7 @@ end;
 
 Function TKeccak384Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fKeccak384,Result[0],HashSize);
 end;
@@ -2068,6 +2075,7 @@ end;
 
 Function TKeccak512Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fKeccak512,Result[0],HashSize);
 end;
@@ -2231,6 +2239,7 @@ end;
 
 Function TSHA3_224Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fSHA3_224,Result[0],HashSize);
 end;
@@ -2367,6 +2376,7 @@ end;
 
 Function TSHA3_256Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fSHA3_256,Result[0],HashSize);
 end;
@@ -2503,6 +2513,7 @@ end;
 
 Function TSHA3_384Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fSHA3_384,Result[0],HashSize);
 end;
@@ -2639,6 +2650,7 @@ end;
 
 Function TSHA3_512Hash.GetHashBuffer: TKeccakVar;
 begin
+Result := nil;
 SetLength(Result,HashSize);
 Move(fSHA3_512,Result[0],HashSize);
 end;

@@ -20,7 +20,7 @@
 
   Build against zlib version 1.2.13
 
-  Last change 2023-05-16
+  Last change 2023-12-27
 
   ©2017-2023 František Milt
 
@@ -1651,99 +1651,99 @@ end;
 // windows binaries
 {$IFDEF x64}
   {$IFDEF GZIP_Support}
-    {$LINK 'zlib_win64\gzclose.o'}
-    {$LINK 'zlib_win64\gzwrite.o'}
-    {$LINK 'zlib_win64\gzread.o'}
-    {$LINK 'zlib_win64\gzlib.o'}
+    {$LINK 'bin\zlib_win64\gzclose.o'}
+    {$LINK 'bin\zlib_win64\gzwrite.o'}
+    {$LINK 'bin\zlib_win64\gzread.o'}
+    {$LINK 'bin\zlib_win64\gzlib.o'}
   {$ENDIF GZIP_Support}
-    {$LINK 'zlib_win64\uncompr.o'}
-    {$LINK 'zlib_win64\compress.o'}
-    {$LINK 'zlib_win64\deflate.o'}
-    {$LINK 'zlib_win64\inflate.o'}
-    {$LINK 'zlib_win64\infback.o'}
-    {$LINK 'zlib_win64\inftrees.o'}
-    {$LINK 'zlib_win64\inffast.o'}
-    {$LINK 'zlib_win64\trees.o'}
-    {$LINK 'zlib_win64\crc32.o'}
-    {$LINK 'zlib_win64\adler32.o'}
-    {$LINK 'zlib_win64\zutil.o'}
+    {$LINK 'bin\zlib_win64\uncompr.o'}
+    {$LINK 'bin\zlib_win64\compress.o'}
+    {$LINK 'bin\zlib_win64\deflate.o'}
+    {$LINK 'bin\zlib_win64\inflate.o'}
+    {$LINK 'bin\zlib_win64\infback.o'}
+    {$LINK 'bin\zlib_win64\inftrees.o'}
+    {$LINK 'bin\zlib_win64\inffast.o'}
+    {$LINK 'bin\zlib_win64\trees.o'}
+    {$LINK 'bin\zlib_win64\crc32.o'}
+    {$LINK 'bin\zlib_win64\adler32.o'}
+    {$LINK 'bin\zlib_win64\zutil.o'}
 {$ELSE}
 {$IFDEF FPC}
   {$IFDEF GZIP_Support}
-    {$LINK 'zlib_win32\gzclose.o'}
-    {$LINK 'zlib_win32\gzwrite.o'}
-    {$LINK 'zlib_win32\gzread.o'}
-    {$LINK 'zlib_win32\gzlib.o'}
+    {$LINK 'bin\zlib_win32\gzclose.o'}
+    {$LINK 'bin\zlib_win32\gzwrite.o'}
+    {$LINK 'bin\zlib_win32\gzread.o'}
+    {$LINK 'bin\zlib_win32\gzlib.o'}
   {$ENDIF GZIP_Support}
-    {$LINK 'zlib_win32\uncompr.o'}
-    {$LINK 'zlib_win32\compress.o'}
-    {$LINK 'zlib_win32\deflate.o'}
-    {$LINK 'zlib_win32\inflate.o'}
-    {$LINK 'zlib_win32\infback.o'}
-    {$LINK 'zlib_win32\inftrees.o'}
-    {$LINK 'zlib_win32\inffast.o'}
-    {$LINK 'zlib_win32\trees.o'}
-    {$LINK 'zlib_win32\crc32.o'}
-    {$LINK 'zlib_win32\adler32.o'}
-    {$LINK 'zlib_win32\zutil.o'}
+    {$LINK 'bin\zlib_win32\uncompr.o'}
+    {$LINK 'bin\zlib_win32\compress.o'}
+    {$LINK 'bin\zlib_win32\deflate.o'}
+    {$LINK 'bin\zlib_win32\inflate.o'}
+    {$LINK 'bin\zlib_win32\infback.o'}
+    {$LINK 'bin\zlib_win32\inftrees.o'}
+    {$LINK 'bin\zlib_win32\inffast.o'}
+    {$LINK 'bin\zlib_win32\trees.o'}
+    {$LINK 'bin\zlib_win32\crc32.o'}
+    {$LINK 'bin\zlib_win32\adler32.o'}
+    {$LINK 'bin\zlib_win32\zutil.o'}
 {$ELSE}
   {$IFDEF GZIP_Support}
-    {$LINK 'zlib_win32\gzclose.obj'}
-    {$LINK 'zlib_win32\gzwrite.obj'}
-    {$LINK 'zlib_win32\gzread.obj'}
-    {$LINK 'zlib_win32\gzlib.obj'}
+    {$LINK 'bin\zlib_win32\gzclose.obj'}
+    {$LINK 'bin\zlib_win32\gzwrite.obj'}
+    {$LINK 'bin\zlib_win32\gzread.obj'}
+    {$LINK 'bin\zlib_win32\gzlib.obj'}
   {$ENDIF GZIP_Support}
-    {$LINK 'zlib_win32\uncompr.obj'}
-    {$LINK 'zlib_win32\compress.obj'}
-    {$LINK 'zlib_win32\deflate.obj'}
-    {$LINK 'zlib_win32\inflate.obj'}
-    {$LINK 'zlib_win32\infback.obj'}
-    {$LINK 'zlib_win32\inftrees.obj'}
-    {$LINK 'zlib_win32\inffast.obj'}
-    {$LINK 'zlib_win32\trees.obj'}
-    {$LINK 'zlib_win32\crc32.obj'}
-    {$LINK 'zlib_win32\adler32.obj'}
-    {$LINK 'zlib_win32\zutil.obj'}
+    {$LINK 'bin\zlib_win32\uncompr.obj'}
+    {$LINK 'bin\zlib_win32\compress.obj'}
+    {$LINK 'bin\zlib_win32\deflate.obj'}
+    {$LINK 'bin\zlib_win32\inflate.obj'}
+    {$LINK 'bin\zlib_win32\infback.obj'}
+    {$LINK 'bin\zlib_win32\inftrees.obj'}
+    {$LINK 'bin\zlib_win32\inffast.obj'}
+    {$LINK 'bin\zlib_win32\trees.obj'}
+    {$LINK 'bin\zlib_win32\crc32.obj'}
+    {$LINK 'bin\zlib_win32\adler32.obj'}
+    {$LINK 'bin\zlib_win32\zutil.obj'}
 {$ENDIF}
 {$ENDIF}
 {$ELSE}
 // linux binaries
 {$IFDEF x64}
   {$IFDEF GZIP_Support}
-    {$LINK 'zlib_lin64\gzclose.o'}
-    {$LINK 'zlib_lin64\gzwrite.o'}
-    {$LINK 'zlib_lin64\gzread.o'}
-    {$LINK 'zlib_lin64\gzlib.o'}
+    {$LINK 'bin\zlib_lin64\gzclose.o'}
+    {$LINK 'bin\zlib_lin64\gzwrite.o'}
+    {$LINK 'bin\zlib_lin64\gzread.o'}
+    {$LINK 'bin\zlib_lin64\gzlib.o'}
   {$ENDIF GZIP_Support}
-    {$LINK 'zlib_lin64\uncompr.o'}
-    {$LINK 'zlib_lin64\compress.o'}
-    {$LINK 'zlib_lin64\deflate.o'}
-    {$LINK 'zlib_lin64\inflate.o'}
-    {$LINK 'zlib_lin64\infback.o'}
-    {$LINK 'zlib_lin64\inftrees.o'}
-    {$LINK 'zlib_lin64\inffast.o'}
-    {$LINK 'zlib_lin64\trees.o'}
-    {$LINK 'zlib_lin64\crc32.o'}
-    {$LINK 'zlib_lin64\adler32.o'}
-    {$LINK 'zlib_lin64\zutil.o'}
+    {$LINK 'bin\zlib_lin64\uncompr.o'}
+    {$LINK 'bin\zlib_lin64\compress.o'}
+    {$LINK 'bin\zlib_lin64\deflate.o'}
+    {$LINK 'bin\zlib_lin64\inflate.o'}
+    {$LINK 'bin\zlib_lin64\infback.o'}
+    {$LINK 'bin\zlib_lin64\inftrees.o'}
+    {$LINK 'bin\zlib_lin64\inffast.o'}
+    {$LINK 'bin\zlib_lin64\trees.o'}
+    {$LINK 'bin\zlib_lin64\crc32.o'}
+    {$LINK 'bin\zlib_lin64\adler32.o'}
+    {$LINK 'bin\zlib_lin64\zutil.o'}
 {$ELSE}
   {$IFDEF GZIP_Support}
-    {$LINK 'zlib_lin32\gzclose.o'}
-    {$LINK 'zlib_lin32\gzwrite.o'}
-    {$LINK 'zlib_lin32\gzread.o'}
-    {$LINK 'zlib_lin32\gzlib.o'}
+    {$LINK 'bin\zlib_lin32\gzclose.o'}
+    {$LINK 'bin\zlib_lin32\gzwrite.o'}
+    {$LINK 'bin\zlib_lin32\gzread.o'}
+    {$LINK 'bin\zlib_lin32\gzlib.o'}
   {$ENDIF GZIP_Support}
-    {$LINK 'zlib_lin32\uncompr.o'}
-    {$LINK 'zlib_lin32\compress.o'}
-    {$LINK 'zlib_lin32\deflate.o'}
-    {$LINK 'zlib_lin32\inflate.o'}
-    {$LINK 'zlib_lin32\infback.o'}
-    {$LINK 'zlib_lin32\inftrees.o'}
-    {$LINK 'zlib_lin32\inffast.o'}
-    {$LINK 'zlib_lin32\trees.o'}
-    {$LINK 'zlib_lin32\crc32.o'}
-    {$LINK 'zlib_lin32\adler32.o'}
-    {$LINK 'zlib_lin32\zutil.o'}
+    {$LINK 'bin\zlib_lin32\uncompr.o'}
+    {$LINK 'bin\zlib_lin32\compress.o'}
+    {$LINK 'bin\zlib_lin32\deflate.o'}
+    {$LINK 'bin\zlib_lin32\inflate.o'}
+    {$LINK 'bin\zlib_lin32\infback.o'}
+    {$LINK 'bin\zlib_lin32\inftrees.o'}
+    {$LINK 'bin\zlib_lin32\inffast.o'}
+    {$LINK 'bin\zlib_lin32\trees.o'}
+    {$LINK 'bin\zlib_lin32\crc32.o'}
+    {$LINK 'bin\zlib_lin32\adler32.o'}
+    {$LINK 'bin\zlib_lin32\zutil.o'}
 {$ENDIF}
 {$ENDIF}
 

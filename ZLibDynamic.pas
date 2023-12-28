@@ -20,7 +20,7 @@
 
   Build against zlib version 1.2.13
 
-  Last change 2023-05-16
+  Last change 2023-12-27
 
   ©2017-2023 František Milt
 
@@ -317,7 +317,7 @@ Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryHandle,[
   Symbol(@@crc32_z             ,'crc32_z'),
   Symbol(@@crc32_combine       ,'crc32_combine'),
   Symbol(@@crc32_combine_gen   ,'crc32_combine_gen'),
-  Symbol(@@crc32_combine_op   ,'crc32_combine_op'),
+  Symbol(@@crc32_combine_op    ,'crc32_combine_op'),
   // macro
   Symbol(@@deflateInit_        ,'deflateInit_'),
   Symbol(@@inflateInit_        ,'inflateInit_'),

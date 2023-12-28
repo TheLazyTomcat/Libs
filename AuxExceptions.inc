@@ -15,7 +15,7 @@
 
   Version 1.1.2 (2023-01-20)
 
-  Last change 2023-01-20
+  Last change 2023-12-27
 
   ©2019-2023 František Milt
 
@@ -1977,6 +1977,7 @@ const
 var
   ModuleFileName: WideString;
 begin
+ModuleFileName := '';
 SetLength(ModuleFileName,UNICODE_STRING_MAX_CHARS);
 SetLength(ModuleFileName,GetModuleFileNameExW(GetCurrentProcess,hInstance,PWideChar(ModuleFileName),Length(ModuleFileName)));
 fModuleInfo.FileName := WideToStr(ModuleFileName);
@@ -2165,6 +2166,7 @@ If Assigned(DirStreamPtr) then
         If DirEntryPtr^.d_type = DT_DIR then
           begin
             TempStrLen := StrLen(DirEntryPtr^.d_name);
+            TempStr := '';
             SetLength(TempStr,TempStrLen);
             Move(DirEntryPtr^.d_name,PChar(TempStr)^,TempStrLen * SizeOf(Char));
             If TryStrToInt(TempStr,TempTID) then
@@ -2228,7 +2230,7 @@ InitProcessInfo;
 FillChar(fProcessInfo,SizeOf(TAEProcessInfo),0);
 {$ENDIF}
 // current module info
-{$IFDEF ExtendedExceptionProcess}
+{$IFDEF ExtendedExceptionModule}
 InitModuleInfo;
 {$ELSE}
 FillChar(fModuleInfo,SizeOf(TAECurrModuleInfo),0);
@@ -2488,6 +2490,7 @@ Result := '';
 Dimensions := VarArrayDimCount(Value);
 If Dimensions > 0 then
   begin
+    Indices := nil;
     SetLength(Indices,Dimensions);
     ConvertVarArrayDimension(Result,1);
   end;

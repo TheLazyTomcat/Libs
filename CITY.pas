@@ -651,7 +651,7 @@ end;
 
 class Function TCity32Hash.City32ToBE(City32: TCity32): TCity32;
 begin
-Result := TCity32(SwapEndian(TCity32Sys(City32)));
+Result := SwapEndian(City32);
 end;
 
 //------------------------------------------------------------------------------
@@ -665,7 +665,7 @@ end;
 
 class Function TCity32Hash.City32FromBE(City32: TCity32): TCity32;
 begin
-Result := TCity32(SwapEndian(TCity32Sys(City32)));
+Result := SwapEndian(City32);
 end;
 
 //------------------------------------------------------------------------------
@@ -925,7 +925,7 @@ end;
 
 class Function TCity64Hash.City64ToBE(City64: TCity64): TCity64;
 begin
-Result := TCity64(SwapEndian(TCity64Sys(City64)));
+Result := SwapEndian(City64);
 end;
 
 //------------------------------------------------------------------------------
@@ -939,7 +939,7 @@ end;
 
 class Function TCity64Hash.City64FromBE(City64: TCity64): TCity64;
 begin
-Result := TCity64(SwapEndian(TCity64Sys(City64)));
+Result := SwapEndian(City64);
 end;
 
 //------------------------------------------------------------------------------
@@ -1128,7 +1128,7 @@ end;
 
 class Function TCity128HashBase.City128ToBE(City128: TCity128): TCity128;
 begin
-Result := TCity128(SwapEndian(TCity128Sys(City128)));
+Result := SwapEndian(City128);
 end;
 
 //------------------------------------------------------------------------------
@@ -1142,7 +1142,7 @@ end;
 
 class Function TCity128HashBase.City128FromBE(City128: TCity128): TCity128;
 begin
-Result := TCity128(SwapEndian(TCity128Sys(City128)));
+Result := SwapEndian(City128);
 end;
 
 //------------------------------------------------------------------------------
@@ -1554,7 +1554,7 @@ end;
 
 class Function TCity256HashBase.City256ToBE(City256: TCity256): TCity256;
 begin
-Result := TCity256(SwapEndian(TCity256Sys(City256)));
+Result := SwapEndian(City256);
 end;
 
 //------------------------------------------------------------------------------
@@ -1568,7 +1568,7 @@ end;
 
 class Function TCity256HashBase.City256FromBE(City256: TCity256): TCity256;
 begin
-Result := TCity256(SwapEndian(TCity256Sys(City256)));
+Result := SwapEndian(City256);
 end;
 
 //------------------------------------------------------------------------------

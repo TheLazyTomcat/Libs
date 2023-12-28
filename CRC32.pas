@@ -30,7 +30,7 @@
 
   Version 1.7.3 (2023-04-14)
 
-  Last change 2023-04-14
+  Last change 2023-12-27
 
   ©2011-2023 František Milt
 
@@ -1822,6 +1822,7 @@ var
       TempObj.Free;
     end;
     // get data
+    Data := nil;
     SetLength(Data,(Length(CodeWord) - 8) div 2);
     For ii := Low(Data) to High(Data) do
       Data[ii] := StrToInt('$' + Copy(CodeWord,(ii * 2) + 1,2));

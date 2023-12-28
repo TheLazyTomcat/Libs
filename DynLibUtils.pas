@@ -18,7 +18,7 @@
 
   Version 1.3.1 (2023-10-18)
 
-  Last change 2023-10-18
+  Last change 2023-12-27
 
   ©2020-2023 František Milt
 
@@ -1434,6 +1434,7 @@ Function GetLibTrueFilePath(Handle: TDLULibraryHandle): String;
 var
   ModuleFileName: WideString;
 begin
+ModuleFileName := '';
 SetLength(ModuleFileName,UNICODE_STRING_MAX_CHARS);
 SetLength(ModuleFileName,GetModuleFileNameExW(GetCurrentProcess,Handle,
   PWideChar(ModuleFileName),Length(ModuleFileName)));

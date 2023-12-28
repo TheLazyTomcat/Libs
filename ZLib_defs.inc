@@ -59,7 +59,7 @@
   To enable/define this symbol in a project without changing this library,
   define project-wide symbol ZLib_CheckCompatibility_On.
 }
-{.$DEFINE CheckCompatibility}
+{$UNDEF CheckCompatibility}
 {$IFDEF ZLib_CheckCompatibility_On}
   {$DEFINE CheckCompatibility}
 {$ENDIF}

@@ -14,7 +14,7 @@
 
   Version 1.4.1 (2023-11-27)
 
-  Last change 2023-11-27
+  Last change 2023-12-27
 
   ©2015-2023 František Milt
 
@@ -342,7 +342,7 @@ const
 //==============================================================================
 // endianness correction
 
-Function EndCor(Value: UInt32): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function EndCor32(Value: UInt32): UInt32; {$IFDEF CanInline} inline;{$ENDIF}
 begin
 {$IFDEF ENDIAN_BIG}
 Result := EndianSwap(Value);
@@ -353,8 +353,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-{$IF SizeOf(NativeUInt) <> SizeOf(UInt32)}
-Function EndCor(Value: NativeUInt): NativeUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function EndCor(Value: NativeUInt): NativeUInt; {$IFDEF CanInline} inline;{$ENDIF}
 begin
 {$IFDEF ENDIAN_BIG}
 Result := EndianSwap(Value);
@@ -362,7 +361,6 @@ Result := EndianSwap(Value);
 Result := Value;
 {$ENDIF}
 end;
-{$IFEND}
 
 {===============================================================================
     TBitVector - class implementation
@@ -1816,7 +1814,7 @@ If fCount > 0 then
       begin
         If MovingPtr^ <> 0 then
           begin
-            Result := (i * 32) + BSF(EndCor(MovingPtr^));
+            Result := (i * 32) + BSF(EndCor32(MovingPtr^));
             Break{For i};
           end;
         Inc(MovingPtr);
@@ -1839,7 +1837,7 @@ If fCount > 0 then
       begin
         If MovingPtr^ <> $FFFFFFFF then
           begin
-            Result := (i * 32) + BSF(EndCor(not MovingPtr^));
+            Result := (i * 32) + BSF(EndCor32(not MovingPtr^));
             Break{For i};
           end;
         Inc(MovingPtr);
@@ -1863,7 +1861,7 @@ If fCount > 0 then
         Dec(MovingPtr);
         If MovingPtr^ <> 0 then
           begin
-            Result := fCount - (Succ(i) * 32) + BSR(EndCor(MovingPtr^));
+            Result := fCount - (Succ(i) * 32) + BSR(EndCor32(MovingPtr^));
             Break{For i};
           end;
       end;
@@ -1886,7 +1884,7 @@ If fCount > 0 then
         Dec(MovingPtr);
         If MovingPtr^ <> $FFFFFFFF then
           begin
-            Result := fCount - (Succ(i) * 32) + BSR(EndCor(not MovingPtr^));
+            Result := fCount - (Succ(i) * 32) + BSR(EndCor32(not MovingPtr^));
             Break{For i};
           end;
       end;

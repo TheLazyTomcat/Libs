@@ -13,7 +13,7 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2023-04-15
+  Last change 2023-12-27
 
   ©2016-2023 František Milt
 
@@ -96,24 +96,24 @@ type
     data manipulation functions - declaration
 ===============================================================================}
 
-Function EndianSwap(x: UInt32): UInt32; overload;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-Function EndianSwap(x: UInt64): UInt64; overload;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+Function EndianSwap(x: UInt32): UInt32; overload;
+Function EndianSwap(x: UInt64): UInt64; overload;
 
 procedure SWAP(var a,b: UInt64);
 
-Function PTR_ADVANCE(const Ptr: Pointer; Offset: PtrUInt): Pointer;{$IFDEF CanInline} inline;{$ENDIF}
+Function PTR_ADVANCE(const Ptr: Pointer; Offset: PtrUInt): Pointer;
 
-procedure PTR_ADVANCEVAR(var Ptr: Pointer; Offset: PtrUInt);{$IFDEF CanInline} inline;{$ENDIF}
+procedure PTR_ADVANCEVAR(var Ptr: Pointer; Offset: PtrUInt);
   
 {===============================================================================
     data loading functions - declaration
 ===============================================================================}
 
-Function UNALIGNED_LOAD32(Ptr: Pointer): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function UNALIGNED_LOAD32(Ptr: Pointer; Offset: PtrUInt): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function UNALIGNED_LOAD32(Ptr: Pointer): UInt32; overload;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND}
+Function UNALIGNED_LOAD32(Ptr: Pointer; Offset: PtrUInt): UInt32; overload;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND}
 
-Function UNALIGNED_LOAD64(Ptr: Pointer): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function UNALIGNED_LOAD64(Ptr: Pointer; Offset: PtrUInt): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function UNALIGNED_LOAD64(Ptr: Pointer): UInt64; overload;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND}
+Function UNALIGNED_LOAD64(Ptr: Pointer; Offset: PtrUInt): UInt64; overload;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND}
 
 Function uint32_in_expected_order(x: UInt32): UInt32;{$IFDEF CanInline} inline;{$ENDIF}
 Function uint64_in_expected_order(x: UInt64): UInt64;{$IFDEF CanInline} inline;{$ENDIF}
@@ -208,7 +208,7 @@ const
     CRC32 intrinsic - declaration
 ===============================================================================}
 
-Function _mm_crc32_u64(crc,v: UInt64): UInt64;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+Function _mm_crc32_u64(crc,v: UInt64): UInt64;
 
 {===============================================================================
     Unit implementation management - declaration

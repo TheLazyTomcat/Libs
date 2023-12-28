@@ -44,7 +44,7 @@
 
   Version 2.0.2 (2023-01-24)
 
-  Last change 2023-09-04
+  Last change 2023-12-27
 
   ©2017-2023 František Milt
 
@@ -2350,6 +2350,7 @@ var
 begin
 // preallocate result array
 Node := ObtainStageNode(Stage,False);
+Result := nil;
 If IncludeMaster then
   SetLength(Result,Node.SubStageLevel + 1)
 else

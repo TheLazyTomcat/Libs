@@ -11,9 +11,9 @@
 
   Version 1.2.3 (2020-07-13)
 
-  Last change 2020-09-13
+  Last change 2023-12-27
 
-  ©2018-2022 František Milt
+  ©2018-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -304,7 +304,7 @@ end;
 
 class Function TAdler32Hash.Adler32ToBE(Adler32: TAdler32): TAdler32;
 begin
-Result := TAdler32(SwapEndian(TAdler32Sys(Adler32)));
+Result := SwapEndian(Adler32);
 end;
 
 //------------------------------------------------------------------------------
@@ -318,7 +318,7 @@ end;
 
 class Function TAdler32Hash.Adler32FromBE(Adler32: TAdler32): TAdler32;
 begin
-Result := TAdler32(SwapEndian(TAdler32Sys(Adler32)));
+Result := SwapEndian(Adler32);
 end;
 
 //------------------------------------------------------------------------------

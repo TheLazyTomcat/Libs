@@ -17,9 +17,9 @@
 
   Version 1.1 (2022-05-23)
 
-  Last change 2022-09-24
+  Last change 2023-12-27
 
-  ©2019-2022 František Milt
+  ©2019-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1529,6 +1529,7 @@ Function ExpandString(const Str: WideString): String;
 var
   Temp: WideString;
 begin
+Temp := '';
 SetLength(Temp,ExpandEnvironmentStringsW(PWideChar(Str),nil,0));
 ExpandEnvironmentStringsW(PWideChar(Str),PWideChar(Temp),Length(Temp));
 Result := WideToStr(Copy(Temp,1,Length(Temp) - 1));
@@ -1541,6 +1542,7 @@ var
   Temp: WideString;
 begin
 Temp := StrToWide(Str);
+Result := '';
 SetLength(Result,UNICODE_STRING_MAX_CHARS);
 If PathUnExpandEnvStringsW(PWideChar(Temp),PWideChar(Result),Length(Result)) then
   SetLength(Result,WStrLen(Result))
@@ -1587,6 +1589,7 @@ If Strs.Count > 0 then
     For i := 0 to Pred(Strs.Count) do
       Len := Len + Length(StrToWide(Strs[i])) + 1;
     // preallocate result
+    Result := '';
     SetLength(Result,Len);
     FillChar(PWideChar(Result)^,Length(Result) * SizeOf(WideChar),0);
     // fill result
@@ -2396,6 +2399,7 @@ begin
 Result := False;
 SubKeys.Clear;
 i := 0;
+TempStr := '';
 SetLength(TempStr,255 + 1{terminating zero}); // limit for key name length
 while True do
   begin
@@ -2437,6 +2441,7 @@ begin
 // do not clear the list, this function is called recursively
 Result := False;
 i := 0;
+Buffer := '';
 SetLength(Buffer,255 + 1);
 while True do
   begin
@@ -2500,6 +2505,7 @@ begin
 Result := False;
 Values.Clear;
 i := 0;
+TempStr := '';
 SetLength(TempStr,16383 + 1); // limit for a value name length
 while True do
   begin
@@ -2743,6 +2749,7 @@ var
     begin
       Result := False;
       i := 0;
+      TempStr := '';
       SetLength(TempStr,16383 + 1);
       while True do
         begin
@@ -3153,6 +3160,7 @@ If CheckErrorCode(RegQueryValueExW(Key,PWideChar(StrToWide(ValueName)),nil,@RegV
   begin
     If TranslateValueType(RegValueType) = ValueType then
       begin
+        Str := '';
         If RegDataSize <= 0 then
           SetLength(Str,8 * 1024)
         else

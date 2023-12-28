@@ -13,7 +13,7 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2023-04-15
+  Last change 2023-12-27
 
   ©2016-2023 František Milt
 
@@ -77,7 +77,7 @@ Function CityHash64WithSeed(s: Pointer; len: TMemSize; seed: UInt64): UInt64;{$I
 
 // Hash function for a byte array.  For convenience, two seeds are also
 // hashed into the result.
-Function CityHash64WithSeeds(s: Pointer; len: TMemSize; seed0,seed1: UInt64): UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+Function CityHash64WithSeeds(s: Pointer; len: TMemSize; seed0,seed1: UInt64): UInt64;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND}
 
 // Hash function for a byte array.  For convenience, a 128-bit seed is also
 // hashed into the result.
