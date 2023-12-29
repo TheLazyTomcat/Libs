@@ -39,7 +39,7 @@
 
   Version 1.2 (2022-12-26)
 
-  Last change 2023-05-01
+  Last change 2023-12-29
 
   ©2016-2023 František Milt
 
@@ -86,16 +86,8 @@ unit WinSyncObjs;
   {$MODE ObjFPC}
   {$MODESWITCH DuplicateLocals+}
   {$MODESWITCH ClassicProcVars+}
-  {$INLINE ON}
-  {$DEFINE CanInline}
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
-{$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
-    {$DEFINE CanInline}
-  {$ELSE}
-    {$UNDEF CanInline}
-  {$IFEND}
 {$ENDIF}
 {$H+}
 
@@ -3794,6 +3786,7 @@ var
 begin
 If Length(Objects) > 0 then
   begin
+    Handles := nil;
     SetLength(Handles,Length(Objects));
     For i := Low(Objects) to High(Objects) do
       Handles[i] := Objects[i].Handle;
@@ -4291,6 +4284,7 @@ If Count > 0 then
         WaitInternals.FatalError := False;
         FillChar(WaitInternals.DebugInfo,SizeOf(TWSOManyWaitDebugInfo),0);
         // waiter parameters
+        WaiterParams.Handles := nil;
         SetLength(WaiterParams.Handles,Count);
         Move(Handles^,Addr(WaiterParams.Handles[Low(WaiterParams.Handles)])^,Count * SizeOf(THandle));
         WaiterParams.IndexBase := 0;
@@ -4342,6 +4336,7 @@ var
 begin
 If Length(Objects) > 0 then
   begin
+    Handles := nil;
     SetLength(Handles,Length(Objects));
     For i := Low(Objects) to High(Objects) do
       Handles[i] := Objects[i].Handle;
@@ -4503,6 +4498,7 @@ begin
 {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
 If (PtrUInt(Addr(Handles[Succ(Low(Handles))])) - PtrUInt(Addr(Handles[Low(Handles)]))) <> SizeOf(THandle) then
   raise EWSOException.Create('HandleArrayItemsStrideCheck: Unsupported implementation detail (open array items alignment).');
+TestArray := nil;
 SetLength(TestArray,2);
 If (PtrUInt(Addr(TestArray[Succ(Low(TestArray))])) - PtrUInt(Addr(TestArray[Low(TestArray)]))) <> SizeOf(THandle) then
   raise EWSOException.Create('HandleArrayItemsStrideCheck: Unsupported implementation detail (array items alignment).');

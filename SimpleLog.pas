@@ -20,9 +20,9 @@
 
   Version 1.4 (2020-11-24)
 
-  Last change 2022-09-13
+  Last change 2023-12-28
 
-  ©2012-2022 František Milt
+  ©2012-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -296,6 +296,13 @@ uses
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+  {$PUSH}{$WARN 2005 OFF}           // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
 {$ENDIF}
 
 {===============================================================================
@@ -358,6 +365,7 @@ threadvar
 
 //==============================================================================
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function SLCB_WriteConsole(Handle: THandle; Ptr: Pointer; CharsToWrite: TStrSize; out CharsWritten: TStrSize): Boolean;
 {$IFDEF Windows}
 var
@@ -375,9 +383,11 @@ CharsWritten := TStrSize(fpWrite(cInt(Handle),Ptr^,TSize(CharsToWrite)));
 Result := CharsWritten >= 0;
 end;
 {$ENDIF}
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function SLCB_ReadConsole(Handle: THandle; Ptr: Pointer; CharsToRead: TStrSize; out CharsRead: TStrSize): Boolean;
 {$IFDEF Windows}
 var
@@ -395,6 +405,7 @@ CharsRead := TStrSize(fpRead(cInt(Handle),Ptr^,TSize(CharsToRead)));
 Result := CharsRead >= 0;
 end;
 {$ENDIF}
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //==============================================================================
 
@@ -413,6 +424,7 @@ var
   WideText:     WideString;
 {$IFEND}
 begin
+ConsoleText := '';
 SetLength(ConsoleText,F.BufPos);
 Move(F.Buffer,PAnsiChar(ConsoleText)^,F.BufPos);
 {$IF Defined(Unicode) and Defined(Windows)}
@@ -478,6 +490,7 @@ If SLCB_ReadConsole(F.Handle,PWideChar(WideText),Length(WideText),CharsRead) the
 begin
 If SLCB_ReadConsole(F.Handle,F.BufPtr,F.BufSize,CharsRead) then
   begin
+    ConsoleText := '';
     SetLength(ConsoleText,CharsRead);
     Move(F.Buffer,PAnsiChar(ConsoleText)^,CharsRead);
     TSimpleLog(Addr(F.UserData[SLCB_USERDATAINDEX_OBJECT])^).ProcessConsoleLog(CslToStr(ConsoleText));
@@ -835,6 +848,7 @@ If Length(Str) > 0 then
           Inc(ResLen);
         Inc(StrPos);
       end;
+    Result := '';
     SetLength(Result,ResLen); // preallocation
     // construct the result
     StrPos := 1;

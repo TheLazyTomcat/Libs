@@ -32,7 +32,7 @@
 
   Version 2.0 (2022-10-24)
 
-  Last change 2023-05-01
+  Last change 2023-12-29
 
   ©2015-2023 František Milt
 
@@ -990,6 +990,7 @@ case MessageCode of
       end;
   WMC_MSG_TRANS_END_STRING:
     begin
+      TempStr := '';
       SetLength(TempStr,DataSize);
       Move(DataPtr^,PUTF8Char(TempStr)^,DataSize);
       Value.ValueType := mvtString;
@@ -1146,6 +1147,7 @@ Function TWinMsgComm.ProcessMessage(Sender: TWMCConnectionID; MessageCode: TWMCM
     TempValue:  TWMCValue;
     TempStr:    UTF8String;
   begin
+    TempStr := '';
     SetLength(TempStr,Len);
     Move(Payload,PUTF8Char(TempStr)^,Len);
     TempValue.UserData := UserData;

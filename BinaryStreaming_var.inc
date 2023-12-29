@@ -11,7 +11,7 @@
 
   Version 2.0.2 (2023-12-24)
 
-  Last change 2023-12-24
+  Last change 2023-12-29
 
   ©2015-2023 František Milt
 
@@ -160,6 +160,7 @@ var
         Indices[Pred(Dimension)] := Index;
         If Dimension >= Dimensions then
           begin
+            TempVar := Null;
             Inc(Result,{$IFDEF BS_INC_M}{$IFDEF BS_INC_L}Ptr_ReadVariant_LE{$ELSE}Ptr_ReadVariant_BE{$ENDIF}(Ptr{$ELSE}{$IFDEF BS_INC_L}Stream_ReadVariant_LE{$ELSE}Stream_ReadVariant_BE{$ENDIF}(Stream{$ENDIF},TempVar,True));
             VarArrayPut(Value,TempVar,Indices);
           end

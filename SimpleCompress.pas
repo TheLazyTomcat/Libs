@@ -14,9 +14,9 @@
 
   Version 1.4.1 (2021-12-12)
 
-  Last change 2022-09-24
+  Last change 2023-12-29
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -52,14 +52,6 @@ unit SimpleCompress;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$INLINE ON}
-  {$DEFINE CanInline}
-{$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
-    {$DEFINE CanInline}
-  {$ELSE}
-    {$UNDEF CanInline}
-  {$IFEND}
 {$ENDIF}
 {$H+}
 
@@ -86,9 +78,9 @@ uses
   Sender in callbacks is of type TZCompressionBuffer and user data are stored in
   its UserPtrData property.
 }
-Function ZCompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZCompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
 {
   ZCompressStream
@@ -106,9 +98,9 @@ Function ZCompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer
   Sender in callbacks is of type TZCompressionStream and user data are stored in
   its UserPtrData property.
 }
-Function ZCompressStream(InStream, OutStream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressStream(InStream, OutStream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressStream(InStream, OutStream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZCompressStream(InStream, OutStream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressStream(InStream, OutStream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressStream(InStream, OutStream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
 {
   ZCompressStream
@@ -127,9 +119,9 @@ Function ZCompressStream(InStream, OutStream: TStream; ProgressCallback: TFloatC
   Sender in callbacks is of type TZCompressionStream and user data are stored in
   its UserPtrData property.
 }
-Function ZCompressStream(Stream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressStream(Stream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressStream(Stream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZCompressStream(Stream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressStream(Stream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressStream(Stream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
 {
   ZCompressFile
@@ -141,9 +133,9 @@ Function ZCompressStream(Stream: TStream; ProgressCallback: TFloatCallback; User
   Sender in callbacks is of type TZCompressionStream and user data are stored in
   its UserPtrData property.
 }
-Function ZCompressFile(const InFileName, OutFileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressFile(const InFileName, OutFileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressFile(const InFileName, OutFileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZCompressFile(const InFileName, OutFileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressFile(const InFileName, OutFileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressFile(const InFileName, OutFileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
 {
   ZCompressFile
@@ -160,9 +152,9 @@ Function ZCompressFile(const InFileName, OutFileName: String; ProgressCallback: 
   Sender in callbacks is of type TZCompressionStream and user data are stored in
   its UserPtrData property.
 }
-Function ZCompressFile(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressFile(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressFile(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZCompressFile(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressFile(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressFile(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
 {
   Compresses selected file to a temporary file (in the same folder), then
@@ -172,9 +164,9 @@ Function ZCompressFile(const FileName: String; ProgressCallback: TFloatCallback;
   Sender in callbacks is of type TZCompressionStream and user data are stored in
   its UserPtrData property.
 }
-Function ZCompressFileTemp(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressFileTemp(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZCompressFileTemp(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZCompressFileTemp(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressFileTemp(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZCompressFileTemp(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -185,29 +177,29 @@ Function ZCompressFileTemp(const FileName: String; ProgressCallback: TFloatCallb
   Decompression functions work exactly the same as their respective compression
   counterparts - so refer to them for details.
 }
-Function ZDecompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZDecompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressBuffer(InBuff: Pointer; InSize: TMemSize; out OutBuff: Pointer; out OutSize: TMemSize; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
-Function ZDecompressStream(InStream, OutStream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressStream(InStream, OutStream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressStream(InStream, OutStream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZDecompressStream(InStream, OutStream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressStream(InStream, OutStream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressStream(InStream, OutStream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
-Function ZDecompressStream(Stream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressStream(Stream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressStream(Stream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZDecompressStream(Stream: TStream; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressStream(Stream: TStream; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressStream(Stream: TStream; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
-Function ZDecompressFile(const InFileName, OutFileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressFile(const InFileName, OutFileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressFile(const InFileName, OutFileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZDecompressFile(const InFileName, OutFileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressFile(const InFileName, OutFileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressFile(const InFileName, OutFileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
-Function ZDecompressFile(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressFile(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressFile(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZDecompressFile(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressFile(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressFile(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
-Function ZDecompressFileTemp(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressFileTemp(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
-Function ZDecompressFileTemp(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;{$IF Defined(FPC) and Defined(CanInline)} inline; {$IfEND}
+Function ZDecompressFileTemp(const FileName: String; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressFileTemp(const FileName: String; ProgressEvent: TFloatEvent; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
+Function ZDecompressFileTemp(const FileName: String; ProgressCallback: TFloatCallback; UserData: Pointer = nil; StreamType: TZStreamType = zstDefault): Boolean; overload;
 
 implementation
 

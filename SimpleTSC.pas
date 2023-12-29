@@ -93,7 +93,7 @@
 
   Version 1.1.1 (2023-11-05)
 
-  Last change (2023-11-05)
+  Last change 2023-12-28
 
   ©2023 František Milt
 
@@ -887,6 +887,7 @@ end;
 
 procedure STSC_Start(out Measurement: TSTSCMeasurement; TimePointCount: Integer = 0);
 begin
+Measurement.TimePoints := nil;
 SetLength(Measurement.TimePoints,0);
 FillChar(Measurement,SizeOf(TSTSCMeasurement),0);
 If TimePointCount >= 0 then

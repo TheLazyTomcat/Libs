@@ -36,7 +36,7 @@
 
   Version 1.1 (2023-01-13)
 
-  Last change 2023-05-01
+  Last change 2023-12-29
 
   ©2022-2023 František Milt
 
@@ -847,7 +847,7 @@ procedure InitializeBlock(out Block: TMD6ProcessingBlock; Rounds: Integer; Key: 
 var
   i:  Integer;
 begin
-SetLength(Block,0);
+Block := nil;
 SetLength(Block,MD6_BLOCK_LEN + (Rounds * MD6_CHUNK_LEN));
 For i := Low(MD6_VEC_Q) to High(MD6_VEC_Q) do
   Block[i] := MD6_VEC_Q[i];
@@ -1439,6 +1439,7 @@ var
 begin
 If (Length(Str) >= 2) and (Length(Str) <= (MD6_BITS_MAX div 4)) then
   begin
+    Temp := nil;
     SetLength(Temp,Length(Str) div 2);
     For i := Low(Temp) to High(Temp) do
       Temp[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
@@ -1480,6 +1481,7 @@ procedure TMD6Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness =
 var
   Temp: TMD6;
 begin
+Temp := nil;
 SetLength(Temp,Length(fMD6));
 If Length(Temp) > 0 then
   begin
@@ -1501,6 +1503,7 @@ procedure TMD6Hash.SetKey(const Key; Size: TMemSize);
 var
   TempKey:  TMD6Key;
 begin
+TempKey := nil;
 If Size <= MD6_KEY_MAXLEN then
   SetLength(TempKey,Size)
 else
@@ -2408,6 +2411,7 @@ var
   var
     ii: Integer;
   begin
+    Level.Nodes := nil;
     SetLength(Level.Nodes,Ceil(SubNodeCount / IfThen(Sequential,3,4)));
     For ii := Low(Level.Nodes) to High(Level.Nodes) do
       with Level.Nodes[ii] do
@@ -2673,6 +2677,7 @@ procedure TMD6HashParallel.SetKey(const Key; Size: TMemSize);
 var
   TempKey:  TMD6Key;
 begin
+TempKey := nil;
 If Size <= MD6_KEY_MAXLEN then
   SetLength(TempKey,Size)
 else
@@ -2814,6 +2819,7 @@ end;
 
 Function MD6_224ToMD6(Hash: TMD6_224): TMD6;
 begin
+Result := nil;
 SetLength(Result,SizeOf(Hash));
 Move(Hash,Result[0],SizeOf(Hash));
 end;
@@ -2822,6 +2828,7 @@ end;
 
 Function MD6_256ToMD6(Hash: TMD6_256): TMD6;
 begin
+Result := nil;
 SetLength(Result,SizeOf(Hash));
 Move(Hash,Result[0],SizeOf(Hash));
 end;
@@ -2830,6 +2837,7 @@ end;
 
 Function MD6_384ToMD6(Hash: TMD6_384): TMD6;
 begin
+Result := nil;
 SetLength(Result,SizeOf(Hash));
 Move(Hash,Result[0],SizeOf(Hash));
 end;
@@ -2838,6 +2846,7 @@ end;
 
 Function MD6_512ToMD6(Hash: TMD6_512): TMD6;
 begin
+Result := nil;
 SetLength(Result,SizeOf(Hash));
 Move(Hash,Result[0],SizeOf(Hash));
 end;
@@ -3289,7 +3298,7 @@ If Assigned(Context) then
   begin
     TMD6Hash(Context).Final;
     Result := TMD6Hash(Context).MD6;
-    Context := nil;
+    FreeAndNil(TMD6Hash(Context));
   end
 else raise EMD6InvalidState.Create('MD6_Final: MD6 context not initialized.');
 end;

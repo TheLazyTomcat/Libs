@@ -31,7 +31,7 @@
 
   Version 1.1.4 (2023-04-15)
 
-  Last change 2023-04-15
+  Last change 2023-12-29
 
   ©2017-2023 František Milt
 
@@ -260,14 +260,14 @@ const
 
   Returns current value of MXCSR register.
 }
-Function GetMXCSR: UInt32;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+Function GetMXCSR: UInt32;
 
 {
   SetMXCSR
 
   Sets MXCSR register to a passed value.
 }
-procedure SetMXCSR(NewValue: UInt32);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+procedure SetMXCSR(NewValue: UInt32);
 
 {
   EmulatedMXCSR
@@ -275,7 +275,7 @@ procedure SetMXCSR(NewValue: UInt32);{$IF Defined(CanInline) and Defined(FPC)} i
   Returns false when a real MXCSR register is used, true when operating on an
   emulated local implementation.
 }
-Function EmulatedMXCSR: Boolean;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+Function EmulatedMXCSR: Boolean;
 
 {
   Sets MXCSR register to $00001900 - denormal, underflow and precision
@@ -301,7 +301,7 @@ procedure InitMXCSR;{$IFDEF CanInline} inline;{$ENDIF}
   This value is only informative, the masking is done automatically in calls to
   functions GetMXCSR and SetMXCSR.
 }
-Function GetMXCSRMask: UInt32;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+Function GetMXCSRMask: UInt32;
 
 {
   GetMXCSRSupportsDAZ
@@ -310,7 +310,7 @@ Function GetMXCSRMask: UInt32;{$IF Defined(CanInline) and Defined(FPC)} inline;{
   supported by the used implementation of MXCSR (be it true SSE register or
   an emulation). False when not supported.
 }
-Function GetMXCSRSupportsDAZ: Boolean;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+Function GetMXCSRSupportsDAZ: Boolean;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
     Abstracted access
@@ -469,7 +469,7 @@ procedure SetSSEFlags(NewValue: TSSEFlags);
 
   Clears (sets to 0) lower 6 bits of MXCSR - that is, all exception flag bits.
 }
-procedure ClearSSEExceptions;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ClearSSEExceptions;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND}
 
 {
   RaiseSSEExceptions(MXCSR)
@@ -532,28 +532,28 @@ Function MapWordToHalf(Value: UInt16): Half;{$IFDEF CanInline} inline;{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-procedure Float16ToFloat32(Float16Ptr,Float32Ptr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
-procedure HalfToSingle(HalfPtr,SinglePtr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
+procedure Float16ToFloat32(Float16Ptr,Float32Ptr: Pointer); overload;
+procedure HalfToSingle(HalfPtr,SinglePtr: Pointer); overload;
 
-procedure Float32ToFloat16(Float32Ptr,Float16Ptr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
-procedure SingleToHalf(SinglePtr,HalfPtr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
+procedure Float32ToFloat16(Float32Ptr,Float16Ptr: Pointer); overload;
+procedure SingleToHalf(SinglePtr,HalfPtr: Pointer); overload;
 
-Function Float16ToFloat32(Value: Float16): Float32;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
-Function HalfToSingle(Value: Half): Single;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
+Function Float16ToFloat32(Value: Float16): Float32; overload;
+Function HalfToSingle(Value: Half): Single; overload;
 
-Function Float32ToFloat16(Value: Float32): Float16;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
-Function SingleToHalf(Value: Single): Half;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND} overload;
+Function Float32ToFloat16(Value: Float32): Float16; overload;
+Function SingleToHalf(Value: Single): Half; overload;
 
 //------------------------------------------------------------------------------
 {
   Following functions are expecting pointers to packed vector of four singles
   (SinglePtr, Float32Ptr) and packed vector of four halfs (HalfPtr, Float16Ptr).
 }
-procedure Float16ToFloat32Vec4(Float16Ptr,Float32Ptr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-procedure HalfToSingleVec4(HalfPtr,SinglePtr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+procedure Float16ToFloat32Vec4(Float16Ptr,Float32Ptr: Pointer);
+procedure HalfToSingleVec4(HalfPtr,SinglePtr: Pointer);
 
-procedure Float32ToFloat16Vec4(Float32Ptr,Float16Ptr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-procedure SingleToHalfVec4(SinglePtr,HalfPtr: Pointer);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+procedure Float32ToFloat16Vec4(Float32Ptr,Float16Ptr: Pointer);
+procedure SingleToHalfVec4(SinglePtr,HalfPtr: Pointer);
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -567,11 +567,11 @@ procedure SingleToHalfVec4(SinglePtr,HalfPtr: Pointer);{$IF Defined(CanInline) a
     Number information - number class
 -------------------------------------------------------------------------------}
 
-Function IsZero(const Value: Half): Boolean;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-Function IsDenormal(const Value: Half): Boolean;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-Function IsNaN(const Value: Half): Boolean;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-Function IsInfinite(const Value: Half): Boolean;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-Function IsNormal(const Value: Half): Boolean;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}  // returns false on zero
+Function IsZero(const Value: Half): Boolean;
+Function IsDenormal(const Value: Half): Boolean;
+Function IsNaN(const Value: Half): Boolean;
+Function IsInfinite(const Value: Half): Boolean;
+Function IsNormal(const Value: Half): Boolean;  // returns false on zero
 
 {-------------------------------------------------------------------------------
     Number information - sign-related
@@ -580,8 +580,8 @@ type
   TValueSign = -1..1;
 
 Function Sign(const Value: Half): TValueSign;
-Function Abs(const Value: Half): Half;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-Function Neg(const Value: Half): Half;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+Function Abs(const Value: Half): Half;
+Function Neg(const Value: Half): Half;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -607,11 +607,11 @@ Function IsGreaterOrEqual(const A,B: Half): Boolean;{$IFDEF CanInline} inline;{$
 type
   TValueRelationship = -1..1; // to preven problems (because delphi vs. FPC)
 
-Function CompareValue(const A,B: Half; Epsilon: Half): TValueRelationship;{$IFDEF CanInline} inline;{$ENDIF} overload;
-Function CompareValue(const A,B: Half): TValueRelationship;{$IFDEF CanInline} inline;{$ENDIF} overload;
+Function CompareValue(const A,B: Half; Epsilon: Half): TValueRelationship;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND} overload;
+Function CompareValue(const A,B: Half): TValueRelationship;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND} overload;
 
-Function SameValue(const A,B: Half; Epsilon: Half): Boolean;{$IFDEF CanInline} inline;{$ENDIF} overload;
-Function SameValue(const A,B: Half): Boolean;{$IFDEF CanInline} inline;{$ENDIF} overload;
+Function SameValue(const A,B: Half; Epsilon: Half): Boolean;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND} overload;
+Function SameValue(const A,B: Half): Boolean;{$IF Defined(CanInline) and not Defined(FPC)} inline;{$IFEND} overload;
 
 {-------------------------------------------------------------------------------
 ================================================================================

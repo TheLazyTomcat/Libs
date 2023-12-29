@@ -58,9 +58,9 @@
 
   Version 1.2.1 (2020-03-09)
 
-  Last change 2022-09-14
+  Last change 2023-12-28
 
-  ©2015-2022 František Milt
+  ©2015-2023 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -200,8 +200,8 @@ type
 ===============================================================================}
 
 {$IFDEF ImplicitManager}
-  Function AllocateHWND(Method: TWndMethod): HWND;{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
-  procedure DeallocateHWND(Wnd: HWND);{$IF Defined(CanInline) and Defined(FPC)} inline;{$IFEND}
+  Function AllocateHWND(Method: TWndMethod): HWND;
+  procedure DeallocateHWND(Wnd: HWND);
 {$ENDIF}
 
 implementation
@@ -341,9 +341,9 @@ end;
 procedure LoadMethodInfoAddr(out Addr: Pointer); assembler; register;
 asm
 {$IFDEF x64}
-    MOVSD   [Addr], XMM0
+    MOVSD   [RCX], XMM0
 {$ELSE}
-    MOVSS   [Addr], XMM0
+    MOVSS   [EAX], XMM0
 {$ENDIF}
 end;
 {$ENDIF}

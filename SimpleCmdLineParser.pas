@@ -162,7 +162,7 @@
 
   Version 2.0.1 (2023-03-23)
 
-  Last change 2023-03-23
+  Last change 2023-12-28
 
   ©2017-2023 František Milt
 
@@ -590,6 +590,7 @@ procedure TSCLPLexer.AddToken(TokenType: TSCLPLexerTokenType);
 
   begin
     // note the resulting string will never be longer than the original
+    Result := '';
     SetLength(Result,Length(Str));
     QuoteState := qsNone;
     StrPos := 1;
@@ -1091,6 +1092,7 @@ Cntr := 0;
 For i := 1 to Length(CommandLine) do
   If CommandLine[i] = SCLP_CHAR_ESCAPE then
     Inc(Cntr);
+Result := '';
 SetLength(Result,Length(CommandLine) + Cntr);
 ResPos := 1;
 For i := 1 to Length(CommandLine) do
@@ -1168,6 +1170,7 @@ If Length(Argument) > 0 then
     If (Argument[1] = SCLP_CHAR_CMDINTRO) and not CanBeCmd then
       Inc(EscapeCnt);
     // prepare result
+    Result := '';
     SetLength(Result,Length(Argument) + EscapeCnt + IfThen(AddQuote,2,0));
     // construct result
     If AddQuote then

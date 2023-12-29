@@ -32,7 +32,7 @@
 
   Version 1.0.4 (2022-10-28)
 
-  Last change 2023-05-01
+  Last change 2023-12-29
 
   ©2022-2023 František Milt
 
@@ -4226,6 +4226,7 @@ var
   TempArr:  array of PLSOEvent;
   i:        Integer;
 begin
+TempArr := nil;
 SetLength(TempArr,Length(Objects));
 For i := Low(Objects) to High(Objects) do
   TempArr[i] := PLSOEvent(Objects[i].fLockPtr);

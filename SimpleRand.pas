@@ -42,7 +42,7 @@
 
   Version 1.0 (2023-08-22)
 
-  Last change 2023-09-06
+  Last change 2023-12-28
 
   ©2023 František Milt
 
@@ -269,6 +269,13 @@ uses
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
+  {$PUSH}{$WARN 2005 OFF}           // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
 {$ENDIF}
 
 {===============================================================================
@@ -291,6 +298,7 @@ Function CryptGenRandom(hProv: HCRYPTPROV; dwLen: DWORD; pbBuffer: PByte): BOOL;
 
 {$ELSE}
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 procedure GetEntropy(out Buff; Count: TMemSize);
 var
   FileHandle: cint;
@@ -306,6 +314,7 @@ If FileHandle <> -1 then
   end
 else raise ESRSeedError.CreateFmt('GetEntropy: Failed to open file (%d).',[errno]);
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 {$ENDIF}
 
@@ -812,6 +821,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function TSimpleRand.RandomFrom(const Value: array of const): Variant;
 var
   Index:  Integer;
@@ -857,6 +867,7 @@ If Length(Value) > 0 then
   end
 else raise ESRInvalidValue.Create('TSimpleRand.RandomFrom: Empty values array.');
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================

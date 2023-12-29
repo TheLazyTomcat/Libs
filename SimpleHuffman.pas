@@ -22,7 +22,7 @@
 
   Version 1.0 alpha (2023-05-09)
 
-  Last change 2023-09-06
+  Last change 2023-12-29
 
   ©2023 František Milt
 
@@ -2023,7 +2023,7 @@ If Assigned(Stream) then
             GetMem(Buffer,fStreamBufferSize);
             try
               repeat
-                BytesRead := Stream.Read(Buffer^,Min(fStreamBufferSize,Count));
+                BytesRead := Stream.Read(Buffer^,Min(Int64(fStreamBufferSize),Count));
                 ScanUpdate(Buffer^,TMemSize(BytesRead));
                 Dec(Count,BytesRead);
                 DoScanProgress((InitialCount - Count) / InitialCount);
@@ -2268,7 +2268,7 @@ If Assigned(Stream) then
             GetMem(Buffer,fStreamBufferSize);
             try
               repeat
-                BytesRead := Stream.Read(Buffer^,Min(fStreamBufferSize,Count));
+                BytesRead := Stream.Read(Buffer^,Min(Int64(fStreamBufferSize),Count));
                 EncodedSizeUpdate(Buffer^,TMemSize(BytesRead));
                 Dec(Count,BytesRead);
                 DoEncodedSizeProgress((InitialCount - Count) / InitialCount);
@@ -2364,7 +2364,7 @@ var
   begin
     If (BytesOut > 0) and (fEncodeBufferBitCount >= 8) then
       begin
-        BytesToMove := TMemSize(Min(Int64(BytesOut),fEncodeBufferBitCount shr 3));
+        BytesToMove := TMemSize(Min(Int64(BytesOut),Int64(fEncodeBufferBitCount shr 3)));
         Move(fEncodeBuffer^,BuffOutPtr^,BytesToMove);
         Inc(BuffOutPtr,BytesToMove);
         Dec(BytesOut,BytesToMove);
@@ -2592,7 +2592,7 @@ If Assigned(StreamIn) then
                   GetMem(BufferIn,fStreamBufferSize);
                   try
                     repeat
-                      BytesRead := TMemSize(StreamIn.Read(BufferIn^,Min(fStreamBufferSize,CountIn)));
+                      BytesRead := TMemSize(StreamIn.Read(BufferIn^,Min(Int64(fStreamBufferSize),CountIn)));
                       BufferInPtr := BufferIn;
                       UnprocessedBytes := BytesRead;
                       // process everything that was read
@@ -3076,7 +3076,7 @@ If Assigned(Stream) then
             GetMem(Buffer,fStreamBufferSize);
             try
               repeat
-                BytesRead := Stream.Read(Buffer^,Min(fStreamBufferSize,Count));
+                BytesRead := Stream.Read(Buffer^,Min(Int64(fStreamBufferSize),Count));
                 CanContinue := DecodedSizeUpdate(Buffer^,TMemSize(BytesRead));
                 Dec(Count,BytesRead);
                 DoDecodedSizeProgress((InitialCount - Count) / InitialCount);
@@ -3280,7 +3280,7 @@ If Assigned(StreamIn) then
                   GetMem(BufferOut,fStreamBufferSize);
                   try
                     repeat
-                      BytesRead := TMemSize(StreamIn.Read(BufferIn^,Min(fStreamBufferSize,CountIn)));
+                      BytesRead := TMemSize(StreamIn.Read(BufferIn^,Min(Int64(fStreamBufferSize),CountIn)));
                       BufferInPtr := BufferIn;
                       UnprocessedBytes := BytesRead;
                       repeat
