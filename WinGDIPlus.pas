@@ -140,7 +140,7 @@
 
   version 1.0 (2023-10-20)
 
-  Last change 2023-10-21
+  Last change 2023-12-29
 
   ©2023 František Milt
 
@@ -1552,6 +1552,10 @@ type
   points to the beginning of the entire record.
 
   To propertly prepare the structure, use function GdiplusAbortSetup.
+
+    NOTE - I know the structure corresponds to objects in Delphi, so an object
+           instance could be used here. But it certainly does not correspond
+           to how objects look in FPC.
 *)
 type
   TGdiplusAbortCallback = Function(Self: Pointer): HRESULT; stdcall;
@@ -6886,6 +6890,13 @@ implementation
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
+  {$PUSH}{$WARN 2005 OFF}           // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30000)}
+    {$DEFINE W4110:={$WARN 4110 OFF}} // range check error while evaluating constants ($1 must be between $2 and $3)
+  {$ELSE}
+    {$DEFINE W4110:=}
+  {$IFEND}
+  {$POP}
 {$ENDIF}
 
 uses
@@ -9212,7 +9223,9 @@ end;
 
 Function TBrush.GetType: TBrushType;
 begin
+{$IFDEF FPCDWM}{$PUSH}W4110{$ENDIF}
 Result := TBrushType(-1);
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 SetStatus(GdipGetBrushType(fNativeBrush,@Result));
 end;
 
@@ -9600,6 +9613,7 @@ var
 begin
 If (Count > 0) and Assigned(PresetColors) then
   begin
+    Argbs := nil;
     SetLength(Argbs,Count);
     If Length(Argbs) > 0 then
       begin
@@ -9622,6 +9636,7 @@ var
 begin
 If (Count > 0) and Assigned(PresetColors) then
   begin
+    Argbs := nil;
     SetLength(Argbs,Count);
     If Length(Argbs) > 0 then
       begin
@@ -11433,6 +11448,7 @@ If Assigned(Colors) and Assigned(Count) then
       begin
         If (Count^ >= Count1) and (Count1 > 0) then
           begin
+            Argbs := nil;
             SetLength(Argbs,Count1);
             If Length(Argbs) > 0 then
               begin
@@ -11470,6 +11486,7 @@ If Assigned(Colors) and Assigned(Count) then
     If (Count^ <= Count1) and (Count1 > 0) then
       begin
         Count1 := Count^;
+        Argbs := nil;
         SetLength(Argbs,Count1);
         If Length(Argbs) > 0 then
           begin
@@ -11599,6 +11616,7 @@ var
   Argbs:  array of TARGB;
   i:      Integer;
 begin
+Argbs := nil;
 SetLength(Argbs,Count);
 If Length(Argbs) > 0 then
   begin
@@ -11620,6 +11638,7 @@ var
 begin
 If (Count > 0) and Assigned(PresetColors) then
   begin
+    Argbs := nil;
     SetLength(Argbs,Count);
     If Length(Argbs) > 0 then
       begin
@@ -13037,6 +13056,7 @@ var
 begin
 If Assigned(Regions) and (RegionCount > 0) then
   begin
+    NativeRegions := nil;
     SetLength(NativeRegions,RegionCount);
     If System.Length(NativeRegions) > 0 then  //!! conflict with Length argument
       begin
@@ -14722,6 +14742,7 @@ begin
 If (NumSought > 0) and Assigned(Gpfamilies) and Assigned(NumFound) then
   begin
     NumFound^ := 0;
+    NativeFamilyList := nil;
     SetLength(NativeFamilyList,NumSought);
     If Length(NativeFamilyList) > 0 then
       begin
@@ -14925,6 +14946,7 @@ Function TFontFamily.GetFamilyName(out Name: String; Language: LANGID = 0): TSta
 var
   Buffer: WideString;
 begin
+Buffer := '';
 SetLength(Buffer,LF_FACESIZE);
 Result := GetFamilyName(PWideChar(Buffer),Language);
 Name := WideToStr(Buffer);
@@ -15962,6 +15984,7 @@ begin
 If NumInputs >= 0 then
   begin
     OutputNative := nil;
+    NativeInputs := nil;
     SetLength(NativeInputs,NumInputs);
     If Length(NativeInputs) > 0 then
       begin
