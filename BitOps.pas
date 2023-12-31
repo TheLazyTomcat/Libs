@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.18.3 (2023-11-26)
+  Version 1.18.4 (2023-12-31)
 
-  Last change (2023-12-23)
+  Last change (2023-12-31)
 
   ©2014-2023 František Milt
 
@@ -188,6 +188,17 @@ type
                    Integer number <-> Bit string conversions
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Following functions are converting numbers (unsigned integers) to their bit
+  string representations and back. Bit string here means a string, where each
+  character represents one particular bit from the number.
+
+  The resulting string is ordered from the most significant (highest) bit (on
+  the left side) to the least significant (lowest) bit (on the right side).
+
+  The string can be split into groups of bits when a better readability is
+  required, and both bit characters and splitting character can be user defined.
+}
 type
   TBitStringSplit = (bssNone,bss4bits,bss8bits,bss16bits,bss32bits);
 
@@ -256,6 +267,10 @@ Function BitStrToNumberDef(const BitString: String; Default: UInt64): UInt64; ov
                    Integer number <-> Octal string conversions
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Following functions are converting unsigned numbers to their octal (base-8)
+  representation and back.
+}
 
 Function NumberToOctStr(Number: UInt8): String; overload;
 Function NumberToOctStr(Number: UInt16): String; overload;
@@ -282,6 +297,21 @@ Function OctStrToNumberDef(const OctString: String; Default: UInt64): UInt64;
                      General data <-> Hex string conversions
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Functions converting general data (buffer or array of bytes) to hexadecimal
+  representation and back.
+
+  The resulting string contains pair of hexadecimal numbers (0..9,a..f), where
+  each pair represents one byte. These pairs appear in the order they have in
+  the source data (first byte is to the left in the string, last byte is to
+  the right). But note that the pairs themselwes are ordered from from most
+  significant nibble to the least significant (ie. left character represents
+  higher four bits of the byte, right character represents lower four bits).
+
+  The string can be split for better readability, you can select splitting
+  character and whether the hexadecimal chars will be of lower or upper case.
+}
+
 type
   THexStringSplit = (hssNone,hssNibble,hssByte,hssWord,hss24bits,hssLong,
                      hssQuad,hss80bits,hssOcta);
@@ -339,6 +369,24 @@ Function TryHexStrToData(const Str: String; out Arr: TArrayOfBytes): Boolean; ov
                      General data <-> Bit string conversions
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Conversion of general data to its bit string representation and back.
+
+  The resulting string can be split for better readability and the splitting
+  character can be selected.
+
+  It is possible to define order in which the bytes appear in the bit string
+  as well as order of bits within the individual bytes (groups of eight
+  chracters). Let's have an example:
+
+    Data(hex): 82 A3
+
+      bytes L2R, bits L2R ... 01000001 11000101
+      bytes L2R, bits R2L ... 10000010 10100011
+      bytes R2L, bits L2R ... 11000101 01000001
+      bytes R2L, bits R2L ... 10100011 10000010
+}
+
 type
   TBitStringOrder = (bsoLeftToRight,bsoRightToLeft);
 
@@ -403,6 +451,16 @@ Function TryBitStrToData(const Str: String; out Arr: TArrayOfBytes): Boolean; ov
                                 Rotate left (ROL)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Rotates the number left - that is, the number is shifted left (towards higher
+  places) by a selected amount of bits, while the shifted-out bits are inserted
+  to the right (lower places).
+
+  Assembly implementation uses instruction ROL.
+
+  Only lower 3, 4, 5 or 6 bits of the shift, depending on the argument size,
+  are used (the ASM version masks 5 or 6 bits, but the result is the same).
+}
 
 Function ROL(Value: UInt8; Shift: Integer): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function ROL(Value: UInt16; Shift: Integer): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -421,6 +479,16 @@ procedure ROLValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
                                Rotate right (ROR)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Rotates the number right - the number is shifted right (towards lower places)
+  by a selected amount of bits, while the shifted-out bits are inserted to the
+  left (higher places).
+
+  Assembly implementation uses instruction ROR.
+
+  Only lower 3, 4, 5 or 6 bits of the shift, depending on the argument size,
+  are used (the ASM version masks 5 or 6 bits, but the result is the same).
+}
 
 Function ROR(Value: UInt8; Shift: Integer): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function ROR(Value: UInt16; Shift: Integer): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -439,6 +507,29 @@ procedure RORValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
                           Rotate left with carry (RCL)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Rotates the number left with carry - works the same as ROL, but the number
+  is being rotated trough carry flag, effectively making it n + 1 bits wide.
+  When the number is shifted, the bit shifted in is taken from carry flag and
+  bit shifted out is stored back in the carry flag.
+  First shifted-in bit is taken from the parameter CF, and the last shifted-out
+  bit is returned again in the CF.
+
+    For example...
+
+      original number:    01001100 (0x4C)
+       original carry:    1
+
+      rotating left by 3 places...
+
+      resulting number:   01100101 (0x65)
+       resulting carry:   0
+
+  Assembly implementation uses instruction RCL.
+
+  Only lower 5 bits (for 8bit, 16bit and 32bit numbers) or 6 bits (for 64bit
+  numbers) of the shift are used.
+}
 
 Function RCLCarry(Value: UInt8; Shift: Integer; var CF: Boolean): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function RCLCarry(Value: UInt16; Shift: Integer; var CF: Boolean): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -471,6 +562,15 @@ procedure RCLValue(var Value: UInt64; Shift: Integer; CF: Boolean = False); over
                          Rotate right with carry (RCR)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Rotates the number right with carry - works the same as ROR, but the number
+  is being shifted trough carry flag. See description of RCL for more info.
+
+  Assembly implementation uses instruction RCR.
+
+  Only lower 5 bits (for 8bit, 16bit and 32bit numbers) or 6 bits (for 64bit
+  numbers) of the shift are used.
+}
 
 Function RCRCarry(Value: UInt8; Shift: Integer; var CF: Boolean): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function RCRCarry(Value: UInt16; Shift: Integer; var CF: Boolean): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -503,6 +603,14 @@ procedure RCRValue(var Value: UInt64; Shift: Integer; CF: Boolean = False); over
                           Arithmetic left shift (SAL)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  This operation is identical to logical left shift (SHL).
+
+  Assembly implementation uses instruction SAL.
+
+  Only lower 5 bits (for 8bit, 16bit and 32bit numbers) or 6 bits (for 64bit
+  numbers) of the shift are used.
+}
 
 Function SAL(Value: UInt8; Shift: Integer): UInt8; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
 Function SAL(Value: UInt16; Shift: Integer): UInt16; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
@@ -521,6 +629,21 @@ procedure SALValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
                           Arithmetic right shift (SAR)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Shifts the number to the right (towards lower bits), while preserving the
+  highest bit. For example...
+
+    number    10010100
+
+    SAR by 3...
+
+    result    11110010
+
+  Assembly implementation uses instruction SAR.
+
+  Only lower 5 bits (for 8bit, 16bit and 32bit numbers) or 6 bits (for 64bit
+  numbers) of the shift are used.
+}
 
 Function SAR(Value: UInt8; Shift: Integer): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function SAR(Value: UInt16; Shift: Integer): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -539,6 +662,11 @@ procedure SARValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
                                  Endianity swap
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Reverses order of bytes within the number or general data buffer.
+
+  Assembly implementation uses instruction BSWAP.
+}
 
 Function EndianSwap(Value: UInt16): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function EndianSwap(Value: UInt32): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -568,6 +696,14 @@ procedure SwapEndian(var Buffer; Size: TMemSize); overload;
                                   Bit test (BT)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Returns true when selected bit in the Value is set, false when it is clear.
+
+  Assembly implementation uses instruction BT.
+
+  The bit number/index is taken modulo 8, 16, 32 or 64, depending on argument
+  width.
+}
 
 Function BT(Value: UInt8; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
 Function BT(Value: UInt16; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
@@ -579,6 +715,15 @@ Function BT(Value: UInt64; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{
                              Bit test and set (BTS)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Sets the selected bit in the Value (to 1) and returns true when the bit was
+  previously set, false when it was clear.
+
+  Assembly implementation uses instruction BTS.
+
+  The bit number/index is taken modulo 8, 16, 32 or 64, depending on argument
+  width.
+}
 
 Function BTS(var Value: UInt8; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BTS(var Value: UInt16; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -590,6 +735,15 @@ Function BTS(var Value: UInt64; Bit: Integer): Boolean; overload;{$IFNDEF PurePa
                             Bit test and reset (BTR)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Resets the selected bit in the Value (to 0) and returns true when the bit was
+  previously set, false when it was clear.
+
+  Assembly implementation uses instruction BTR.
+
+  The bit number/index is taken modulo 8, 16, 32 or 64, depending on argument
+  width.
+}
 
 Function BTR(var Value: UInt8; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BTR(var Value: UInt16; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -601,6 +755,15 @@ Function BTR(var Value: UInt64; Bit: Integer): Boolean; overload;{$IFNDEF PurePa
                           Bit test and complement (BTC)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Complements the selected bit in the Value (swaps its state, 0 <-> 1) and
+  returns true when the bit was previously set, false when it was clear.
+
+  Assembly implementation uses instruction BTC.
+
+  The bit number/index is taken modulo 8, 16, 32 or 64, depending on argument
+  width.
+}
 
 Function BTC(var Value: UInt8; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BTC(var Value: UInt16; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -612,6 +775,13 @@ Function BTC(var Value: UInt64; Bit: Integer): Boolean; overload;{$IFNDEF PurePa
                        Bit test and set to a given value
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Sets value of the selected bit in the number given in Value to a NewValue and
+  returns its previous state.
+
+  The bit number/index is taken modulo 8, 16, 32 or 64, depending on argument
+  width.  
+}
 
 Function BitSetTo(var Value: UInt8; Bit: Integer; NewValue: Boolean): Boolean; overload;
 Function BitSetTo(var Value: UInt16; Bit: Integer; NewValue: Boolean): Boolean; overload;
@@ -623,6 +793,12 @@ Function BitSetTo(var Value: UInt64; Bit: Integer; NewValue: Boolean): Boolean; 
                              Bit scan forward (BSF)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Returns index of lowest set (1) bit in the passed number. If no bit is set,
+  then -1 is returned.
+
+  Assembly implementation uses instruction BSF.
+}
 
 Function BSF(Value: UInt8): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BSF(Value: UInt16): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -634,6 +810,12 @@ Function BSF(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; as
                              Bit scan reversed (BSR)
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Returns index of highest set bit in the passed number. If no bit is set, then
+  -1 is returned.
+
+  Assembly implementation uses instruction BSR.
+}
 
 Function BSR(Value: UInt8): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BSR(Value: UInt16): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -645,6 +827,12 @@ Function BSR(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; as
                                 Population count
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Returns number of set (1) bits in the passed number. When no bit is set, it
+  will return 0.
+
+  Assembly implementation uses instruction POPCNT.
+}
 
 Function PopCount(Value: UInt8): Integer; overload;
 Function PopCount(Value: UInt16): Integer; overload;
@@ -656,6 +844,10 @@ Function PopCount(Value: UInt64): Integer; overload;
                                Nibble manipulation
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Following funtions are meant for obtaining or changing lower or higher
+  nibbles (half bytes, 4bit halfs) within one byte (an octet).
+}
 
 Function GetHighNibble(Value: UInt8): TNibble;{$IFDEF CanInline} inline;{$ENDIF}
 Function GetLowNibble(Value: UInt8): TNibble;{$IFDEF CanInline} inline;{$ENDIF}
@@ -671,6 +863,13 @@ procedure SetLowNibbleValue(var Value: UInt8; SetTo: TNibble);{$IFDEF CanInline}
                                  Get flag state
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  When exact match is false, the following function will return true when at
+  least one bit set in FlagBitmask is also set in the Value, false otherwise.
+
+  When exact match is true, then true is returned only when all bits set in the
+  FlagBitmask are also set in Value, false otherwise.
+}
 
 Function GetFlagState(Value,FlagBitmask: UInt8; ExactMatch: Boolean = False): Boolean; overload;
 Function GetFlagState(Value,FlagBitmask: UInt16; ExactMatch: Boolean = False): Boolean; overload;
@@ -683,6 +882,12 @@ Function GetFlagState(Value,FlagBitmask: UInt64; ExactMatch: Boolean = False): B
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  Bits set in the FlagBitmask are also set (to 1) in the passed number and this
+  resulting number is then returned.
+
+  Functions accepting array of flags will set all bits within all the passed
+  flag bistmasks.
+
   Functions with bits noted in name (*_8, *_16, ...) are there mainly for older
   versions of Delphi (up to Delphi 2007), because they are not able to
   distinguish what overloaded function to call (some problem with open array
@@ -735,6 +940,12 @@ procedure SetFlagsValue(var Value: UInt64; Flags: array of UInt64); overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  Bits set in the FlagBitmask are reset (to 0) in the passed number and this
+  resulting number is then returned.
+
+  Functions accepting array of flags will reset all bits within all the passed
+  flag bistmasks.
+
   Functions with bits noted in name (*_8, *_16, ...) are there mainly for older
   versions of Delphi (up to Delphi 2007), because they are not able to
   distinguish what overloaded function to call (some problem with open array
@@ -786,6 +997,11 @@ procedure ResetFlagsValue(var Value: UInt64; Flags: array of UInt64); overload;
                                  Set flag state
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Sets or resets (depending on NewState; false = reset, true = set) all bits
+  selected (set to 1) in FlagBitmask in the passed number Value and returns the
+  result.
+}
 
 Function SetFlagState(Value,FlagBitmask: UInt8; NewState: Boolean): UInt8; overload;
 Function SetFlagState(Value,FlagBitmask: UInt16; NewState: Boolean): UInt16; overload;
@@ -806,7 +1022,15 @@ procedure SetFlagStateValue(var Value: UInt64; FlagBitmask: UInt64; NewState: Bo
 -------------------------------------------------------------------------------}
 {
   Returns contiguous segment of bits from passed Value, selected by a bit range.
+
+  When ShiftDown is true, the extracted bits are shifted down so that the first
+  extracted bit is at lowest position in the result, otherwise the bit segment
+  is left at its original position.
+
+  Bit indices are taken module 8, 16, 32 and 64, depending on the argument
+  width.
 }
+
 Function GetBits(Value: UInt8; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt8; overload;
 Function GetBits(Value: UInt16; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt16; overload;
 Function GetBits(Value: UInt32; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt32; overload;
@@ -818,9 +1042,13 @@ Function GetBits(Value: UInt64; FromBit,ToBit: Integer; ShiftDown: Boolean = Tru
 ================================================================================
 -------------------------------------------------------------------------------}
 {
-  Replaces contiguous segment of bits in Value by corresponding bits from
-  NewBits.
+  Replaces contiguous segment of bits selected by range in Value by
+  corresponding bits from the NewBits.
+
+  Bit indices are taken module 8, 16, 32 and 64, depending on the argument
+  width.
 }
+
 Function SetBits(Value,NewBits: UInt8; FromBit,ToBit: Integer): UInt8; overload;
 Function SetBits(Value,NewBits: UInt16; FromBit,ToBit: Integer): UInt16; overload;
 Function SetBits(Value,NewBits: UInt32; FromBit,ToBit: Integer): UInt32; overload;
@@ -838,6 +1066,9 @@ procedure SetBitsValue(var Value: UInt64; NewBits: UInt64; FromBit,ToBit: Intege
                                   Reverse bits
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Reverses all bits within a given number.
+}
 
 Function ReverseBits(Value: UInt8): UInt8; overload;
 Function ReverseBits(Value: UInt16): UInt16; overload;
@@ -856,6 +1087,13 @@ procedure ReverseBitsValue(var Value: UInt64); overload;{$IFDEF CanInline} inlin
                                Leading zero count
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Returns number of leading most significant zero bits (number of zero bits
+  above the highest set bit). If the number is zero, it will return size of
+  the number (in bits).
+
+  Assembly implementation uses instruction LZCNT.
+}
 
 Function LZCount(Value: UInt8): Integer; overload;
 Function LZCount(Value: UInt16): Integer; overload;
@@ -867,6 +1105,13 @@ Function LZCount(Value: UInt64): Integer; overload;
                               Trailing zero count
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Returns number of trailing least significant zero bits (number of zero bits
+  below the lowest set bit). If the number is zero, it will return size of the
+  number (in bits).
+
+  Assembly implementation uses instruction TZCNT.
+}
 
 Function TZCount(Value: UInt8): Integer; overload;
 Function TZCount(Value: UInt16): Integer; overload;
@@ -878,6 +1123,20 @@ Function TZCount(Value: UInt64): Integer; overload;
                                   Extract bits
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Extracts contiguous segment of bits from given value, selected by a starting
+  bit index and length of the segment.
+  The bits are written to the result from lowest bit up. Bits above length are
+  zeroed in the result.
+
+  Assembly implementation uses instruction BEXTR.
+
+  Both Start and Length are masked so that only lower 8 bits are observed,
+  irrespective of argument width.
+  If observed value of start index is out of alloved range (0..width-1), then
+  no bit is extracted.
+  Only bits up to width-1 can be extracted, even if length is greater than that.
+}
 
 Function ExtractBits(Value: UInt8; Start,Length: Integer): UInt8; overload;
 Function ExtractBits(Value: UInt16; Start,Length: Integer): UInt16; overload;
@@ -889,6 +1148,13 @@ Function ExtractBits(Value: UInt64; Start,Length: Integer): UInt64; overload;
                               Parallel bits extract
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Extracts bits from value using a mask - bits that are set (to 1) in the mask
+  are extracted, other bits are ignored. The extracted bits are written into
+  result from the lowest bit (bit 0) up. Unused bit in the result are zeroed.
+
+  Assembly implementation uses instruction PEXT.
+}
 
 Function ParallelBitsExtract(Value,Mask: UInt8): UInt8; overload;
 Function ParallelBitsExtract(Value,Mask: UInt16): UInt16; overload;
@@ -900,6 +1166,15 @@ Function ParallelBitsExtract(Value,Mask: UInt64): UInt64; overload;
                               Parallel bits deposit
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Deposits bits from value to result using a mask - it takes low order bits
+  from value and puts them at locations in result corresponding to set bits
+  in the mask, in the order they appear (so first bit from value is put into
+  result at location corresponding to first set bit in mask and so on). All
+  unused bits in the result are zeroed.
+
+  Assembly implementation uses instruction PDEP.
+}
 
 Function ParallelBitsDeposit(Value,Mask: UInt8): UInt8; overload;
 Function ParallelBitsDeposit(Value,Mask: UInt16): UInt16; overload;
@@ -934,6 +1209,14 @@ Function BitParity(Value: UInt64): Boolean; overload;
                            Pointer arithmetic helpers
 ================================================================================
 -------------------------------------------------------------------------------}
+{
+  Following functions are to be used in situations where a pointer needs to be
+  incremented or decremented by an arbitrary offset and doing it in-situ is not
+  desirable or impossible.
+
+  Overload accepting Count and Stride is for arrays/vectors. Here, the pointer
+  is incremented by Count * Stride.
+}
 
 Function PtrAdvance(Ptr: Pointer; Offset: PtrInt): Pointer; overload;
 Function PtrAdvance(Ptr: Pointer; Count: Integer; Stride: TMemSize): Pointer; overload;
@@ -6353,12 +6636,12 @@ end;
 
 Function Fce_ExtractBits_8_Pas(Value: UInt8; Start,Length: Integer): UInt8; register;
 begin
-If Start <= 7 then
+If UInt8(Start) <= 7 then
   begin
-    If Length <= 7 then
-      Result := UInt8(Value shr Start) and UInt8(Int8(UInt8(1) shl Length) - 1)
+    If UInt8(Length) <= 7 then
+      Result := UInt8(Value shr UInt8(Start)) and UInt8(Int8(UInt8(1) shl UInt8(Length)) - 1)
     else
-      Result := UInt8(Value shr Start) and UInt8($FF);
+      Result := UInt8(Value shr UInt8(Start)) and UInt8($FF);
   end
 else Result := 0;
 end;
@@ -6367,12 +6650,12 @@ end;
 
 Function Fce_ExtractBits_16_Pas(Value: UInt16; Start,Length: Integer): UInt16; register;
 begin
-If Start <= 15 then
+If UInt8(Start) <= 15 then
   begin
-    If Length <= 15 then
-      Result := UInt16(Value shr Start) and UInt16(Int16(UInt16(1) shl Length) - 1)
+    If UInt8(Length) <= 15 then
+      Result := UInt16(Value shr UInt8(Start)) and UInt16(Int16(UInt16(1) shl UInt8(Length)) - 1)
     else
-      Result := UInt16(Value shr Start) and UInt16($FFFF);
+      Result := UInt16(Value shr UInt8(Start)) and UInt16($FFFF);
   end
 else Result := 0;
 end;
@@ -6381,12 +6664,12 @@ end;
 
 Function Fce_ExtractBits_32_Pas(Value: UInt32; Start,Length: Integer): UInt32; register;
 begin
-If Start <= 31 then
+If UInt8(Start) <= 31 then
   begin
-    If Length <= 31 then
-      Result := UInt32(Value shr Start) and UInt32(Int32(UInt32(1) shl Length) - 1)
+    If UInt8(Length) <= 31 then
+      Result := UInt32(Value shr UInt8(Start)) and UInt32(Int32(UInt32(1) shl UInt8(Length)) - 1)
     else
-      Result := UInt32(Value shr Start) and UInt32($FFFFFFFF);
+      Result := UInt32(Value shr UInt8(Start)) and UInt32($FFFFFFFF);
   end
 else Result := 0;
 end;
@@ -6395,12 +6678,12 @@ end;
 
 Function Fce_ExtractBits_64_Pas(Value: UInt64; Start,Length: Integer): UInt64; register;
 begin
-If Start <= 63 then
+If UInt8(Start) <= 63 then
   begin
-    If Length <= 63 then
-      Result := UInt64(Value shr Start) and UInt64(Int64(UInt64(1) shl Length) - 1)
+    If UInt8(Length) <= 63 then
+      Result := UInt64(Value shr UInt8(Start)) and UInt64(Int64(UInt64(1) shl UInt8(Length)) - 1)
     else
-      Result := UInt64(Value shr Start) and UInt64($FFFFFFFFFFFFFFFF);
+      Result := UInt64(Value shr UInt8(Start)) and UInt64($FFFFFFFFFFFFFFFF);
   end
 else Result := 0;
 end;

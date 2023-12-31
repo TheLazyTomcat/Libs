@@ -51,7 +51,7 @@
 
   Version 1.5 (2023-12-19)
 
-  Last change 2023-12-19
+  Last change 2023-12-29
 
   ©2017-2023 František Milt
 
@@ -81,6 +81,10 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
+{$ELSEIF Defined(LINUX) and Defined(FPC)}
+  {$DEFINE Linux}
+{$ELSE}
+  {$MESSAGE FATAL 'Unsupported operating system.'}
 {$IFEND}
 
 {$IFDEF FPC}
@@ -133,6 +137,13 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
 interface
 
 uses
+{$IFNDEF Windows}
+{
+  Currently disabled (default wide strings manager is used) - if you want to
+  use the one provided by C library, uncomment the following line...
+}
+  //cwstring,
+{$ENDIF}
   AuxTypes;
 
 {$IF Declared(UnicodeIsWideE)}
