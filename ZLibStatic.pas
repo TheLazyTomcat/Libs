@@ -16,13 +16,13 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.3 (2022-12-27)
+  Version 1.1.4 (2024-01-14)
 
-  Build against zlib version 1.2.13
+  Build against zlib version 1.3
 
-  Last change 2023-12-27
+  Last change 2024-01-14
 
-  ©2017-2023 František Milt
+  ©2017-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -79,7 +79,7 @@ Function deflateInit(strm: z_streamp; level: int): int;{$IFDEF CanInline} inline
      Initializes the internal stream state for compression.  The fields
    zalloc, zfree and opaque must be initialized before by the caller.  If
    zalloc and zfree are set to Z_NULL, deflateInit updates them to use default
-   allocation functions.
+   allocation functions. total_in, total_out, adler, and msg are initialized.
 
      The compression level must be Z_DEFAULT_COMPRESSION, or between 0 and 9:
    1 gives best speed, 9 gives best compression, 0 gives no compression at all
@@ -168,8 +168,8 @@ Function deflate(strm: z_streamp; flush: int): int; cdecl; external;
   with the same value of the flush parameter and more output space (updated
   avail_out), until the flush is complete (deflate returns with non-zero
   avail_out).  In the case of a Z_FULL_FLUSH or Z_SYNC_FLUSH, make sure that
-  avail_out is greater than six to avoid repeated flush markers due to
-  avail_out == 0 on return.
+  avail_out is greater than six when the flush marker begins, in order to avoid
+  repeated flush markers upon calling deflate() again when avail_out == 0.
 
     If the parameter flush is set to Z_FINISH, pending input is processed,
   pending output is flushed and deflate returns with Z_STREAM_END if there was
@@ -229,7 +229,8 @@ Function inflateInit(strm: z_streamp): int;{$IFDEF CanInline} inline; {$ENDIF}
    read or consumed.  The allocation of a sliding window will be deferred to
    the first call of inflate (if the decompression does not complete on the
    first call).  If zalloc and zfree are set to Z_NULL, inflateInit updates
-   them to use default allocation functions.
+   them to use default allocation functions.  total_in, total_out, adler, and
+   msg are initialized.
 
      inflateInit returns Z_OK if success, Z_MEM_ERROR if there was not enough
    memory, Z_VERSION_ERROR if the zlib library version is incompatible with the
@@ -528,7 +529,7 @@ Function deflateReset(strm: z_streamp): int; cdecl; external;
      This function is equivalent to deflateEnd followed by deflateInit, but
    does not free and reallocate the internal compression state.  The stream
    will leave the compression level and any other attributes that may have been
-   set unchanged.
+   set unchanged.  total_in, total_out, adler, and msg are initialized.
 
      deflateReset returns Z_OK if success, or Z_STREAM_ERROR if the source
    stream state was inconsistent (such as zalloc or state being Z_NULL).
@@ -559,7 +560,7 @@ Function deflateParams(strm: z_streamp; level, strategy: int): int; cdecl; exter
    Then no more input data should be provided before the deflateParams() call.
    If this is done, the old level and strategy will be applied to the data
    compressed before deflateParams(), and the new level and strategy will be
-   applied to the the data compressed after deflateParams().
+   applied to the data compressed after deflateParams().
 
      deflateParams returns Z_OK on success, Z_STREAM_ERROR if the source stream
    state was inconsistent or if a parameter was invalid, or Z_BUF_ERROR if
@@ -641,8 +642,9 @@ Function deflateSetHeader(strm: z_streamp; head: gz_headerp): int; cdecl; extern
    gzip file" and give up.
 
      If deflateSetHeader is not used, the default gzip header has text false,
-   the time set to zero, and os set to 255, with no extra, name, or comment
-   fields.  The gzip header is returned to the default state by deflateReset().
+   the time set to zero, and os set to the current operating system, with no
+   extra, name, or comment fields.  The gzip header is returned to the default
+   state by deflateReset().
 
      deflateSetHeader returns Z_OK if success, or Z_STREAM_ERROR if the source
    stream state was inconsistent.
@@ -774,6 +776,7 @@ Function inflateReset(strm: z_streamp): int; cdecl; external;
      This function is equivalent to inflateEnd followed by inflateInit,
    but does not free and reallocate the internal decompression state.  The
    stream will keep attributes that may have been set by inflateInit2.
+   total_in, total_out, adler, and msg are initialized.
 
      inflateReset returns Z_OK if success, or Z_STREAM_ERROR if the source
    stream state was inconsistent (such as zalloc or state being Z_NULL).

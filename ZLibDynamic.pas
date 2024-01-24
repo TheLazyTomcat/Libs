@@ -16,13 +16,13 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.3 (2022-12-27)
+  Version 1.1.4 (2024-01-14)
 
-  Build against zlib version 1.2.13
+  Build against zlib version 1.3
 
-  Last change 2023-12-27
+  Last change 2024-01-14
 
-  ©2017-2023 František Milt
+  ©2017-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
