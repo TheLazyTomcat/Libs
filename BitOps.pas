@@ -12,11 +12,11 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.18.4 (2023-12-31)
+  Version 1.19 (2024-01-26)
 
-  Last change (2023-12-31)
+  Last change (2024-01-26)
 
-  ©2014-2023 František Milt
+  ©2014-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1045,21 +1045,27 @@ Function GetBits(Value: UInt64; FromBit,ToBit: Integer; ShiftDown: Boolean = Tru
   Replaces contiguous segment of bits selected by range in Value by
   corresponding bits from the NewBits.
 
+  Parameter ShiftUP is counterpart to ShiftDown in GetBits. When it is true,
+  the deposited bits (NewBits parameter) are shifted up so that the first bit
+  (bit 0) becomes the first deposited bit. When false, the NewBits are taken
+  without change, meaning the deposited bits are taken from corresponding
+  location in the NewBits, not from the low-order bits.
+
   Bit indices are taken module 8, 16, 32 and 64, depending on the argument
   width.
 }
 
-Function SetBits(Value,NewBits: UInt8; FromBit,ToBit: Integer): UInt8; overload;
-Function SetBits(Value,NewBits: UInt16; FromBit,ToBit: Integer): UInt16; overload;
-Function SetBits(Value,NewBits: UInt32; FromBit,ToBit: Integer): UInt32; overload;
-Function SetBits(Value,NewBits: UInt64; FromBit,ToBit: Integer): UInt64; overload;
+Function SetBits(Value,NewBits: UInt8; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt8; overload;
+Function SetBits(Value,NewBits: UInt16; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt16; overload;
+Function SetBits(Value,NewBits: UInt32; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt32; overload;
+Function SetBits(Value,NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt64; overload;
 
 //------------------------------------------------------------------------------
 
-procedure SetBitsValue(var Value: UInt8; NewBits: UInt8; FromBit,ToBit: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
-procedure SetBitsValue(var Value: UInt16; NewBits: UInt16; FromBit,ToBit: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
-procedure SetBitsValue(var Value: UInt32; NewBits: UInt32; FromBit,ToBit: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
-procedure SetBitsValue(var Value: UInt64; NewBits: UInt64; FromBit,ToBit: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetBitsValue(var Value: UInt8; NewBits: UInt8; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetBitsValue(var Value: UInt16; NewBits: UInt16; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetBitsValue(var Value: UInt32; NewBits: UInt32; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetBitsValue(var Value: UInt64; NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1142,6 +1148,35 @@ Function ExtractBits(Value: UInt8; Start,Length: Integer): UInt8; overload;
 Function ExtractBits(Value: UInt16; Start,Length: Integer): UInt16; overload;
 Function ExtractBits(Value: UInt32; Start,Length: Integer): UInt32; overload;
 Function ExtractBits(Value: UInt64; Start,Length: Integer): UInt64; overload;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                  Deposit bits
+================================================================================
+-------------------------------------------------------------------------------}
+{
+  Deposits contiguous segment of bits from parameter NewBits to a selected
+  position (Start) in Value and returns it. Bits are taken from low-order
+  positions (starting from bit 0).
+
+  Both Start and Length are masked so that only lower 8 bits are observed,
+  irrespective of argument width.
+
+  If observed value of start index is out of alloved range (0..width-1), then
+  no bit is deposited.
+}
+
+Function DepositBits(Value,NewBits: UInt8; Start,Length: Integer): UInt8; overload;
+Function DepositBits(Value,NewBits: UInt16; Start,Length: Integer): UInt16; overload;
+Function DepositBits(Value,NewBits: UInt32; Start,Length: Integer): UInt32; overload;
+Function DepositBits(Value,NewBits: UInt64; Start,Length: Integer): UInt64; overload;
+
+//------------------------------------------------------------------------------
+
+procedure DepositBitsValue(var Value: UInt8; NewBits: UInt8; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure DepositBitsValue(var Value: UInt16; NewBits: UInt16; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure DepositBitsValue(var Value: UInt32; NewBits: UInt32; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure DepositBitsValue(var Value: UInt64; NewBits: UInt64; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -6068,70 +6103,78 @@ end;
 ================================================================================
 -------------------------------------------------------------------------------}
 
-Function SetBits(Value,NewBits: UInt8; FromBit,ToBit: Integer): UInt8;
+Function SetBits(Value,NewBits: UInt8; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt8;
 var
   Mask: UInt8;
 begin
+If ShiftUp then
+  NewBits := UInt8(NewBits shl (FromBit and 7));
 Mask := UInt8(($FF shl (FromBit and 7)) and ($FF shr (7 - (ToBit and 7))));
 Result := (Value and not Mask) or (NewBits and Mask);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetBits(Value,NewBits: UInt16; FromBit,ToBit: Integer): UInt16;
+Function SetBits(Value,NewBits: UInt16; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt16;
 var
   Mask: UInt16;
 begin
+If ShiftUp then
+  NewBits := UInt16(NewBits shl (FromBit and 15));
 Mask := UInt16(($FFFF shl (FromBit and 15)) and ($FFFF shr (15 - (ToBit and 15))));
 Result := (Value and not Mask) or (NewBits and Mask);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetBits(Value,NewBits: UInt32; FromBit,ToBit: Integer): UInt32;
+Function SetBits(Value,NewBits: UInt32; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt32;
 var
   Mask: UInt32;
 begin
+If ShiftUp then
+  NewBits := UInt32(NewBits shl (FromBit and 31));
 Mask := UInt32(($FFFFFFFF shl (FromBit and 31)) and ($FFFFFFFF shr (31 - (ToBit and 31))));
 Result := (Value and not Mask) or (NewBits and Mask);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetBits(Value,NewBits: UInt64; FromBit,ToBit: Integer): UInt64;
+Function SetBits(Value,NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt64;
 var
   Mask: UInt64;
 begin
+If ShiftUp then
+  NewBits := UInt64(NewBits shl (FromBit and 63));
 Mask := UInt64((UInt64($FFFFFFFFFFFFFFFF) shl (FromBit and 63)) and (UInt64($FFFFFFFFFFFFFFFF) shr (63 - (ToBit and 63))));
 Result := (Value and not Mask) or (NewBits and Mask);
 end;
 
 //==============================================================================
 
-procedure SetBitsValue(var Value: UInt8; NewBits: UInt8; FromBit,ToBit: Integer);
+procedure SetBitsValue(var Value: UInt8; NewBits: UInt8; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
 begin
-Value := SetBits(Value,NewBits,FromBit,ToBit);
+Value := SetBits(Value,NewBits,FromBit,ToBit,ShiftUp);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure SetBitsValue(var Value: UInt16; NewBits: UInt16; FromBit,ToBit: Integer);
+procedure SetBitsValue(var Value: UInt16; NewBits: UInt16; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
 begin
-Value := SetBits(Value,NewBits,FromBit,ToBit);
+Value := SetBits(Value,NewBits,FromBit,ToBit,ShiftUp);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure SetBitsValue(var Value: UInt32; NewBits: UInt32; FromBit,ToBit: Integer);
+procedure SetBitsValue(var Value: UInt32; NewBits: UInt32; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
 begin
-Value := SetBits(Value,NewBits,FromBit,ToBit);
+Value := SetBits(Value,NewBits,FromBit,ToBit,ShiftUp);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure SetBitsValue(var Value: UInt64; NewBits: UInt64; FromBit,ToBit: Integer);
+procedure SetBitsValue(var Value: UInt64; NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
 begin
-Value := SetBits(Value,NewBits,FromBit,ToBit);
+Value := SetBits(Value,NewBits,FromBit,ToBit,ShiftUp);
 end;
 
 {-------------------------------------------------------------------------------
@@ -6903,6 +6946,124 @@ Function ExtractBits(Value: UInt64; Start,Length: Integer): UInt64;
 begin
 Result := Var_ExtractBits_64(Value,Start,Length);
 end;
+
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                  Deposit bits
+================================================================================
+-------------------------------------------------------------------------------}
+
+Function DepositBits(Value,NewBits: UInt8; Start,Length: Integer): UInt8;
+var
+  Mask: UInt8;
+begin
+If UInt8(Start) <= 7 then
+  begin
+    If UInt8(Length) > 0 then
+      begin
+        Length := UInt8(Length);
+        Mask := UInt8(UInt8($FF) shl Start);
+        If Start + Length <= 8 then
+          Mask := Mask and (UInt8($FF) shr (8 - (Start + Length)));
+        Result := (Value and not Mask) or (UInt8(NewBits shl Start) and Mask);
+      end
+    else Result := Value;
+  end
+else Result := Value;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function DepositBits(Value,NewBits: UInt16; Start,Length: Integer): UInt16;
+var
+  Mask: UInt16;
+begin
+If UInt8(Start) <= 15 then
+  begin
+    If UInt8(Length) > 0 then
+      begin
+        Length := UInt8(Length);
+        Mask := UInt16(UInt16($FFFF) shl Start);
+        If Start + Length <= 16 then
+          Mask := Mask and (UInt16($FFFF) shr (16 - (Start + Length)));
+        Result := (Value and not Mask) or (UInt16(NewBits shl Start) and Mask);
+      end
+    else Result := Value;
+  end
+else Result := Value;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function DepositBits(Value,NewBits: UInt32; Start,Length: Integer): UInt32;
+var
+  Mask: UInt32;
+begin
+If UInt8(Start) <= 31 then
+  begin
+    If UInt8(Length) > 0 then
+      begin
+        Length := UInt8(Length);
+        Mask := UInt32(UInt32($FFFFFFFF) shl Start);
+        If Start + Length <= 32 then
+          Mask := Mask and (UInt32($FFFFFFFF) shr (32 - (Start + Length)));
+        Result := (Value and not Mask) or (UInt32(NewBits shl Start) and Mask);
+      end
+    else Result := Value;
+  end
+else Result := Value;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function DepositBits(Value,NewBits: UInt64; Start,Length: Integer): UInt64;
+var
+  Mask: UInt64;
+begin
+If UInt8(Start) <= 63 then
+  begin
+    If UInt8(Length) > 0 then
+      begin
+        Length := UInt8(Length);
+        Mask := UInt64(UInt64($FFFFFFFFFFFFFFFF) shl Start);
+        If Start + Length <= 64 then
+          Mask := Mask and (UInt64($FFFFFFFFFFFFFFFF) shr (64 - (Start + Length)));
+        Result := (Value and not Mask) or (UInt64(NewBits shl Start) and Mask);
+      end
+    else Result := Value;        
+  end
+else Result := Value;
+end;
+
+//==============================================================================
+
+procedure DepositBitsValue(var Value: UInt8; NewBits: UInt8; Start,Length: Integer);
+begin
+Value := DepositBits(Value,NewBits,Start,Length);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure DepositBitsValue(var Value: UInt16; NewBits: UInt16; Start,Length: Integer);
+begin
+Value := DepositBits(Value,NewBits,Start,Length);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure DepositBitsValue(var Value: UInt32; NewBits: UInt32; Start,Length: Integer);
+begin
+Value := DepositBits(Value,NewBits,Start,Length);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure DepositBitsValue(var Value: UInt64; NewBits: UInt64; Start,Length: Integer);
+begin
+Value := DepositBits(Value,NewBits,Start,Length);
+end;
+
 
 {-------------------------------------------------------------------------------
 ================================================================================

@@ -15,8 +15,8 @@
 
     It also provides set of functions for string comparison that encapsulates
     some of the intricacies given by different approach in different compilers,
-    and functions returning index of first and last character (can be used when
-    iterating the string).
+    functions returning index of first and last character (can be used when
+    iterating the string) and functions for character presence tests.
 
     For details about encodings refer to file encoding_notes.txt that should
     be distributed with this library.
@@ -49,11 +49,11 @@
               Also, if you are certain that some part, in here marked as
               dubious, is actually correct, let the author know.
 
-  Version 1.5 (2023-12-19)
+  Version 1.6 (2024-01-26)
 
-  Last change 2023-12-29
+  Last change 2024-01-26
 
-  ©2017-2023 František Milt
+  ©2017-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -122,21 +122,10 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
 {$ENDIF}
 {$H+} // explicitly activate long strings
 
-{$IF Defined(FPC) or (CompilerVersion >= 17)}
-{
-  I have no idea when Delphi started seeing UTF8String as a separate type from
-  AnsiString, but it sure is not in D7 (ambiguous overload).
-  For now I am assuming Delphi 2005 and newer are ok with it. If not, please
-  let me know.
-}
-  {$DEFINE UTF8StringSeparateType}
-{$ELSE}
-  {$UNDEF UTF8StringSeparateType}
-{$IFEND}
-
 interface
 
 uses
+  SysUtils,
 {$IFNDEF Windows}
 {
   Currently disabled (default wide strings manager is used) - if you want to
@@ -145,12 +134,6 @@ uses
   //cwstring,
 {$ENDIF}
   AuxTypes;
-
-{$IF Declared(UnicodeIsWideE)}
-  {$UNDEF UnicodeStringSeparateType}
-{$ELSE}
-  {$DEFINE UnicodeStringSeparateType}
-{$IFEND}
 
 {$IFNDEF FPC}
 const
@@ -310,40 +293,60 @@ Function StringCompare(const A,B: String; CaseSensitive: Boolean): Integer;
     String indexing helpers
 ===============================================================================}
 
-Function StrLow(const Str: ShortString): TStrOff; overload;
-Function StrLow(const Str: AnsiString): TStrOff; overload;
-{$IFDEF UTF8StringSeparateType}
-Function StrLow(const Str: UTF8String): TStrOff; overload;
-{$ENDIF}
-Function StrLow(const Str: WideString): TStrOff; overload;
-{$IFDEF UnicodeStringSeparateType}
-Function StrLow(const Str: UnicodeString): TStrOff; overload;
-{$ENDIF}
-Function StrLow(const Str: UCS4String): TStrOff; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function ShortStrLow(const Str: ShortString): TStrOff;
+Function AnsiStrLow(const Str: AnsiString): TStrOff;
+Function UTF8StrLow(const Str: UTF8String): TStrOff;
+Function WideStrLow(const Str: WideString): TStrOff;
+Function UnicodeStrLow(const Str: UnicodeString): TStrOff;
+Function UCS4StrLow(const Str: UCS4String): TStrOff; {$IFDEF CanInline} inline; {$ENDIF}
+Function StrLow(const Str: String): TStrOff;
 
 //------------------------------------------------------------------------------
 
-Function StrHigh(const Str: ShortString): TStrOff; overload;
-Function StrHigh(const Str: AnsiString): TStrOff; overload;
-{$IFDEF UTF8StringSeparateType}   
-Function StrHigh(const Str: UTF8String): TStrOff; overload;
-{$ENDIF}
-Function StrHigh(const Str: WideString): TStrOff; overload;
-{$IFDEF UnicodeStringSeparateType}
-Function StrHigh(const Str: UnicodeString): TStrOff; overload;
-{$ENDIF}
-Function StrHigh(const Str: UCS4String): TStrOff; overload;
+Function ShortStrHigh(const Str: ShortString): TStrOff;
+Function AnsiStrHigh(const Str: AnsiString): TStrOff;
+Function UTF8StrHigh(const Str: UTF8String): TStrOff;
+Function WideStrHigh(const Str: WideString): TStrOff;
+Function UnicodeStrHigh(const Str: UnicodeString): TStrOff;
+Function UCS4StrHigh(const Str: UCS4String): TStrOff;
+Function StrHigh(const Str: String): TStrOff;
+
+{===============================================================================
+    Character presence tests
+===============================================================================}
+
+Function AnsiCharInSet(C: AnsiChar; const CharSet: TSysCharSet): Boolean;{$IFDEF CanInline} inline; {$ENDIF}
+Function UTF8CharInSet(C: UTF8Char; const CharSet: TSysCharSet): Boolean;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideCharInSet(C: WideChar; const CharSet: TSysCharSet): Boolean;
+Function UnicodeCharInSet(C: UnicodeChar; const CharSet: TSysCharSet): Boolean;
+Function UCS4CharInSet(C: UCS4Char; const CharSet: TSysCharSet): Boolean;
+Function CharInSet(C: Char; const CharSet: TSysCharSet): Boolean;
+
+Function AnsiCharInArr(C: AnsiChar; const Arr: array of AnsiChar): Boolean;
+Function UTF8CharInArr(C: UTF8Char; const Arr: array of UTF8Char): Boolean;
+Function WideCharInArr(C: WideChar; const Arr: array of WideChar): Boolean;
+Function UnicodeCharInArr(C: UnicodeChar; const Arr: array of UnicodeChar): Boolean;
+Function UCS4CharInArr(C: UCS4Char; const Arr: array of UCS4Char): Boolean;
+Function CharInArr(C: Char; const Arr: array of Char): Boolean;
+
+Function AnsiCharInStr(C: AnsiChar; const Str: AnsiString): Boolean;
+Function UTF8CharInStr(C: UTF8Char; const Str: UTF8String): Boolean;
+Function WideCharInStr(C: WideChar; const Str: WideString): Boolean;
+Function UnicodeCharInStr(C: WideChar; const Str: UnicodeString): Boolean;
+Function UCS4CharInStr(C: UCS4Char; const Str: UCS4String): Boolean;
+Function CharInStr(C: Char; const Str: String): Boolean;
 
 implementation
 
+{$IF (not Defined(FPC) and (CompilerVersion >= 20)) or Defined(Windows)}
 uses
-  SysUtils
 {$IF not Defined(FPC) and (CompilerVersion >= 20)}(* Delphi2009+ *)
-  , AnsiStrings
+  AnsiStrings{$IFDEF Windows},{$ENDIF}
 {$IFEND}
 {$IFDEF Windows}
-  , Windows
+  Windows   
 {$ENDIF};
+{$IFEND}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -1789,106 +1792,105 @@ begin
 VAR_STRIDXOFF := Ord(TestStr[1]);
 end;
 
+//==============================================================================
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function ShortStrLow(const Str: ShortString): TStrOff;
+begin
+Result := VAR_STRIDXOFF;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 //------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function StrLow(const Str: ShortString): TStrOff;
+Function AnsiStrLow(const Str: AnsiString): TStrOff;
 begin
 Result := VAR_STRIDXOFF;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function StrLow(const Str: AnsiString): TStrOff;
+Function UTF8StrLow(const Str: UTF8String): TStrOff;
 begin
 Result := VAR_STRIDXOFF;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-{$IFDEF UTF8StringSeparateType}
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function StrLow(const Str: UTF8String): TStrOff;
-begin
-Result := VAR_STRIDXOFF;
-end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-{$ENDIF}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function StrLow(const Str: WideString): TStrOff;
+Function WideStrLow(const Str: WideString): TStrOff;
 begin
 Result := VAR_STRIDXOFF;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
-{$IFDEF UnicodeStringSeparateType}
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function StrLow(const Str: UnicodeString): TStrOff;
+Function UnicodeStrLow(const Str: UnicodeString): TStrOff;
 begin
 Result := VAR_STRIDXOFF;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
-{$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function StrLow(const Str: UCS4String): TStrOff;
+Function UCS4StrLow(const Str: UCS4String): TStrOff;
 begin
 Result := Low(Str);
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-Function StrHigh(const Str: ShortString): TStrOff;
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function StrLow(const Str: String): TStrOff;
+begin
+Result := VAR_STRIDXOFF;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//==============================================================================
+
+Function ShortStrHigh(const Str: ShortString): TStrOff;
 begin
 Result := Pred(Length(Str)) + VAR_STRIDXOFF;
 end;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
-Function StrHigh(const Str: AnsiString): TStrOff;
+Function AnsiStrHigh(const Str: AnsiString): TStrOff;
 begin
 Result := Pred(Length(Str)) + VAR_STRIDXOFF;
 end;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
-{$IFDEF UTF8StringSeparateType}
-Function StrHigh(const Str: UTF8String): TStrOff;
-begin
-Result := Pred(Length(Str)) + VAR_STRIDXOFF;
-end;
-{$ENDIF}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-Function StrHigh(const Str: WideString): TStrOff;
+Function UTF8StrHigh(const Str: UTF8String): TStrOff;
 begin
 Result := Pred(Length(Str)) + VAR_STRIDXOFF;
 end;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
-{$IFDEF UnicodeStringSeparateType}
-Function StrHigh(const Str: UnicodeString): TStrOff;
+Function WideStrHigh(const Str: WideString): TStrOff;
 begin
 Result := Pred(Length(Str)) + VAR_STRIDXOFF;
 end;
-{$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
-Function StrHigh(const Str: UCS4String): TStrOff;
+Function UnicodeStrHigh(const Str: UnicodeString): TStrOff;
+begin
+Result := Pred(Length(Str)) + VAR_STRIDXOFF;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UCS4StrHigh(const Str: UCS4String): TStrOff;
 begin
 If Length(Str) > 0 then
   begin
@@ -1898,6 +1900,252 @@ If Length(Str) > 0 then
       Result := High(Str);
   end
 else Result := -1;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StrHigh(const Str: String): TStrOff;
+begin
+Result := Pred(Length(Str)) + VAR_STRIDXOFF;
+end;
+
+
+{===============================================================================
+    Character presence tests
+===============================================================================}
+
+Function AnsiCharInSet(C: AnsiChar; const CharSet: TSysCharSet): Boolean;
+begin
+Result := C in CharSet;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UTF8CharInSet(C: UTF8Char; const CharSet: TSysCharSet): Boolean;
+begin
+Result := AnsiChar(C) in CharSet;
+end;
+
+//------------------------------------------------------------------------------
+
+Function WideCharInSet(C: WideChar; const CharSet: TSysCharSet): Boolean;
+begin
+If Ord(C) <= 255 then
+  Result := AnsiChar(C) in CharSet
+else
+  Result := False;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UnicodeCharInSet(C: UnicodeChar; const CharSet: TSysCharSet): Boolean;
+begin
+If Ord(C) <= 255 then
+  Result := AnsiChar(C) in CharSet
+else
+  Result := False;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UCS4CharInSet(C: UCS4Char; const CharSet: TSysCharSet): Boolean;
+begin
+If C <= 255 then
+  Result := AnsiChar(Byte(C)) in CharSet
+else
+  Result := False;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CharInSet(C: Char; const CharSet: TSysCharSet): Boolean;
+begin
+{$IF (SizeOf(Char) <> 1)}
+If Ord(C) > 255 then
+  Result := False
+else
+{$IFEND}
+  Result := AnsiChar(C) in CharSet;
+end;
+
+//==============================================================================
+
+Function AnsiCharInArr(C: AnsiChar; const Arr: array of AnsiChar): Boolean;
+var
+  i:  Integer;
+begin
+Result := False;
+For i := Low(Arr) to High(Arr) do
+  If Arr[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UTF8CharInArr(C: UTF8Char; const Arr: array of UTF8Char): Boolean;
+var
+  i:  Integer;
+begin
+Result := False;
+For i := Low(Arr) to High(Arr) do
+  If Arr[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function WideCharInArr(C: WideChar; const Arr: array of WideChar): Boolean;
+var
+  i:  Integer;
+begin
+Result := False;
+For i := Low(Arr) to High(Arr) do
+  If Arr[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UnicodeCharInArr(C: UnicodeChar; const Arr: array of UnicodeChar): Boolean;
+var
+  i:  Integer;
+begin
+Result := False;
+For i := Low(Arr) to High(Arr) do
+  If Arr[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UCS4CharInArr(C: UCS4Char; const Arr: array of UCS4Char): Boolean;
+var
+  i:  Integer;
+begin
+Result := False;
+For i := Low(Arr) to High(Arr) do
+  If Arr[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CharInArr(C: Char; const Arr: array of Char): Boolean;
+var
+  i:  Integer;
+begin
+Result := False;
+For i := Low(Arr) to High(Arr) do
+  If Arr[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//==============================================================================
+
+Function AnsiCharInStr(C: AnsiChar; const Str: AnsiString): Boolean;
+var
+  i:  TStrOff;
+begin
+Result := False;
+For i := AnsiStrLow(Str) to AnsiStrHigh(Str) do
+  If Str[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UTF8CharInStr(C: UTF8Char; const Str: UTF8String): Boolean;
+var
+  i:  TStrOff;
+begin
+Result := False;
+For i := UTF8StrLow(Str) to UTF8StrHigh(Str) do
+  If Str[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function WideCharInStr(C: WideChar; const Str: WideString): Boolean;
+var
+  i:  TStrOff;
+begin
+Result := False;
+For i := WideStrLow(Str) to WideStrHigh(Str) do
+  If Str[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UnicodeCharInStr(C: UnicodeChar; const Str: UnicodeString): Boolean;
+var
+  i:  TStrOff;
+begin
+Result := False;
+For i := UnicodeStrLow(Str) to UnicodeStrHigh(Str) do
+  If Str[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function UCS4CharInStr(C: UCS4Char; const Str: UCS4String): Boolean;
+var
+  i:  TStrOff;
+begin
+Result := False;
+For i := UCS4StrLow(Str) to UCS4StrHigh(Str) do
+  If Str[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CharInStr(C: Char; const Str: String): Boolean;
+var
+  i:  TStrOff;
+begin
+Result := False;
+For i := StrLow(Str) to StrHigh(Str) do
+  If Str[i] = C then
+    begin
+      Result := True;
+      Break{For i};
+    end;
 end;
 
 
