@@ -32,9 +32,9 @@
 
   Version 2.0 (2022-10-24)
 
-  Last change 2023-12-29
+  Last change 2024-02-03
 
-  ©2015-2023 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -51,31 +51,31 @@
       github.com/TheLazyTomcat/Lib.WinMsgComm
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    BitVector          - github.com/TheLazyTomcat/Lib.BitVector
-    CRC32              - github.com/TheLazyTomcat/Lib.CRC32
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
-  * ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
-  * MemVector          - github.com/TheLazyTomcat/Lib.MemVector
-  * MulticastEvent     - github.com/TheLazyTomcat/Lib.MulticastEvent
-  * NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
-  * SHA1               - github.com/TheLazyTomcat/Lib.SHA1
-    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
-  * SimpleMessages     - github.com/TheLazyTomcat/Lib.SimpleMessages
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * UtilityWindow      - github.com/TheLazyTomcat/Lib.UtilityWindow
-  * WinSyncObjs        - github.com/TheLazyTomcat/Lib.WinSyncObjs
-  * WndAlloc           - github.com/TheLazyTomcat/Lib.WndAlloc
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BitOps              - github.com/TheLazyTomcat/Lib.BitOps
+    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
+    CRC32               - github.com/TheLazyTomcat/Lib.CRC32
+    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
+    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
+  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
+  * ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
+  * MemVector           - github.com/TheLazyTomcat/Lib.MemVector
+  * MulticastEvent      - github.com/TheLazyTomcat/Lib.MulticastEvent
+  * NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
+  * SHA1                - github.com/TheLazyTomcat/Lib.SHA1
+    SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+  * SimpleMessages      - github.com/TheLazyTomcat/Lib.SimpleMessages
+    StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+  * UtilityWindow       - github.com/TheLazyTomcat/Lib.UtilityWindow
+  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
+  * WndAlloc            - github.com/TheLazyTomcat/Lib.WndAlloc
 
   SimpleCPUID library might not be needed, depending on defined symbols in
   other libraries.
@@ -92,6 +92,8 @@
 
   Libraries LinSyncObjs and SimpleFutex are required only when compiling for
   Linux OS.
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
 
 ===============================================================================}
 unit WinMsgComm;

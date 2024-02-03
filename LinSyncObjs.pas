@@ -32,9 +32,9 @@
 
   Version 1.0.4 (2022-10-28)
 
-  Last change 2023-12-29
+  Last change 2024-02-03
 
-  ©2022-2023 František Milt
+  ©2022-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -51,21 +51,23 @@
       github.com/TheLazyTomcat/Lib.LinSyncObjs
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    BitVector          - github.com/TheLazyTomcat/Lib.BitVector
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-    NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
-    SHA1               - github.com/TheLazyTomcat/Lib.SHA1
-    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
-    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BitOps              - github.com/TheLazyTomcat/Lib.BitOps
+    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
+    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
+    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
+    NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
+    SHA1                - github.com/TheLazyTomcat/Lib.SHA1
+    SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+    SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+    StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
 
 ===============================================================================}
 unit LinSyncObjs;

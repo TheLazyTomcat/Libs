@@ -12,11 +12,11 @@
     Provides classes that can be used to access individual bits of memory in
     a list-like manner.
 
-  Version 1.4.1 (2023-11-27)
+  Version 1.4.2 (2024-02-03)
 
-  Last change 2023-12-27
+  Last change 2024-02-03
 
-  ©2015-2023 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -33,15 +33,17 @@
       github.com/TheLazyTomcat/Lib.BitVector
 
   Dependencies:
-    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM        - github.com/TheLazyTomcat/Lib.BasicUIM
-    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    BitOps          - github.com/TheLazyTomcat/Lib.BitOps
-  * SimpleCPUID     - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BitOps              - github.com/TheLazyTomcat/Lib.BitOps
+  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
 
     SimpleCPUID might not be needed, see BitOps library for details.
+
+    BinaryStreamingLite can be replaced by full BinaryStreaming.
 
 ===============================================================================}
 unit BitVector;
@@ -147,9 +149,9 @@ type
     procedure Append(Vector: TBitVector); overload; virtual;
     procedure Put(Index: Integer; Memory: Pointer; Count: Integer); overload; virtual;
     procedure Put(Index: Integer; Vector: TBitVector); overload; virtual;
-    procedure Fill(FromIdx, ToIdx: Integer; Value: Boolean); overload; virtual;
+    procedure Fill(FromIdx,ToIdx: Integer; Value: Boolean); overload; virtual;
     procedure Fill(Value: Boolean); overload; virtual;
-    procedure Complement(FromIdx, ToIdx: Integer); overload; virtual;
+    procedure Complement(FromIdx,ToIdx: Integer); overload; virtual;
     procedure Complement; overload; virtual;
     procedure Reverse; virtual;
     procedure Combine(Memory: Pointer; Count: Integer; Operations: TBVOperations); overload; virtual;
@@ -223,7 +225,7 @@ implementation
 
 uses
   Math,
-  BitOps, StrRect, BinaryStreaming;
+  BitOps, StrRect, BinaryStreamingLite;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -487,7 +489,7 @@ If MemoryCanBeReallocated then
                   // add new bits, and reset them (pop count is not changed)
                   // partial byte...
                   If (fCount and 7) <> 0 then
-                    SetBitsValue(GetBytePtrBitIdx(Pred(fCount))^,0,fCount and 7,7);
+                    SetBitsValue(GetBytePtrBitIdx(Pred(fCount))^,0,fCount and 7,7,False);
                   // full bytes...
                   For i := ((fCount + 7) shr 3) to (Pred(Value) shr 3) do
                     GetBytePtrByteIdx(i)^ := 0;
@@ -534,7 +536,7 @@ If Idx2 > Idx1 then
         MovingPtr := GetBytePtrBitIdx(Idx2);
         // shift last byte and preserve shifted-out bit
         Carry := GetBit_LL(Idx2 and not 7); // bit 0 of last byte
-        SetBitsValue(PByte(MovingPtr)^,PByte(MovingPtr)^ shr 1,0,Idx2 and 7);
+        SetBitsValue(PByte(MovingPtr)^,PByte(MovingPtr)^ shr 1,0,Idx2 and 7,False);
         // shift native words
         while ByteCount >= BV_NATINT_BYTES do
           begin
@@ -551,11 +553,11 @@ If Idx2 > Idx1 then
           end;
         // shift first byte and store carry
         Dec(PByte(MovingPtr));
-        SetBitsValue(PByte(MovingPtr)^,PByte(MovingPtr)^ shr 1,Idx1 and 7,7);
+        SetBitsValue(PByte(MovingPtr)^,PByte(MovingPtr)^ shr 1,Idx1 and 7,7,False);
         SetBit_LL(Idx1 or 7,Carry);
       end
     // shift is done within a single byte
-    else SetBitsValue(GetBytePtrBitIdx(Idx1)^,GetBytePtrBitIdx(Idx1)^ shr 1,Idx1 and 7,Idx2 and 7);
+    else SetBitsValue(GetBytePtrBitIdx(Idx1)^,GetBytePtrBitIdx(Idx1)^ shr 1,Idx1 and 7,Idx2 and 7,False);
   end
 else raise EBVInvalidValue.CreateFmt('TBitVector.ShiftDown: Invalid indices (%d, %d).',[Idx1,Idx2]);
 end;
@@ -577,7 +579,7 @@ If Idx2 > Idx1 then
         MovingPtr := GetBytePtrBitIdx(Idx1);        
         // shift first byte and preserve shifted-out bit
         Carry := GetBit_LL(Idx1 or 7);
-        SetBitsValue(PByte(MovingPtr)^,Byte(PByte(MovingPtr)^ shl 1),Idx1 and 7,7);
+        SetBitsValue(PByte(MovingPtr)^,Byte(PByte(MovingPtr)^ shl 1),Idx1 and 7,7,False);
         Inc(PByte(MovingPtr));
         // shift native words
         while ByteCount >= BV_NATINT_BYTES do
@@ -594,11 +596,11 @@ If Idx2 > Idx1 then
             Dec(ByteCount);
           end;
         // shift last byte and store carry
-        SetBitsValue(PByte(MovingPtr)^,Byte(PByte(MovingPtr)^ shl 1),0,Idx2 and 7);
+        SetBitsValue(PByte(MovingPtr)^,Byte(PByte(MovingPtr)^ shl 1),0,Idx2 and 7,False);
         SetBit_LL(Idx2 and not 7,Carry);
       end
     // shift is done inside of one byte
-    else SetBitsValue(GetBytePtrBitIdx(Idx1)^,Byte(GetBytePtrBitIdx(Idx1)^ shl 1),Idx1 and 7,Idx2 and 7);
+    else SetBitsValue(GetBytePtrBitIdx(Idx1)^,Byte(GetBytePtrBitIdx(Idx1)^ shl 1),Idx1 and 7,Idx2 and 7,False);
   end
 else raise EBVInvalidValue.CreateFmt('TBitVector.ShiftUp: Invalid indices (%d, %d).',[Idx1,Idx2]);
 end;
@@ -675,7 +677,7 @@ If Count > 0 then
         For i := 0 to Pred(Count) do
           TempR := TempR or Byte(IfThen(Operations.BoolOperation(
             ((TempA shr i) and 1) <> 0,((TempB shr i) and 1) <> 0),1,0) shl i);
-        SetBitsValue(PByte(MovingPtr)^,TempR,0,Pred(Count and 7));
+        SetBitsValue(PByte(MovingPtr)^,TempR,0,Pred(Count and 7),False);
       end;
     ScanForPopCount;
     DoChange;
@@ -945,7 +947,7 @@ If MemoryCanBeReallocated or (Count = fCount) then
       If (Count and 7) <> 0 then
         SetBitsValue(GetBytePtrByteIdx(Count shr 3)^,
                      PByte(PtrAdvance(Memory,PtrInt(Count shr 3)))^,
-                     0,Pred(Count and 7));
+                     0,Pred(Count and 7),False);
       ScanForPopCount;
       DoChange;
     finally
@@ -992,7 +994,7 @@ If MemoryCanBeReallocated then
             while BytesCount >= BV_NATINT_BYTES do
               begin
                 NextBytePtr := PtrAdvance(MovingPtr,1);
-                SetBitsValue(PByte(MovingPtr)^,Byte(PByte(NextBytePtr)^ shl LShift),LShift,7);
+                SetBitsValue(PByte(MovingPtr)^,Byte(PByte(NextBytePtr)^ shl LShift),LShift,7,False);
                 PNativeUInt(NextBytePtr)^ := EndCor(EndCor(PNativeUInt(NextBytePtr)^) shr RShift);
                 Inc(PNativeUInt(MovingPtr));
                 Dec(BytesCount,BV_NATINT_BYTES);
@@ -1000,7 +1002,7 @@ If MemoryCanBeReallocated then
             while BytesCount > 0 do
               begin
                 NextBytePtr := PtrAdvance(MovingPtr,1);
-                SetBitsValue(PByte(MovingPtr)^,Byte(PByte(NextBytePtr)^ shl LShift),LShift,7);
+                SetBitsValue(PByte(MovingPtr)^,Byte(PByte(NextBytePtr)^ shl LShift),LShift,7,False);
                 PByte(NextBytePtr)^ := PByte(NextBytePtr)^ shr RShift;
                 Inc(PByte(MovingPtr));
                 Dec(BytesCount);
@@ -1058,12 +1060,12 @@ If MemoryCanBeReallocated or ((Index + Count) <= fCount) then
                   // full native words
                   while Count >= BV_NATINT_BITS do
                     begin
-                      SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,7);
+                      SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,7,False);
                       Inc(PByte(MovingPtrSelf));
                       Dec(Count,BV_NATINT_BITS);
                       If (Count <= 0) or ((Count < 8{this must be 8!}) and PartialEndFill) then
                         PNativeUInt(MovingPtrSelf)^ := EndCor(SetBits(EndCor(PNativeUInt(MovingPtrSelf)^),
-                          EndCor(PNativeUInt(MovingPtr)^) shr RShift,0,Pred(BV_NATINT_BITS - RShift)))
+                          EndCor(PNativeUInt(MovingPtr)^) shr RShift,0,Pred(BV_NATINT_BITS - RShift),False))
                       else
                         PNativeUInt(MovingPtrSelf)^ := EndCor(EndCor(PNativeUInt(MovingPtr)^) shr RShift); 
                       Inc(PNativeUInt(MovingPtr));
@@ -1072,11 +1074,11 @@ If MemoryCanBeReallocated or ((Index + Count) <= fCount) then
                   // full bytes
                   while Count >= 8 do
                     begin
-                      SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,7);
+                      SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,7,False);
                       Inc(PByte(MovingPtrSelf));
                       Dec(Count,8);
                       If (Count <= 0) or ((Count < 8) and PartialEndFill) then
-                        SetBitsValue(PByte(MovingPtrSelf)^,PByte(MovingPtr)^ shr RShift,0,Pred(LShift))
+                        SetBitsValue(PByte(MovingPtrSelf)^,PByte(MovingPtr)^ shr RShift,0,Pred(LShift),False)
                       else
                         PByte(MovingPtrSelf)^ := Byte(PByte(MovingPtr)^ shr RShift);
                       Inc(PByte(MovingPtr));
@@ -1086,15 +1088,15 @@ If MemoryCanBeReallocated or ((Index + Count) <= fCount) then
                     begin
                       If not PartialEndFill then
                         begin
-                          SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,7);
+                          SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,7,False);
                           Dec(Count,RShift);
                           If Count > 0 then
                             begin
                               Inc(PByte(MovingPtrSelf));
-                              SetBitsValue(PByte(MovingPtrSelf)^,PByte(MovingPtr)^ shr RShift,0,Pred(Count));
+                              SetBitsValue(PByte(MovingPtrSelf)^,PByte(MovingPtr)^ shr RShift,0,Pred(Count),False);
                             end;
                         end
-                      else SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,Pred(LShift + Count));
+                      else SetBitsValue(PByte(MovingPtrSelf)^,Byte(PByte(MovingPtr)^ shl LShift),LShift,Pred(LShift + Count),False);
                     end;
                 end
               else
@@ -1105,7 +1107,7 @@ If MemoryCanBeReallocated or ((Index + Count) <= fCount) then
                   If (Count and 7) <> 0 then
                     SetBitsValue(GetBytePtrByteIdx((Index + Count) shr 3)^,
                                  PByte(PtrAdvance(Memory,PtrInt(Count shr 3)))^,
-                                 0,Pred(Count and 7));
+                                 0,Pred(Count and 7),False);
                 end;
               ScanForPopCount;
               DoChange;
@@ -1128,7 +1130,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBitVector.Fill(FromIdx, ToIdx: Integer; Value: Boolean);
+procedure TBitVector.Fill(FromIdx,ToIdx: Integer; Value: Boolean);
 var
   FillValue:  NativeUInt;
   BitCount:   Integer;
@@ -1150,7 +1152,7 @@ If (FromIdx <= ToIdx) and (fCount > 0) then
         If (FromIdx and 7) <> 0 then
           begin
             ByteBits := Min(BitCount,8 - (FromIdx and 7));
-            SetBitsValue(PByte(MovingPtr)^,Byte(FillValue),FromIdx and 7,Pred((FromIdx and 7) + ByteBits));
+            SetBitsValue(PByte(MovingPtr)^,Byte(FillValue),FromIdx and 7,Pred((FromIdx and 7) + ByteBits),False);
             Dec(BitCount,ByteBits);
             Inc(PByte(MovingPtr));
           end;
@@ -1170,7 +1172,7 @@ If (FromIdx <= ToIdx) and (fCount > 0) then
           end;
         // partial last byte
         If BitCount > 0 then
-          SetBitsValue(PByte(MovingPtr)^,Byte(FillValue),0,ToIdx and 7);
+          SetBitsValue(PByte(MovingPtr)^,Byte(FillValue),0,ToIdx and 7,False);
         ScanForPopCount;
         DoChange;
       end
@@ -1204,7 +1206,7 @@ If fCount > 0 then
         Inc(PByte(MovingPtr));
       end;
     If BitCount > 0 then
-      SetBitsValue(PByte(MovingPtr)^,Byte(FillValue),0,Pred(fCount and 7));
+      SetBitsValue(PByte(MovingPtr)^,Byte(FillValue),0,Pred(fCount and 7),False);
     fPopCount := IfThen(Value,fCount,0);
     DoChange;
   end;
@@ -1212,7 +1214,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBitVector.Complement(FromIdx, ToIdx: Integer);
+procedure TBitVector.Complement(FromIdx,ToIdx: Integer);
 var
   BitCount:   Integer;
   MovingPtr:  Pointer;
@@ -1231,7 +1233,7 @@ If (FromIdx <= ToIdx) and (fCount > 0) then
         If (FromIdx and 7) <> 0 then
           begin
             ByteBits := Min(BitCount,8 - (FromIdx and 7));
-            SetBitsValue(PByte(MovingPtr)^,not PByte(MovingPtr)^,FromIdx and 7,Pred((FromIdx and 7) + ByteBits));
+            SetBitsValue(PByte(MovingPtr)^,not PByte(MovingPtr)^,FromIdx and 7,Pred((FromIdx and 7) + ByteBits),False);
             Dec(BitCount,ByteBits);
             Inc(PByte(MovingPtr));
           end;
@@ -1248,7 +1250,7 @@ If (FromIdx <= ToIdx) and (fCount > 0) then
             Inc(PByte(MovingPtr));
           end;
         If BitCount > 0 then
-          SetBitsValue(PByte(MovingPtr)^,not PByte(MovingPtr)^,0,ToIdx and 7);
+          SetBitsValue(PByte(MovingPtr)^,not PByte(MovingPtr)^,0,ToIdx and 7,False);
         ScanForPopCount;
         DoChange;
       end
@@ -1280,7 +1282,7 @@ If fCount > 0 then
         Inc(PByte(MovingPtr));
       end;
     If BitCount > 0 then
-      SetBitsValue(PByte(MovingPtr)^,not PByte(MovingPtr)^,0,Pred(fCount and 7));
+      SetBitsValue(PByte(MovingPtr)^,not PByte(MovingPtr)^,0,Pred(fCount and 7),False);
     fPopCount := fCount - fPopCount;
     DoChange;
   end;
@@ -1628,7 +1630,7 @@ If fCount > 0 then
     // prepare and write last partial byte, if any
     If (fCount and 7) <> 0 then
       begin
-        Temp := SetBits(0,GetBytePtrByteIdx(fCount shr 3)^,0,Pred(fCount and 7));
+        Temp := SetBits(0,GetBytePtrByteIdx(fCount shr 3)^,0,Pred(fCount and 7),False);
         Stream.WriteBuffer(Temp,1);
       end;
   end;
@@ -1652,7 +1654,7 @@ If fCount > 0 then
     If (fCount and 7) <> 0 then
       begin
         Stream.ReadBuffer(Addr(Temp)^,1);
-        SetBitsValue(GetBytePtrByteIdx(fCount shr 3)^,Temp,0,Pred(fCount and 7));
+        SetBitsValue(GetBytePtrByteIdx(fCount shr 3)^,Temp,0,Pred(fCount and 7),False);
       end;
     ScanForPopCount;
     DoChange;

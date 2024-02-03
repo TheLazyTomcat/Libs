@@ -44,9 +44,9 @@
 
   Version 2.0.2 (2023-01-24)
 
-  Last change 2023-12-27
+  Last change 2024-02-03
 
-  ©2017-2023 František Milt
+  ©2017-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -63,11 +63,13 @@
       github.com/TheLazyTomcat/Lib.ProgressTracker
 
   Dependencies:
-    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
-    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
-    UInt64Utils     - github.com/TheLazyTomcat/Lib.UInt64Utils
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.  
 
 ===============================================================================}
 unit ProgressTracker;
@@ -692,7 +694,7 @@ implementation
 
 uses
   {$IFDEF Windows}Windows,{$ENDIF} IniFiles,
-  StrRect, BinaryStreaming, UInt64Utils;
+  StrRect, BinaryStreamingLite, UInt64Utils;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

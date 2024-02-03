@@ -38,9 +38,9 @@
     
   Version 2.0 (2022-09-11)
 
-  Last change 2023-05-01
+  Last change 2024-02-03
 
-  ©2018-2023 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -57,28 +57,28 @@
       github.com/TheLazyTomcat/Lib.SyncThread
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-  * BitVector          - github.com/TheLazyTomcat/Lib.BitVector
-    CrossSyncObjs      - github.com/TheLazyTomcat/Lib.CrossSyncObjs  
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
-    ListSorters        - github.com/TheLazyTomcat/Lib.ListSorters
-    MemVector          - github.com/TheLazyTomcat/Lib.MemVector
-    Messanger          - github.com/TheLazyTomcat/Lib.Messanger
-    NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
-    SHA1               - github.com/TheLazyTomcat/Lib.SHA1  
-    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream    
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * WinSyncObjs        - github.com/TheLazyTomcat/Lib.WinSyncObjs
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BitOps              - github.com/TheLazyTomcat/Lib.BitOps
+  * BitVector           - github.com/TheLazyTomcat/Lib.BitVector
+    CrossSyncObjs       - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
+    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
+  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
+    MemVector           - github.com/TheLazyTomcat/Lib.MemVector
+    Messanger           - github.com/TheLazyTomcat/Lib.Messanger
+    NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
+    SHA1                - github.com/TheLazyTomcat/Lib.SHA1
+    SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+    StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
 
   Libraries UInt64Utils and WinSyncObjs are required only when compiling for
   Windows OS.
@@ -88,6 +88,8 @@
 
   Library SimpleCPUID might not be required when compiling for Windows OS,
   depending on defined symbols in InterlockedOps and BitOps libraries.
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
 
 ===============================================================================}
 unit SyncThread;

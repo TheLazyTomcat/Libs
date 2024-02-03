@@ -65,9 +65,9 @@
 
   Version 1.0.1 (2022-10-26)
 
-  Last change 2023-09-04
+  Last change 2024-02-03
 
-  ©2022-2023 František Milt
+  ©2022-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -84,10 +84,12 @@
       github.com/TheLazyTomcat/Lib.TaggedBinaryData
 
   Dependencies:
-    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
-    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
 
 ===============================================================================}
 unit TaggedBinaryData;
@@ -349,7 +351,7 @@ type
 implementation
 
 uses
-  BinaryStreaming;
+  BinaryStreamingLite;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

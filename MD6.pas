@@ -36,9 +36,9 @@
 
   Version 1.1 (2023-01-13)
 
-  Last change 2023-12-29
+  Last change 2024-02-03
 
-  ©2022-2023 František Milt
+  ©2022-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -55,25 +55,25 @@
       github.com/TheLazyTomcat/Lib.MD6
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    BinaryStreaming    - github.com/TheLazyTomcat/Lib.BinaryStreaming
-  * BitVector          - github.com/TheLazyTomcat/Lib.BitVector
-    CrossSyncObjs      - github.com/TheLazyTomcat/Lib.CrossSyncObjs
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
-    NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
-    SHA1               - github.com/TheLazyTomcat/Lib.SHA1
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
-    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * WinSyncObjs        - github.com/TheLazyTomcat/Lib.WinSyncObjs
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
+    BitOps              - github.com/TheLazyTomcat/Lib.BitOps
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+  * BitVector           - github.com/TheLazyTomcat/Lib.BitVector
+    CrossSyncObjs       - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
+    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
+  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
+    SHA1                - github.com/TheLazyTomcat/Lib.SHA1
+  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+    SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+    StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
 
   Libraries UInt64Utils and WinSyncObjs are required only when compiling for
   Windows OS.
@@ -83,6 +83,8 @@
 
   Library SimpleCPUID might not be required, depending on defined symbols in
   InterlockedOps and BitOps libraries.
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
 
 ===============================================================================}
 unit MD6;

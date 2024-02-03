@@ -24,9 +24,9 @@
 
   Version 1.2.3 (2023-11-05)
 
-  Last change 2023-11-05
+  Last change 2024-02-03
 
-  ©2016-2023 František Milt
+  ©2016-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -43,11 +43,13 @@
       github.com/TheLazyTomcat/Lib.MemVector
 
   Dependencies:
-    AuxClasses      - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes        - github.com/TheLazyTomcat/Lib.AuxTypes
-    BinaryStreaming - github.com/TheLazyTomcat/Lib.BinaryStreaming
-    ListSorters     - github.com/TheLazyTomcat/Lib.ListSorters
-    StrRect         - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
 
 ===============================================================================}
 (*******************************************************************************
@@ -426,7 +428,7 @@ type
 implementation
 
 uses
-  StrRect, ListSorters, BinaryStreaming;
+  StrRect, ListSorters, BinaryStreamingLite;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
