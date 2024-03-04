@@ -12,11 +12,11 @@
     Utility functions for 64bit unsigned integers. Meant mainly for compilers
     that do not have full native support for this type (eg. Delphi 7).
 
-  Version 1.0.3 (2023-02-21)
+  Version 1.0.5 (2024-02-17)
 
-  Last change 2023-12-19
+  Last change 2024-02-17
 
-  ©2018-2023 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -40,6 +40,14 @@ unit UInt64Utils;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
+  {$INLINE ON}
+  {$DEFINE CanInline}
+{$ELSE}
+  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+    {$DEFINE CanInline}
+  {$ELSE}
+    {$UNDEF CanInline}
+  {$IFEND}
 {$ENDIF}
 {$H+}
 
@@ -54,6 +62,7 @@ type
 
   EUI64UConvertError = class(EUI64UException);
 
+//------------------------------------------------------------------------------  
 type
   UInt64Rec = packed record
     case Integer of
@@ -63,7 +72,23 @@ type
       3: (Bytes: array [0..7] of UInt8);
   end;
 
-Function UInt64Get(Hi,Lo: UInt32): UInt64;
+//------------------------------------------------------------------------------
+
+Function UInt64Low: UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+Function LowUInt64: UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function UInt64High: UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+Function HighUInt64: UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function UInt64Get(Hi,Lo: UInt32): UInt64; overload;
+Function UInt64Get(Lo: UInt32): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function GetUInt64(Hi,Lo: UInt32): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GetUInt64(Lo: UInt32): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
 
 Function UInt64ToStr(Value: UInt64): String;
 
@@ -77,6 +102,7 @@ Function TryStrToUInt64(const Str: String; out Value: UInt64): Boolean;
 
 Function StrToUInt64Def(const Str: String; Default: UInt64): UInt64;
 
+//------------------------------------------------------------------------------ 
 {
   Returns negative number if A is less than B, positive number when A is larger
   than B, zero when they equals.
@@ -85,7 +111,45 @@ Function CompareUInt64(A,B: UInt64): Integer;
 
 Function SameUInt64(A,B: UInt64): Boolean;
 
+Function IsEqualUInt64(A,B: UInt64): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function IsLessUInt64(A,B: UInt64): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function IsLessOrEqualUInt64(A,B: UInt64): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function IsGreaterUInt64(A,B: UInt64): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function IsGreaterOrEqualUInt64(A,B: UInt64): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+
 implementation
+
+Function UInt64Low: UInt64;
+begin
+Result := UInt64(0);
+end;
+
+//------------------------------------------------------------------------------
+
+Function LowUInt64: UInt64;
+begin
+Result := UInt64(0);
+end;
+
+//------------------------------------------------------------------------------
+
+Function UInt64High: UInt64;
+begin
+Result := UInt64($FFFFFFFFFFFFFFFF);
+end;
+
+//------------------------------------------------------------------------------
+
+Function HighUInt64: UInt64;
+begin
+Result := UInt64($FFFFFFFFFFFFFFFF);
+end;
+
+//==============================================================================
 
 Function UInt64Get(Hi,Lo: UInt32): UInt64;
 begin
@@ -93,7 +157,28 @@ UInt64Rec(Result).Hi := Hi;
 UInt64Rec(Result).Lo := Lo;
 end;
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function UInt64Get(Lo: UInt32): UInt64;
+begin
+Result := UInt64Get(0,Lo);
+end;
+
 //------------------------------------------------------------------------------
+
+Function GetUInt64(Hi,Lo: UInt32): UInt64;
+begin
+Result := UInt64Get(Hi,Lo);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetUInt64(Lo: UInt32): UInt64;
+begin
+Result := UInt64Get(0,Lo);
+end;
+
+//==============================================================================
 
 const
   UInt64NumTable: array[0..63] of String = (
@@ -316,7 +401,7 @@ If not TryStrToUInt64(Str,Result) then
   Result := Default;
 end;
 
-//------------------------------------------------------------------------------
+//==============================================================================
 
 Function CompareUInt64(A,B: UInt64): Integer;
 begin
@@ -344,4 +429,40 @@ Result := (UInt64Rec(A).Hi = UInt64Rec(B).Hi) and
           (UInt64Rec(A).Lo = UInt64Rec(B).Lo);
 end;
 
+//------------------------------------------------------------------------------
+
+Function IsEqualUInt64(A,B: UInt64): Boolean;
+begin
+Result := SameUInt64(A,B);
+end;
+
+//------------------------------------------------------------------------------
+
+Function IsLessUInt64(A,B: UInt64): Boolean;
+begin
+Result := CompareUInt64(A,B) < 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function IsLessOrEqualUInt64(A,B: UInt64): Boolean;
+begin
+Result := CompareUInt64(A,B) <= 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function IsGreaterUInt64(A,B: UInt64): Boolean;
+begin
+Result := CompareUInt64(A,B) > 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function IsGreaterOrEqualUInt64(A,B: UInt64): Boolean;
+begin
+Result := CompareUInt64(A,B) >= 0;
+end;
+
 end.
+

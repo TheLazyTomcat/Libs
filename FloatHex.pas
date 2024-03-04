@@ -10,18 +10,19 @@
   FloatHex
 
     Small set of functions for conversions of floating point numbers to and
-    from hexadecimal strings.
+    from hexadecimal strings and functions for direct casting between integers
+    and floats.
 
     Note that when converting to and from type Extended, the strings will be
     20 characters long - as if the type is 80bits (10bytes) in size,
     irrespective of how it is declared (in 64bit windows programs, it is
     usually declared as a simple alias for type double (64bits)).
 
-  Version 2.0 (2020-11-22)
+  Version 2.1 (2024-02-14)
 
-  Last change 2020-11-22
+  Last change 2024-02-14
 
-  ©2015-2020 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -160,6 +161,108 @@ Function HexToFloat(const HexString: String): Double;{$IFDEF CanInline} inline;{
 Function TryHexToFloat(const HexString: String; out Value: Double): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
 Function HexToFloatDef(const HexString: String; const DefaultValue: Double): Double;{$IFDEF CanInline} inline;{$ENDIF}
 
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                            Float <-> Integer casting
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Following functions are casting the integers to floats and back as if they
+  would occupy the same memory location, they are NOT converting them.
+  The result will have the same bit pattern as the input parameter, which might
+  lead to exceptions if you happen to produce SNaN from an integer - be aware
+  of that and do not blindly pass some random integers.
+
+  Note that unsigned integers are used to reduce potential problems with
+  negative values (don't ask, accept it >:/).
+}
+{===============================================================================
+    Float <-> Integer casting - declaration
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float16
+-------------------------------------------------------------------------------}
+
+Function CastToFloat16(Value: UInt16): Float16;
+Function CastFromFloat16(Value: Float16): UInt16;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Half
+-------------------------------------------------------------------------------}
+
+Function CastToHalf(Value: UInt16): Half;{$IFDEF CanInline} inline;{$ENDIF}
+Function CastFromHalf(Value: Half): UInt16;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float32
+-------------------------------------------------------------------------------}
+
+Function CastToFloat32(Value: UInt32): Float32;
+Function CastFromFloat32(Value: Float32): UInt32;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Single
+-------------------------------------------------------------------------------}
+
+Function CastToSingle(Value: UInt32): Single;{$IFDEF CanInline} inline;{$ENDIF}
+Function CastFromSingle(Value: Single): UInt32;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float64
+-------------------------------------------------------------------------------}
+
+Function CastToFloat64(Value: UInt64): Float64;
+Function CastFromFloat64(Value: Float64): UInt64;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Double
+-------------------------------------------------------------------------------}
+
+Function CastToDouble(Value: UInt64): Double;{$IFDEF CanInline} inline;{$ENDIF}
+Function CastFromDouble(Value: Double): UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float80
+-------------------------------------------------------------------------------}
+
+Function CastToFloat80(const Value): Float80; overload;
+Function CastToFloat80(ExponentWithSign: UInt16; Mantissa: UInt64): Float80; overload;
+procedure CastFromFloat80(Value: Float80; out Result); overload;
+procedure CastFromFloat80(Value: Float80; out ExponentWithSign: UInt16; out Mantissa: UInt64); overload;
+Function CastFromFloat80(Value: Float80): TFloat80Overlay; overload;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Extended
+-------------------------------------------------------------------------------}
+{
+  WARNING - in following functions, the integer input/output is ALWAYS 80bits
+            (10 bytes) wide, irrespective of how is the type Extended declared
+            (conversion to/from 80bit to 64bit float is done automatically when
+            needed).
+            If you want to have integer in/out to be the true size of Extended,
+            use functions NativeCastToExtended and NativeCastFromExtended.
+}
+Function CastToExtended(const Value): Extended; overload;
+Function CastToExtended(ExponentWithSign: UInt16; Mantissa: UInt64): Extended; overload;
+procedure CastFromExtended(Value: Extended; out Result); overload;
+procedure CastFromExtended(Value: Extended; out ExponentWithSign: UInt16; out Mantissa: UInt64); overload;
+Function CastFromExtended(Value: Extended): TFloat80Overlay; overload;
+
+{
+  In following two functions, the size of input/output buffer equals to actual
+  size of type Extended, whatever its declaration may be.
+}
+Function NativeCastToExtended(const Value): Extended; overload;
+procedure NativeCastFromExtended(Value: Extended; out Result); overload;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - default float type
+-------------------------------------------------------------------------------}
+
+Function CastToFloat(Value: UInt64): Double;{$IFDEF CanInline} inline;{$ENDIF}
+Function CastFromFloat(Value: Double): UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+
 implementation
 
 // do not place higher (FPC does not like it)
@@ -177,7 +280,7 @@ implementation
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    Float <-> HexString conversions- auxiliary routines
+    Float <-> HexString conversions - auxiliary routines
 ===============================================================================}
 
 Function RectifyHexString(const Str: String; RequiredLength: Integer): String;
@@ -539,5 +642,258 @@ Function HexToFloatDef(const HexString: String; const DefaultValue: Double): Dou
 begin
 Result := HexToDoubleDef(HexString,DefaultValue);
 end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                            Float <-> Integer casting
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Float <-> Integer casting - implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float16
+-------------------------------------------------------------------------------}
+
+Function CastToFloat16(Value: UInt16): Float16;
+var
+  Temp: UInt16 absolute Result;
+begin
+Temp := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CastFromFloat16(Value: Float16): UInt16;
+var
+  Temp: Float16 absolute Result;
+begin
+Temp := Value;
+end;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Half
+-------------------------------------------------------------------------------}
+
+Function CastToHalf(Value: UInt16): Half;
+begin
+Result := CastToFloat16(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CastFromHalf(Value: Half): UInt16;
+begin
+Result := CastFromFloat16(Value);
+end;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float32
+-------------------------------------------------------------------------------}
+
+Function CastToFloat32(Value: UInt32): Float32;
+var
+  Temp: UInt32 absolute Result;
+begin
+Temp := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CastFromFloat32(Value: Float32): UInt32;
+var
+  Temp: Float32 absolute Result;
+begin
+Temp := Value;
+end;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Single
+-------------------------------------------------------------------------------}
+
+Function CastToSingle(Value: UInt32): Single;
+begin
+Result := CastToFloat32(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CastFromSingle(Value: Single): UInt32;
+begin
+Result := CastFromFloat32(Value);
+end;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float64
+-------------------------------------------------------------------------------}
+
+Function CastToFloat64(Value: UInt64): Float64;
+var
+  Temp: UInt64 absolute Result;
+begin
+Temp := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CastFromFloat64(Value: Float64): UInt64; 
+var
+  Temp: Float64 absolute Result;
+begin
+Temp := Value;
+end;
+
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Double
+-------------------------------------------------------------------------------}
+
+Function CastToDouble(Value: UInt64): Double;
+begin
+Result := CastToFloat64(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CastFromDouble(Value: Double): UInt64;
+begin
+Result := CastFromFloat64(Value);
+end;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Float80
+-------------------------------------------------------------------------------}
+
+Function CastToFloat80(const Value): Float80;
+begin
+Result := Float80(Value);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CastToFloat80(ExponentWithSign: UInt16; Mantissa: UInt64): Float80;
+begin
+TFloat80Overlay(Result).SignExponent := ExponentWithSign;
+TFloat80Overlay(Result).Mantissa := Mantissa;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure CastFromFloat80(Value: Float80; out Result);
+begin
+Float80(Result) := Value;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure CastFromFloat80(Value: Float80; out ExponentWithSign: UInt16; out Mantissa: UInt64);
+begin
+ExponentWithSign := TFloat80Overlay(Value).SignExponent;
+Mantissa := TFloat80Overlay(Value).Mantissa;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CastFromFloat80(Value: Float80): TFloat80Overlay;
+begin
+Result := TFloat80Overlay(Value);
+end;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - type Extended
+-------------------------------------------------------------------------------}
+
+Function CastToExtended(const Value): Extended;
+begin
+{$IFDEF Extended64}
+Float80ToFloat64(@Value,@Result);
+{$ELSE}
+Result := Extended(Value);
+{$ENDIF}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CastToExtended(ExponentWithSign: UInt16; Mantissa: UInt64): Extended;
+var
+  Temp: TFloat80Overlay;
+begin
+Temp.SignExponent := ExponentWithSign;
+Temp.Mantissa := Mantissa;
+{$IFDEF Extended64}
+Float80ToFloat64(@Temp,@Result);
+{$ELSE}
+Result := Extended(Temp);
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure CastFromExtended(Value: Extended; out Result);
+begin
+{$IFDEF Extended64}
+Float64ToFloat80(@Value,@Result);
+{$ELSE}
+Extended(Result) := Value;
+{$ENDIF}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure CastFromExtended(Value: Extended; out ExponentWithSign: UInt16; out Mantissa: UInt64);
+var
+  Temp: TFloat80Overlay;
+begin
+{$IFDEF Extended64}
+Float64ToFloat80(@Value,@Temp);
+{$ELSE}
+Temp := TFloat80Overlay(Value);
+{$ENDIF}
+ExponentWithSign := Temp.SignExponent;
+Mantissa := Temp.Mantissa;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CastFromExtended(Value: Extended): TFloat80Overlay;
+begin
+{$IFDEF Extended64}
+Float64ToFloat80(@Value,@Result);
+{$ELSE}
+Result := TFloat80Overlay(Value);
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function NativeCastToExtended(const Value): Extended;
+begin
+Result := Extended(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure NativeCastFromExtended(Value: Extended; out Result);
+begin
+Extended(Result) := Value;
+end;
+
+{-------------------------------------------------------------------------------
+    Float <-> Integer casting - default float type
+-------------------------------------------------------------------------------}
+
+Function CastToFloat(Value: UInt64): Double;
+begin
+Result := CastToFloat64(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CastFromFloat(Value: Double): UInt64;
+begin
+Result := CastFromFloat64(Value);
+end;
+
 
 end.

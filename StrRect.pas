@@ -49,9 +49,9 @@
               Also, if you are certain that some part, in here marked as
               dubious, is actually correct, let the author know.
 
-  Version 1.6 (2024-01-26)
+  Version 1.6.1 (2024-02-29)
 
-  Last change 2024-01-26
+  Last change 2024-02-29
 
   ©2017-2024 František Milt
 
@@ -127,11 +127,7 @@ interface
 uses
   SysUtils,
 {$IFNDEF Windows}
-{
-  Currently disabled (default wide strings manager is used) - if you want to
-  use the one provided by C library, uncomment the following line...
-}
-  //cwstring,
+  cwstring,
 {$ENDIF}
   AuxTypes;
 
