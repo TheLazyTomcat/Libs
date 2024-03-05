@@ -14,7 +14,7 @@
 
   Version 1.19 (2024-01-26)
 
-  Last change (2024-01-26)
+  Last change 2024-03-05
 
   ©2014-2024 František Milt
 
@@ -85,7 +85,7 @@ unit BitOps;
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

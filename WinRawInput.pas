@@ -15,9 +15,9 @@
 
   Version 1.2.2 (2019-10-02)
 
-  Last change 2020-11-12
+  Last change 2024-03-05
 
-  ©2016-2019 František Milt  
+  ©2016-2024 František Milt  
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -58,7 +58,7 @@ unit WinRawInput;
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

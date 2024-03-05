@@ -123,9 +123,9 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2023-12-28
+  Last change 2024-03-05
 
-  ©2015-2023 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -172,7 +172,7 @@ unit SHA3;
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

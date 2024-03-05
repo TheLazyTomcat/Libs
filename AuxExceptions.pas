@@ -18,9 +18,9 @@
     To do that, you only need to copy the entire code from this unit
     (AuxException.pas) to a new unit of your choice, copy AuxException.inc
     (which implements everything) so it can be included, and change declaration
-    of EBaseException to a class you desire to be a new common ancestor.
-    You can also provide aliases to existing specialized exception classes, see
-    current implementation on how to do that.
+    of EBaseException to a class you desire to be the new common ancestor.
+    You can also provide aliases to existing specialized exception classes (see
+    current implementation on how to do that).
 
     Depending on defined symbols and compilation target, the implemented
     exception classes can also provide some more advanced information, eg.
@@ -57,11 +57,11 @@
         In Linux, this list might not be accurate as the threads can be created
         and/or destroyed during the enumeration.
 
-  Version 1.1.2 (2023-01-20)
+  Version 1.2 (2024-03-04)
 
-  Last change 2023-12-27
+  Last change 2024-03-04
 
-  ©2019-2023 František Milt
+  ©2019-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -78,21 +78,158 @@
       github.com/TheLazyTomcat/Lib.AuxExceptions
 
   Dependencies:
-  * AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
   * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
   * StrRect     - github.com/TheLazyTomcat/Lib.StrRect
   * UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
   * WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
-  Libraries AuxTypes, SimpleCPUID and WinFileInfo are required only when
-  PurePascal is not defined (note it might be automatically defined, depending
-  on taget CPU, see source code for details) and symbol AllowExtendedException
-  is defined.
-  In addition, StrRect is only required when compiling for Windows and
-  UInt64Utils only for Linux OS.
+  Library SimpleCPUID is required only when symbol PurePascal is not defined.
+
+  Libraries StrRect, UInt64Utils and WinFileInfo are required only when symbol
+  AllowExtendedException is defined. Also, StrRect is required only when
+  compiling for Windows OS and UInt64Utils when compiling for Linux OS.
 
 ===============================================================================}
 unit AuxExceptions;
+{
+  AllowExtendedException
+
+  If defined and when other symbols and compilation target allows it, then
+  EGeneralException (and its descendants) are based on EAEExtendedException
+  instead of EAECustomException. Extended exception implements advanced stuff
+  like registers snapshot, stack trace and so on, and therefore enables these
+  functions in all descendant exception classes.
+
+  Defined by default.
+
+  To disable/undefine this symbol in a project without changing this library,
+  define project-wide symbol AuxExceptions_AllowExtendedException_OFF.
+}
+{$DEFINE AllowExtendedException}
+{$IFDEF AuxExceptions_AllowExtendedException_OFF}
+  {$UNDEF AllowExtendedException}
+{$ENDIF}
+
+{
+  ExtendedExceptionRegisters
+
+  When defined, the extended exception will try to create a register snapshot
+  of current processor at its creation.
+
+  Has no effect when symbol AllowExtendedException is not defined or when
+  PurePascal symbol is defined.
+
+  Defined by default.
+
+  To disable/undefine this symbol in a project without changing this library,
+  define project-wide symbol AuxExceptions_ExtendedExceptionRegisters_OFF.
+}
+{$DEFINE ExtendedExceptionRegisters}
+{$IFDEF AuxExceptions_ExtendedExceptionRegisters_OFF}
+  {$UNDEF ExtendedExceptionRegisters}
+{$ENDIF}
+
+{
+  ExtendedExceptionStack
+
+  When defined, the extended exception will create stack dump and a simple
+  stack trace at its creation.
+
+  Has no effect when symbol AllowExtendedException is not defined or when
+  PurePascal symbol is defined.
+
+  Defined by default.
+
+  To disable/undefine this symbol in a project without changing this library,
+  define project-wide symbol AuxExceptions_ExtendedExceptionStack_OFF.
+}
+{$DEFINE ExtendedExceptionStack}
+{$IFDEF AuxExceptions_ExtendedExceptionStack_OFF}
+  {$UNDEF ExtendedExceptionStack}
+{$ENDIF}
+
+{
+  ExtendedExceptionProcess
+
+  When defined, the extended exception will obtain a set of information about
+  the executable file of current process.
+
+  Has no effect when symbol AllowExtendedException is not defined.
+
+  Not defined by default.
+
+  To enable/define this symbol in a project without changing this library,
+  define project-wide symbol AuxExceptions_ExtendedExceptionProcess_ON.
+}
+{$UNDEF ExtendedExceptionProcess}
+{$IFDEF AuxExceptions_ExtendedExceptionProcess_ON}
+  {$DEFINE ExtendedExceptionProcess}
+{$ENDIF}
+
+{
+  ExtendedExceptionModule
+
+  When defined, the extended exception will obtain information about the
+  current module (be it executable or dynamic library) in which the exception
+  was created/raised.
+
+  Has no effect when symbol AllowExtendedException is not defined.
+
+  Not defined by default.
+
+  To enable/define this symbol in a project without changing this library,
+  define project-wide symbol AuxExceptions_ExtendedExceptionModule_ON.
+}
+{$UNDEF ExtendedExceptionModule}
+{$IFDEF AuxExceptions_ExtendedExceptionModule_ON}
+  {$DEFINE ExtendedExceptionModule}
+{$ENDIF}
+
+{
+  ExtendedExceptionModules
+
+  When defined, the extended exception will compile a list of all modules
+  loaded in the process memory.
+
+  Has no effect when symbol AllowExtendedException is not defined.
+
+  Not defined by default.
+
+  To enable/define this symbol in a project without changing this library,
+  define project-wide symbol AuxExceptions_ExtendedExceptionModules_ON.
+}
+{$UNDEF ExtendedExceptionModules}
+{$IFDEF AuxExceptions_ExtendedExceptionModules_ON}
+  {$DEFINE ExtendedExceptionModules}
+{$ENDIF}
+
+{
+  ExtendedExceptionThreads
+
+  When defined, the extended exception will obtain a list of all threads within
+  the current process.
+
+  Has no effect when symbol AllowExtendedException is not defined.
+
+  Not defined by default.
+
+  To enable/define this symbol in a project without changing this library,
+  define project-wide symbol AuxExceptions_ExtendedExceptionThreads_ON.
+}
+{$UNDEF ExtendedExceptionThreads}
+{$IFDEF AuxExceptions_ExtendedExceptionThreads_ON}
+  {$DEFINE ExtendedExceptionThreads}
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$UNDEF AE_Include_Defs}
+{$UNDEF AE_Include_Interface_Uses}
+{$UNDEF AE_Include_Interface}
+{$UNDEF AE_Include_Implementation_Uses}
+{$UNDEF AE_Include_Implementation}
+{$UNDEF AE_Include_UnitInitFinal}
 
 {$DEFINE AE_Include_Defs}
   {$INCLUDE '.\AuxExceptions.inc'}
@@ -118,7 +255,7 @@ type
 type
   // aliases of all implemented exceptions
   ECustomException      = EAECustomException;
-{$IFDEF ExtendedException}
+{$IFDEF AE_ExtendedException}
   EExtendedException    = EAEExtendedException;
 {$ENDIF}
   EGeneralException     = EAEGeneralException;

@@ -51,7 +51,7 @@
 
   Version 1.6.1 (2024-02-29)
 
-  Last change 2024-02-29
+  Last change 2024-03-05
 
   ©2017-2024 František Milt
 
@@ -114,7 +114,7 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
     {$UNDEF BARE_FPC}
   {$ENDIF}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

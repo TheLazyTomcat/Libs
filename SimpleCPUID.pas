@@ -16,9 +16,9 @@
 
   Version 1.3 (2023-04-23)
 
-  Last change 2023-12-17
+  Last change 2024-03-05
 
-  ©2016-2023 František Milt
+  ©2016-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -84,7 +84,7 @@ unit SimpleCPUID;
   {$DEFINE CanInline}
   {$ASMMODE Intel}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

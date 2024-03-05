@@ -11,9 +11,9 @@
 
   Version 1.2.3 (2020-07-13)
 
-  Last change 2023-12-27
+  Last change 2024-03-05
 
-  ©2018-2023 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -46,7 +46,7 @@ unit Adler32;
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

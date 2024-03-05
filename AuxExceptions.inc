@@ -13,11 +13,11 @@
     AuxExceptions library. It is stored separately to allow for classes
     rebasing.
 
-  Version 1.1.2 (2023-01-20)
+  Version 1.2 (2024-03-04)
 
-  Last change 2023-12-27
+  Last change 2024-03-04
 
-  ©2019-2023 František Milt
+  ©2019-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -34,18 +34,17 @@
       github.com/TheLazyTomcat/Lib.AuxExceptions
 
   Dependencies:
-  * AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
   * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
   * StrRect     - github.com/TheLazyTomcat/Lib.StrRect
   * UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
   * WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
-  Libraries AuxTypes, SimpleCPUID and WinFileInfo are required only when
-  PurePascal is not defined (note it might be automatically defined, depending
-  on taget CPU, see source code for details) and symbol AllowExtendedException
-  is defined.
-  In addition, StrRect is only required when compiling for Windows and
-  UInt64Utils only for Linux OS.
+  Library SimpleCPUID is required only when symbol PurePascal is not defined.
+
+  Libraries StrRect, UInt64Utils and WinFileInfo are required only when symbol
+  AllowExtendedException is defined. Also, StrRect is required only when
+  compiling for Windows OS and UInt64Utils when compiling for Linux OS.
 
 ===============================================================================}
 {$IFDEF AE_Include_Defs}
@@ -60,136 +59,6 @@
 {$IFDEF AuxExceptions_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
-
-{
-  AllowExtendedException
-
-  If defined and when other symbols and compilation target allows it, then
-  EGeneralException (and its descendants) are based on EAEExtendedException
-  instead of EAECustomException. Extended exception implements advanced stuff
-  like registers snapshot, stack trace and so on, and therefore enables these
-  functions in all descendant exception classes.
-
-  Defined by default.
-
-  To disable/undefine this symbol in a project without changing this library,
-  define project-wide symbol AuxExceptions_AllowExtendedException_OFF.
-}
-{$DEFINE AllowExtendedException}
-{$IFDEF AuxExceptions_AllowExtendedException_OFF}
-  {$UNDEF AllowExtendedException}
-{$ENDIF}
-
-{
-  ExtendedExceptionRegisters
-
-  When defined, the extended exception will try to create a register snapshot
-  of current processor at its creation.
-
-  Has no effect when symbol AllowExtendedException is not defined.
-
-  Defined by default.
-
-  To disable/undefine this symbol in a project without changing this library,
-  define project-wide symbol AuxExceptions_ExtendedExceptionRegisters_OFF.
-}
-{$DEFINE ExtendedExceptionRegisters}
-{$IFDEF AuxExceptions_ExtendedExceptionRegisters_OFF}
-  {$UNDEF ExtendedExceptionRegisters}
-{$ENDIF}
-
-{
-  ExtendedExceptionStack
-
-  When defined, the extended exception will create stack dump and a simple
-  stack trace at its creation.
-
-  Has no effect when symbol AllowExtendedException is not defined.
-
-  Defined by default.
-
-  To disable/undefine this symbol in a project without changing this library,
-  define project-wide symbol AuxExceptions_ExtendedExceptionStack_OFF.
-}
-{$DEFINE ExtendedExceptionStack}
-{$IFDEF AuxExceptions_ExtendedExceptionStack_OFF}
-  {$UNDEF ExtendedExceptionStack}
-{$ENDIF}
-
-{
-  ExtendedExceptionProcess
-
-  When defined, the extended exception will obtain a set of information about
-  the executable file of current process.
-
-  Has no effect when symbol AllowExtendedException is not defined.
-
-  Not defined by default.
-
-  To enable/define this symbol in a project without changing this library,
-  define project-wide symbol AuxExceptions_ExtendedExceptionProcess_ON.
-}
-{$UNDEF ExtendedExceptionProcess}
-{$IFDEF AuxExceptions_ExtendedExceptionProcess_ON}
-  {$DEFINE ExtendedExceptionProcess}
-{$ENDIF}
-
-{
-  ExtendedExceptionModule
-
-  When defined, the extended exception will obtain information about the
-  current module (be it executable or dynamic library) in which the exception
-  was created/raised.
-
-  Has no effect when symbol AllowExtendedException is not defined.
-
-  Not defined by default.
-
-  To enable/define this symbol in a project without changing this library,
-  define project-wide symbol AuxExceptions_ExtendedExceptionModule_ON.
-}
-{$UNDEF ExtendedExceptionModule}
-{$IFDEF AuxExceptions_ExtendedExceptionModule_ON}
-  {$DEFINE ExtendedExceptionModule}
-{$ENDIF}
-
-{
-  ExtendedExceptionModules
-
-  When defined, the extended exception will compile a list of all modules
-  loaded in the process memory.
-
-  Has no effect when symbol AllowExtendedException is not defined.
-
-  Not defined by default.
-
-  To enable/define this symbol in a project without changing this library,
-  define project-wide symbol AuxExceptions_ExtendedExceptionModules_ON.
-}
-{$UNDEF ExtendedExceptionModules}
-{$IFDEF AuxExceptions_ExtendedExceptionModules_ON}
-  {$DEFINE ExtendedExceptionModules}
-{$ENDIF}
-
-{
-  ExtendedExceptionThreads
-
-  When defined, the extended exception will obtain a list of all threads within
-  the current process.
-
-  Has no effect when symbol AllowExtendedException is not defined.
-
-  Not defined by default.
-
-  To enable/define this symbol in a project without changing this library,
-  define project-wide symbol AuxExceptions_ExtendedExceptionThreads_ON.
-}
-{$UNDEF ExtendedExceptionThreads}
-{$IFDEF AuxExceptions_ExtendedExceptionThreads_ON}
-  {$DEFINE ExtendedExceptionThreads}
-{$ENDIF}
-
-//------------------------------------------------------------------------------
 
 {$IF Defined(CPUX86_64) or Defined(CPUX64)}
   {$DEFINE x64}
@@ -219,11 +88,16 @@
 
 //------------------------------------------------------------------------------
 
-{$IF not Defined(PurePascal) and Defined(AllowExtendedException)}
-  {$DEFINE ExtendedException}
+{$IFDEF AllowExtendedException}
+  {$DEFINE AE_ExtendedException}
 {$ELSE}
-  {$UNDEF ExtendedException}
-{$IFEND}
+  {$UNDEF AE_ExtendedException}
+{$ENDIF}
+
+{$IFDEF PurePascal}
+  {$UNDEF ExtendedExceptionRegisters}
+  {$UNDEF ExtendedExceptionStack}
+{$ENDIF}
 
 {$IFOPT W+}
   {$DEFINE AE_StackFramesEnabled}
@@ -239,8 +113,8 @@
 
 {$IFDEF AE_Include_Interface_Uses}
 uses
-  SysUtils {$IFDEF Windows}, Windows{$ELSE}, BaseUnix{$ENDIF}
-  {$IFDEF ExtendedException}, AuxTypes, WinFileInfo{$ENDIF};
+  SysUtils{$IFNDEF Windows}, BaseUnix{$ENDIF},
+  AuxTypes{$IFDEF AE_ExtendedException}, WinFileInfo{$ENDIF};
 
 {$ENDIF AE_Include_Interface_Uses}
 
@@ -248,7 +122,22 @@ uses
 ********************************************************************************
 ===============================================================================}
 
+{===============================================================================
+    Informative symbols
+===============================================================================}
+{
+  Following symbols can be used to discern whether the provided classes are
+  based on extended exception. Since they are true constants, they can be used
+  as conditionals in compilation.
+}
 {$IFDEF AE_Include_Interface}
+const
+  ProvidingExtendedException = {$IFDEF AE_ExtendedException}True{$ELSE}False{$ENDIF};
+  ProvidingExtendedExceptionN = {$IFDEF AE_ExtendedException}1{$ELSE}0{$ENDIF};
+{$IFDEF AE_ExtendedException}
+  ProvidingExtendedExceptionE = True;
+{$ENDIF}
+
 {===============================================================================
     Common types
 ===============================================================================}
@@ -290,18 +179,14 @@ type
     property ExceptAddress: Pointer read fExcAddr;
   end;
 
-{$IFDEF ExtendedException}
 {===============================================================================
 --------------------------------------------------------------------------------
-                               EAEExtendedException
+                             CPU registers snapshot
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    EAEExtendedException - public storage types
+    CPU registers snapshot - public storage types
 ===============================================================================}
-{-------------------------------------------------------------------------------
-    EAEExtendedException - public storage types - registers
--------------------------------------------------------------------------------}
 type
   TAENativeRegister = PtrUInt;
 
@@ -432,6 +317,85 @@ type
     FloatVector:      TAEFloatVectorRegisters;    // SSE, AVX
     System:           TAESystemRegisters;         // MSW
   end;
+
+{===============================================================================
+    CPU registers snapshot - public functions declaration
+===============================================================================}
+{
+  When assembly is allowed (ie. PurePascal symbol is NOT defined):
+
+    RegistersSnapshotMake
+
+      This function makes a snapshot of CPU registers as they were just before
+      calling it (except for RIP/EIP, it will contain address of next
+      instruction after the call) and saves it into a thread-local storage.
+      If the thread storage does not exists, it is created (allocated), but if
+      it does exist, then data stored in it are preserved and the current
+      snapshot is dropped.
+      In any case, the result will contain return address of the call (address
+      of next instruction after the call).
+
+      If this function is called in conjunction with raising an exception that
+      is a descendant of extended exception as this:
+
+          raise EAEExtendedException.Create at RegistersSnapshotMake;
+
+      ...then the exception object will take the snapshot instead of creating
+      its own (the snapshot will not be polluted by constructor call) and will
+      also automatically free the thread storage, but...
+
+                                  !!! WARNING !!!
+
+      ...this works only in 32bit Windows (and probably only when compiled in
+      Delphi), nowhere else. This is because in Win32, the function is called
+      BEFORE the exception object is created, whereas everywhere else the
+      object is firss created and only then the function is called (why, I do
+      not know).
+      Therefore using this feature is, at this point, strongly discouraged.
+
+    RegistersSnapshotGet
+
+      This function is to be the used to obtain the snapshot from thread
+      storage. It returns true when the snapshot is successfully obtained (ie.
+      was previously created by RegistersSnapshotMake) and false when it could
+      not be obtained. In that case, the output parameter Snapshot is zeroed
+      and its field PresentRegisters explicitly contains an empty set
+
+      If Cleanup is set to true, then the thread storage is freed (equivalent
+      to calling RegistersSnapshotCleanup).
+
+    RegistersSnapshotCleanup
+
+      Frees the thread-local storage (if it exists, otherwise it does nothing).
+
+  When PurePascal symbol is defined (assembly disabled):
+
+    RegistersSnapshotMake returns its own address, RegistersSnapshotGet returns
+    false (argument Snapshot is filled with zeroes, field PresentRegisters is
+    explicitly an empty set) and function RegistersSnapshotCleanup does nothing.
+}
+Function RegistersSnapshotMake: Pointer;{$IFNDEF PurePascal}register; assembler;{$ENDIF}
+Function RegistersSnapshotGet(out Snapshot: TAERegisters; Cleanup: Boolean = False): Boolean;
+procedure RegistersSnapshotCleanup;
+
+{$IFDEF AE_ExtendedException}
+{===============================================================================
+--------------------------------------------------------------------------------
+                               EAEExtendedException
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    EAEExtendedException - public storage types
+===============================================================================}
+{
+  TAEProvidedInformation(s) is used to indicate what information the extended
+  exception object is providing.
+}
+type
+  TAEProvidedInformation = (infoRegistersSnapshot,infoStackTrace,infoProcess,
+                            infoModule,infoModules,infoThreads);
+
+  TAEProvidedInformations = set of TAEProvidedInformation;
 
 {-------------------------------------------------------------------------------
     EAEExtendedException - public storage types - stack
@@ -581,12 +545,13 @@ type
 type
   EAEExtendedException = class(EAECustomException)
   protected
-    fRegisters:   TAERegisters;
-    fStackTrace:  TAEStackTrace;
-    fProcessInfo: TAEProcessInfo;
-    fModuleInfo:  TAECurrModuleInfo;
-    fModulesInfo: TAEModulesInfo;
-    fThreadsInfo: TAEThreadsInfo;
+    fProvidedInfo:  TAEProvidedInformations;
+    fRegisters:     TAERegisters;
+    fStackTrace:    TAEStackTrace;
+    fProcessInfo:   TAEProcessInfo;
+    fModuleInfo:    TAECurrModuleInfo;
+    fModulesInfo:   TAEModulesInfo;
+    fThreadsInfo:   TAEThreadsInfo;
     procedure InitRegisters; virtual;
     procedure InitStackTrace; virtual;
     procedure InitProcessInfo; virtual;
@@ -597,6 +562,7 @@ type
   public
     constructor CreateFmt(const Msg: String; Args: array of const);
     destructor Destroy; override;
+    property ProvidedInformation: TAEProvidedInformations read fProvidedInfo;
     property Registers: TAERegisters read fRegisters;
     property StackTrace: TAEStackTrace read fStackTrace;
     property ProcessInfo: TAEProcessInfo read fProcessInfo;
@@ -605,7 +571,7 @@ type
     property ThreadsInfo: TAEThreadsInfo read fThreadsInfo;
   end;
 
-{$ENDIF ExtendedException}
+{$ENDIF AE_ExtendedException}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -616,11 +582,11 @@ type
     EAEGeneralException - class declaration
 ===============================================================================}
 type
-{$IFDEF ExtendedException}
+{$IFDEF AE_ExtendedException}
   EAEGeneralException = class(EAEExtendedException)
-{$ELSE ExtendedException}
+{$ELSE AE_ExtendedException}
   EAEGeneralException = class(EAECustomException)
-{$ENDIF ExtendedException}
+{$ENDIF AE_ExtendedException}
   protected
     fFaultingObject:    String;
     fFaultingFunction:  String;
@@ -788,20 +754,21 @@ type
 {$IFDEF FPC}{$PUSH}{$WARN 2005 OFF}{$ENDIF}
 {$IFDEF AE_Include_Implementation_Uses}
 uses
-  Variants {$IFDEF Windows}{$ELSE}, syscall, pthreads{$ENDIF}
-{$IFDEF ExtendedException}
+  Variants {$IFDEF Windows}, Windows{$ELSE}, syscall, pthreads{$ENDIF}
+{$IFDEF AE_ExtendedException}
   {$IFDEF Windows}
     ,{$IFDEF FPC}jwaTlHelp32, jwaPsApi{$ELSE}TlHelp32, PsApi{$ENDIF}, StrRect
   {$ELSE}
     , Classes, StrUtils, dl, UInt64Utils
-  {$ENDIF}, SimpleCPUID
-{$ENDIF};
+  {$ENDIF}
+{$ENDIF}{$IFNDEF PurePascal}, SimpleCPUID{$ENDIF};
 
 //------------------------------------------------------------------------------
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W4055:={$WARN 4055 OFF}}   // Conversion between ordinals and pointers is not portable
+  {$DEFINE W5024:={$WARN 5024 OFF}}   // Parameter "$1" not used
   {$DEFINE W7102:={$WARN 7102 OFF}}   // Use of +offset(%ebp) for parameters invalid here
   {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
   {$IF Defined(FPC) and (FPC_FULLVERSION >= 30000)}
@@ -875,14 +842,43 @@ begin
 CreateFmt(Msg,[]);
 end;
 
-{$IFDEF ExtendedException}
+
 {===============================================================================
 --------------------------------------------------------------------------------
-                               Registers obtaining
+                             CPU registers snapshot
 --------------------------------------------------------------------------------
 ===============================================================================}
+{$IFDEF PurePascal}
 {===============================================================================
-    Registers obtaining  - machine features word
+    CPU registers snapshot - public functions implementation
+===============================================================================}
+
+Function RegistersSnapshotMake: Pointer;
+begin
+Result := @RegistersSnapshotMake;
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function RegistersSnapshotGet(out Snapshot: TAERegisters; Cleanup: Boolean = False): Boolean;
+begin
+FillChar(Addr(Snapshot)^,SizeOf(TAERegisters),0);
+Snapshot.PresentRegisters := [];
+Result := False;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure RegistersSnapshotCleanup;
+begin
+// do nothing
+end;
+
+{$ELSE}
+{===============================================================================
+    CPU registers snapshot - machine features word
 ===============================================================================}
 const
   AE_MACHINEFEATURES_FPU    = $00000001;
@@ -891,11 +887,15 @@ const
   AE_MACHINEFEATURES_AVX    = $00000008;
   AE_MACHINEFEATURES_AVX512 = $00000010;
 
+  AE_MACHINEFEATURES_FLOATVECS = AE_MACHINEFEATURES_SSE or
+                                 AE_MACHINEFEATURES_AVX or
+                                 AE_MACHINEFEATURES_AVX512;
+
 var
   MachineFeaturesWord:  UInt32 = 0;
 
 {===============================================================================
-    Registers obtaining - thread-local storage
+    CPU registers snapshot - internal/thread-local storage
 ===============================================================================}
 type
   TAERegistersStorage = packed record
@@ -935,12 +935,13 @@ type
     MSW:          UInt16; // machine status word
   end;
   PAERegistersStorage = ^TAERegistersStorage;
-
+  
+//------------------------------------------------------------------------------
 threadvar
   RegistersSnapshot:  PAERegistersStorage;
 
 {===============================================================================
-    Registers obtaining - internal functions
+    CPU registers snapshot - internal functions
 ===============================================================================}
 
 procedure GetX87Data(Storage: Pointer); register; assembler;
@@ -1185,21 +1186,66 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure CreateRegistersSnapshotCopyToTLS(Storage: PAERegistersStorage); register;
+procedure RegistersSnapshotCopyToTLS(Data: PAERegistersStorage); register;
 begin
+// if snapshot already exists, preserve its content
 If not Assigned(RegistersSnapshot) then
-  RegistersSnapshot := AllocMem(SizeOf(TAERegistersStorage));
-RegistersSnapshot^ := Storage^;
+  begin
+    RegistersSnapshot := AllocMem(SizeOf(TAERegistersStorage));
+    RegistersSnapshot^ := Data^; // this copies Data to RegistersSnapshot
+  end;
+end;
+
+//------------------------------------------------------------------------------
+const
+  X87CW_EMASK_InvalidOP = UInt16($0001);
+
+//------------------------------------------------------------------------------
+
+Function GetX87ControlWord: UInt16; register; assembler;
+var
+  Temp: UInt16;
+asm
+    FSTCW   word ptr [Temp]
+    MOV     AX, word ptr [Temp]
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SetX87ControlWord(NewValue: UInt16); register; assembler;
+var
+  Temp: UInt16;
+asm
+    MOV     word ptr [Temp], NewValue
+    FLDCW   word ptr [Temp]
+end;
+
+//------------------------------------------------------------------------------
+
+procedure Float80ToFloat64(F80,F64: Pointer); register; assembler;
+asm
+    FLD     tbyte ptr [F80]
+    FSTP    qword ptr [F64]
+    FCLEX   // also issues FWAIT
+end;
+
+//------------------------------------------------------------------------------
+
+procedure Float80ToFloat32(F80,F32: Pointer); register; assembler;
+asm
+    FLD     tbyte ptr [F80]
+    FSTP    dword ptr [F32]
+    FCLEX
 end;
 
 {===============================================================================
-    Registers obtaining - implementation
+    CPU registers snapshot - public functions implementation
 ===============================================================================}
 
-{$STACKFRAMES ON} // make sure stack frame is created in RegistersSnapshot
+{$STACKFRAMES ON} // make sure stack frame is created in RegistersSnapshotMake
 
 {$IFDEF FPCDWM}{$PUSH}W7102{$ENDIF}
-Function CreateRegistersSnapshot: Pointer; register; assembler;
+Function RegistersSnapshotMake: Pointer; register; assembler;
 var
   Data: TAERegistersStorage;  // allocated on stack
 asm
@@ -1300,6 +1346,12 @@ asm
   @SkipMMX:
 
     // MXCSR
+{$IFDEF x64}
+    TEST      dword ptr [RIP + MachineFeaturesWord], AE_MACHINEFEATURES_FLOATVECS
+{$ELSE}
+    TEST      dword ptr [MachineFeaturesWord], AE_MACHINEFEATURES_FLOATVECS
+{$ENDIF}
+    JZ        @SkipSSE
     STMXCSR   dword ptr [Data.MXCSR]
 
     // AVX512
@@ -1365,7 +1417,7 @@ asm
     CALL    GetSSEData
   @SkipSSE:
 
-    // system registers
+    // system registers (currently only machine status word)
     SMSW    word ptr [Data.MSW]
 
     // copy data to thread-local storage
@@ -1378,7 +1430,7 @@ asm
 {$ELSE}
     LEA     EAX, [Data]
 {$ENDIF}
-    CALL    CreateRegistersSnapshotCopyToTLS
+    CALL    RegistersSnapshotCopyToTLS
 
 {$IFDEF x64}
     // result
@@ -1394,6 +1446,125 @@ end;
   {$STACKFRAMES OFF}
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
+Function RegistersSnapshotGet(out Snapshot: TAERegisters; Cleanup: Boolean = False): Boolean;
+var
+  TLSRegsPtr: PAERegistersStorage;
+  i:          Integer;
+  OldX87CW:   UInt16;
+
+  procedure DoFloatVectors(Length,Count: Integer);
+  var
+    ii: Integer;
+  begin
+    Snapshot.FloatVector.Length := Length;
+    Snapshot.FloatVector.Count := Count;
+    For ii := 0 to Pred(Count) do
+    {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+      Move(Pointer(PtrUInt(Addr(TLSRegsPtr^.ZMM)) + PtrUInt(ii * Length * 4))^,
+           Snapshot.FloatVector.Regs[ii],Length * 4);
+    {$IFDEF FPCDWM}{$POP}{$ENDIF}
+    Snapshot.FloatVector.MXCSR := TLSRegsPtr^.MXCSR;
+  end;
+
+begin
+If Assigned(RegistersSnapshot) then
+  begin
+    // prevent repeated calls to GetTLS
+    TLSRegsPtr := RegistersSnapshot{<-threadvar};
+    // copy registers from TLS to this object's field
+    For i := 0 to AE_GPR_HIGH do
+      Snapshot.Basic.GeneralPurpose.Regs[i].Native := TLSRegsPtr^.GP[i];
+    For i := 0 to 5 do
+      Snapshot.Basic.Segment.Regs[i] := TLSRegsPtr^.SG[i];
+    Snapshot.Basic.Flags := TLSRegsPtr^.FLAGS;
+    Snapshot.Basic.InstructionPointer := TLSRegsPtr^.IP;
+    Snapshot.PresentRegisters := [prBasic];
+    // x87 FPU
+    If MachineFeaturesWord and AE_MACHINEFEATURES_FPU <> 0 then
+      begin
+        OldX87CW := GetX87ControlWord;
+        try
+          SetX87ControlWord(OldX87CW or X87CW_EMASK_InvalidOP);
+          For i := 0 to 7 do
+            begin
+              Move(TLSRegsPtr^.Stack[i],Snapshot.Float.Stack[i],10);
+              Float80ToFloat64(Addr(Snapshot.Float.Stack[i].Float80),
+                               Addr(Snapshot.Float.Stack[i].Float64));
+              Float80ToFloat32(Addr(Snapshot.Float.Stack[i].Float80),
+                               Addr(Snapshot.Float.Stack[i].Float32));
+            end;
+        finally
+          SetX87ControlWord(OldX87CW);
+        end;
+        Snapshot.Float.ControlWord := TLSRegsPtr^.CW;
+        Snapshot.Float.StatusWord := TLSRegsPtr^.SW;
+        Snapshot.Float.TagWord := TLSRegsPtr^.TW;
+        Snapshot.Float.LastInstructionPointerSelector := TLSRegsPtr^.FCS;
+        Snapshot.Float.LastInstructionPointerOffset := TLSRegsPtr^.FIP;
+        Snapshot.Float.LastDataPointerSelector := TLSRegsPtr^.FDS;
+        Snapshot.Float.LastDataPointerOffset := TLSRegsPtr^.FDP;
+        Snapshot.Float.OpCode := TLSRegsPtr^.OpCode;
+        Include(Snapshot.PresentRegisters,prFPU);
+      end;
+    // MMX
+    If MachineFeaturesWord and AE_MACHINEFEATURES_MMX <> 0 then
+      begin
+        For i := 0 to 7 do
+          Snapshot.IntegerVector.MM[i].VecQuad := TLSRegsPtr^.MM[i];
+        Include(Snapshot.PresentRegisters,prMMX);
+      end;
+    // AVX-512
+    If MachineFeaturesWord and AE_MACHINEFEATURES_AVX512 <> 0 then
+      begin
+        DoFloatVectors(16{64bytes, 512bits},{$IFDEF x64}32{$ELSE}8{$ENDIF});
+        For i := 0 to 7 do
+          Snapshot.FloatVector.OPMask[i] := TLSRegsPtr^.K[i];
+        Snapshot.PresentRegisters := Snapshot.PresentRegisters + [prSSE,prAVX,prAVX512];
+      end
+    // AVX
+    else If MachineFeaturesWord and AE_MACHINEFEATURES_AVX <> 0 then
+      begin
+        DoFloatVectors(8{32bytes, 256bits},{$IFDEF x64}16{$ELSE}8{$ENDIF});
+        Snapshot.PresentRegisters := Snapshot.PresentRegisters + [prSSE,prAVX];
+      end
+    // SSE  
+    else If MachineFeaturesWord and AE_MACHINEFEATURES_SSE <> 0 then
+      begin
+        DoFloatVectors(4{16bytes, 128bits},{$IFDEF x64}16{$ELSE}8{$ENDIF});
+        Snapshot.PresentRegisters := Snapshot.PresentRegisters + [prSSE];
+      end;
+    // system regs
+    Snapshot.System.MachineStatusWord := TLSRegsPtr^.MSW;
+    // final touches
+    Result := True;
+    If Cleanup then
+      RegistersSnapshotCleanup
+  end
+else
+  begin
+    FillChar(Snapshot,SizeOf(TAERegisters),0);
+    Snapshot.PresentRegisters := [];
+    Result := False;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure RegistersSnapshotCleanup;
+begin
+If Assigned(RegistersSnapshot) then
+  begin
+    FreeMem(RegistersSnapshot);
+    RegistersSnapshot := nil;
+  end;
+end;
+
+{$ENDIF PurePascal}
+
+
+{$IFDEF AE_ExtendedException}
 {$IFNDEF Windows}
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1636,50 +1807,7 @@ end;
 {===============================================================================
     EAEExtendedException - internals
 ===============================================================================}
-{-------------------------------------------------------------------------------
-    EAEExtendedException - internals - registers
--------------------------------------------------------------------------------}
-const
-  X87CW_EMASK_InvalidOP = UInt16($0001);
-
-//------------------------------------------------------------------------------  
-
-Function GetX87ControlWord: UInt16; register; assembler;
-var
-  Temp: UInt16;
-asm
-    FSTCW   word ptr [Temp]
-    MOV     AX, word ptr [Temp]
-end;
-
-//------------------------------------------------------------------------------
-
-procedure SetX87ControlWord(NewValue: UInt16); register; assembler;
-var
-  Temp: UInt16;
-asm
-    MOV     word ptr [Temp], NewValue
-    FLDCW   word ptr [Temp]
-end;
-
-//------------------------------------------------------------------------------
-
-procedure Float80ToFloat64(F80,F64: Pointer); register; assembler;
-asm
-    FLD     tbyte ptr [F80]
-    FSTP    qword ptr [F64]
-    FCLEX   // also issues FWAIT
-end;
-
-//------------------------------------------------------------------------------
-
-procedure Float80ToFloat32(F80,F32: Pointer); register; assembler;
-asm
-    FLD     tbyte ptr [F80]
-    FSTP    dword ptr [F32]
-    FCLEX
-end;
-
+{$IFNDEF PurePascal}
 {-------------------------------------------------------------------------------
     EAEExtendedException - internals - stack
 -------------------------------------------------------------------------------}
@@ -1752,6 +1880,8 @@ end;
   {$STACKFRAMES ON}
 {$ENDIF}
 
+{$ENDIF PurePascal}
+
 {===============================================================================
     EAEExtendedException - class implementation
 ===============================================================================}
@@ -1760,104 +1890,23 @@ end;
 -------------------------------------------------------------------------------}
 
 procedure EAEExtendedException.InitRegisters;
-var
-  TLSRegsPtr: PAERegistersStorage;
-  i:          Integer;
-  OldX87CW:   UInt16;
-
-  procedure DoFloatVectors(Length,Count: Integer);
-  var
-    ii: Integer;
-  begin
-    fRegisters.FloatVector.Length := Length;
-    fRegisters.FloatVector.Count := Count;
-    For ii := 0 to Pred(Count) do
-    {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-      Move(Pointer(PtrUInt(Addr(TLSRegsPtr^.ZMM)) + PtrUInt(ii * Length * 4))^,
-           fRegisters.FloatVector.Regs[ii],Length * 4);
-    {$IFDEF FPCDWM}{$POP}{$ENDIF}
-    fRegisters.FloatVector.MXCSR := TLSRegsPtr^.MXCSR;
-  end;
-
 begin
-If Assigned(RegistersSnapshot) then
-  begin
-    // prevent reapeated calls to GetTLS
-    TLSRegsPtr := RegistersSnapshot;
-    // copy registers from TLS to this object's field
-    For i := 0 to AE_GPR_HIGH do
-      fRegisters.Basic.GeneralPurpose.Regs[i].Native := TLSRegsPtr^.GP[i];
-    For i := 0 to 5 do
-      fRegisters.Basic.Segment.Regs[i] := TLSRegsPtr^.SG[i];
-    fRegisters.Basic.Flags := TLSRegsPtr^.FLAGS;
-    fRegisters.Basic.InstructionPointer := TLSRegsPtr^.IP;
-    fRegisters.PresentRegisters := [prBasic];
-    // x87 FPU
-    If MachineFeaturesWord and AE_MACHINEFEATURES_FPU <> 0 then
-      begin
-        OldX87CW := GetX87ControlWord;
-        try
-          SetX87ControlWord(OldX87CW or X87CW_EMASK_InvalidOP);
-          For i := 0 to 7 do
-            begin
-              Move(TLSRegsPtr^.Stack[i],fRegisters.Float.Stack[i],10); 
-              Float80ToFloat64(Addr(fRegisters.Float.Stack[i].Float80),
-                               Addr(fRegisters.Float.Stack[i].Float64));
-              Float80ToFloat32(Addr(fRegisters.Float.Stack[i].Float80),
-                               Addr(fRegisters.Float.Stack[i].Float32));
-            end;
-        finally
-          SetX87ControlWord(OldX87CW);
-        end;
-        fRegisters.Float.ControlWord := TLSRegsPtr^.CW;
-        fRegisters.Float.StatusWord := TLSRegsPtr^.SW;
-        fRegisters.Float.TagWord := TLSRegsPtr^.TW;
-        fRegisters.Float.LastInstructionPointerSelector := TLSRegsPtr^.FCS;
-        fRegisters.Float.LastInstructionPointerOffset := TLSRegsPtr^.FIP;
-        fRegisters.Float.LastDataPointerSelector := TLSRegsPtr^.FDS;
-        fRegisters.Float.LastDataPointerOffset := TLSRegsPtr^.FDP;
-        fRegisters.Float.OpCode := TLSRegsPtr^.OpCode;
-        Include(fRegisters.PresentRegisters,prFPU);
-      end;
-    // MMX
-    If MachineFeaturesWord and AE_MACHINEFEATURES_MMX <> 0 then
-      begin
-        For i := 0 to 7 do
-          fRegisters.IntegerVector.MM[i].VecQuad := TLSRegsPtr^.MM[i];
-        Include(fRegisters.PresentRegisters,prMMX);
-      end;
-    // AVX-512
-    If MachineFeaturesWord and AE_MACHINEFEATURES_AVX512 <> 0 then
-      begin
-        DoFloatVectors(16{64bytes, 512bits},{$IFDEF x64}32{$ELSE}8{$ENDIF});
-        For i := 0 to 7 do
-          fRegisters.FloatVector.OPMask[i] := TLSRegsPtr^.K[i];
-        fRegisters.PresentRegisters := fRegisters.PresentRegisters + [prSSE,prAVX,prAVX512];
-      end
-    // AVX
-    else If MachineFeaturesWord and AE_MACHINEFEATURES_AVX <> 0 then
-      begin
-        DoFloatVectors(8{32bytes, 256bits},{$IFDEF x64}16{$ELSE}8{$ENDIF});
-        fRegisters.PresentRegisters := fRegisters.PresentRegisters + [prSSE,prAVX];
-      end
-    // SSE  
-    else If MachineFeaturesWord and AE_MACHINEFEATURES_SSE <> 0 then
-      begin
-        DoFloatVectors(4{16bytes, 128bits},{$IFDEF x64}16{$ELSE}8{$ENDIF});
-        fRegisters.PresentRegisters := fRegisters.PresentRegisters + [prSSE];
-      end;
-    // system regs
-    fRegisters.System.MachineStatusWord := TLSRegsPtr^.MSW;
-    // cleanup
-    FreeMem(RegistersSnapshot,SizeOf(TAERegistersStorage));
-    RegistersSnapshot := nil;
-  end
-else fRegisters.PresentRegisters := [];
+{
+  If following fails, then fRegisters are cleared, so no need to clear them
+  explicitly.
+}
+If RegistersSnapshotGet(fRegisters,True) then
+  Include(fProvidedInfo,infoRegistersSnapshot);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure EAEExtendedException.InitStackTrace;
+{$IFDEF PurePascal}
+begin
+FillChar(fStackTrace,SizeOf(TAEStackTrace),0);
+end;
+{$ELSE}
 type
   TAEStackLinkingInfo = packed record
     FrameBase:      Pointer;
@@ -1916,7 +1965,7 @@ fStackTrace.StackBottom := GetTIB^.StackBase;
 {$ELSE}
 {
   NOTE - In Intel's documentation, the stack bottom is its base (ie. its
-         largest address, because it is growing down), and stack top is the the
+         largest address, because it is growing down), and stack top is the 
          current RSP/ESP (points to the last pushed value). In FPC system unit,
          this nomenclature is reversed. We stick to Intel scheme.
 }
@@ -1953,9 +2002,11 @@ If PtrUInt(fStackTrace.StackBottom) >= PtrUInt(fStackTrace.StackTop) then
         SetLength(fStackTrace.StackFrames,FrameCount);
       end;
   {$IFDEF FPCDWM}{$POP}{$ENDIF}
+    Include(fProvidedInfo,infoStackTrace);
   end
 else FillChar(fStackTrace,SizeOf(TAEStackTrace),0);
 end;
+{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1964,6 +2015,7 @@ begin
 fProcessInfo.ProcessID := fProcessID;
 fProcessInfo.ExecFileName := ParamStr(0);
 fProcessInfo.FileInfo := TWinFileInfo.Create(fProcessInfo.ExecFileName,WFI_LS_All);
+Include(fProvidedInfo,infoProcess);
 end;
 
 //------------------------------------------------------------------------------
@@ -1982,7 +2034,6 @@ SetLength(ModuleFileName,UNICODE_STRING_MAX_CHARS);
 SetLength(ModuleFileName,GetModuleFileNameExW(GetCurrentProcess,hInstance,PWideChar(ModuleFileName),Length(ModuleFileName)));
 fModuleInfo.FileName := WideToStr(ModuleFileName);
 fModuleInfo.FileInfo := TWinFileInfo.Create(fModuleInfo.FileName,WFI_LS_All);
-end;
 {$ELSE}
 var
   ModuleFileName: String;
@@ -1990,13 +2041,14 @@ var
 begin
 ModuleFileName := '';
 FillChar(Addr(Info)^,SizeOf(dl_info),0);
-If dladdr(@GetX87ControlWord{a function in this unit},@Info) <> 0 then
+If dladdr(@RegistersSnapshotCleanup{a function in this unit},@Info) <> 0 then
   If Assigned(Info.dli_fname) then
     ModuleFileName := ExpandFileName(String(Info.dli_fname));
 fModuleInfo.FileName := ModuleFileName;
 fModuleInfo.FileInfo := TWinFileInfo.Create(fModuleInfo.FileName,WFI_LS_All);
-end;
 {$ENDIF}
+Include(fProvidedInfo,infoModule);
+end;
 
 //------------------------------------------------------------------------------
 
@@ -2039,7 +2091,6 @@ If HelpSnapshot <> INVALID_HANDLE_VALUE then
     CloseHandle(HelpSnapshot);
   end
 else FillChar(fModulesInfo,SizeOf(TAEModulesInfo),0);
-end;
 {$ELSE}
 var
   MapsFile:     TStringList;
@@ -2079,9 +2130,6 @@ try
                   fModulesInfo.Modules[i].ExecContiguous := False;
               LastExecEnd := MapsParser.MapsModules[i,j].EndAddr;
             end;
-        // get file info
-        fModulesInfo.Modules[i].FileInfo := TWinFileInfo.Create(
-          fModulesInfo.Modules[i].ModuleFileName,WFI_LS_ALL);
       end;
     {
       Remove all files that do not have any executable memory - we are assuming
@@ -2091,19 +2139,23 @@ try
     For i := High(fModulesInfo.Modules) downto Low(fModulesInfo.Modules) do
       If fModulesInfo.Modules[i].ExecSize <= 0 then
         begin
-          fModulesInfo.Modules[i].FileInfo.Free;
           For j := i to Pred(High(fModulesInfo.Modules)) do
-             fModulesInfo.Modules[i] := fModulesInfo.Modules[i + 1];
+             fModulesInfo.Modules[j] := fModulesInfo.Modules[j + 1];
           SetLength(fModulesInfo.Modules,Length(fModulesInfo.Modules) - 1);
         end;
+    // get file info for remaining modules
+    For i := High(fModulesInfo.Modules) downto Low(fModulesInfo.Modules) do
+      fModulesInfo.Modules[i].FileInfo := TWinFileInfo.Create(
+        fModulesInfo.Modules[i].ModuleFileName,WFI_LS_ALL);
   finally
     MapsParser.Free;
   end;
 finally
   MapsFile.Free;
 end;
-end;
 {$ENDIF}
+Include(fProvidedInfo,infoModules);
+end;
 
 //------------------------------------------------------------------------------
 
@@ -2143,7 +2195,6 @@ If HelpSnapshot <> INVALID_HANDLE_VALUE then
     CloseHandle(HelpSnapshot);
   end
 else FillChar(fThreadsInfo,SizeOf(TAEThreadsInfo),0);
-end;
 {$ELSE}
 const
   DT_DIR = 4;
@@ -2183,8 +2234,9 @@ If Assigned(DirStreamPtr) then
     fpCloseDir(DirStreamPtr^);
   end
 else FillChar(fThreadsInfo,SizeOf(TAEThreadsInfo),0);
-end;
 {$ENDIF}
+Include(fProvidedInfo,infoThreads);
+end;
 
 //------------------------------------------------------------------------------
 
@@ -2208,13 +2260,15 @@ end;
 
 constructor EAEExtendedException.CreateFmt(const Msg: String; Args: array of const);
 begin
-If not Assigned(RegistersSnapshot) then
-  CreateRegistersSnapshot;
+RegistersSnapshotMake;
 inherited CreateFmt(Msg,Args);
+fProvidedInfo := [];
 // registers snapshot
 {$IFDEF ExtendedExceptionRegisters}
 InitRegisters;
 {$ELSE}
+RegistersSnapshotCleanup;
+FillChar(fRegisters,SizeOf(TAERegisters),0);
 fRegisters.PresentRegisters := [];
 {$ENDIF}
 // stack trace
@@ -2257,7 +2311,7 @@ Finalize;
 inherited;
 end;
 
-{$ENDIF ExtendedException}
+{$ENDIF AE_ExtendedException}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -2585,7 +2639,7 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 
-{$IFDEF ExtendedException}
+{$IFNDEF PurePascal}
 
 procedure UnitInitialize;
 begin
@@ -2610,19 +2664,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure UnitFinalize;
-begin
-If Assigned(RegistersSnapshot) then
-  FreeMem(RegistersSnapshot,SizeOf(TAERegistersStorage));
-end;
-
-//------------------------------------------------------------------------------
-
 initialization
   UnitInitialize;
-
-finalization
-  UnitFinalize;
 
 {$ENDIF}
 

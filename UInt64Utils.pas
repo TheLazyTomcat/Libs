@@ -14,7 +14,7 @@
 
   Version 1.0.5 (2024-02-17)
 
-  Last change 2024-02-17
+  Last change 2024-03-05
 
   ©2018-2024 František Milt
 
@@ -43,7 +43,7 @@ unit UInt64Utils;
   {$INLINE ON}
   {$DEFINE CanInline}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

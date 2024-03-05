@@ -128,9 +128,9 @@
 
   Version 1.3.1 (2021-12-24)
 
-  Last change 2022-06-25
+  Last change 2024-03-05
 
-  ©2016-2022 František Milt
+  ©2016-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -173,7 +173,7 @@ unit FastLocks;
   {$DEFINE CanInline}
   {$MACRO ON}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

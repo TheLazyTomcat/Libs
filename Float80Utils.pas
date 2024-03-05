@@ -46,9 +46,9 @@
 
   Version 1.1 (2021-02-03)
 
-  Last change 2023-12-19
+  Last change 2024-03-05
 
-  ©2020-2023 František Milt
+  ©2020-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -108,7 +108,7 @@ unit Float80Utils;
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+  {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
   {$ELSE}
     {$UNDEF CanInline}

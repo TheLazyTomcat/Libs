@@ -21,11 +21,11 @@
     compiled for other systems too. But in such case, it provides only a
     limited file information set.
 
-  Version 1.1.1 (2022-09-28)
+  Version 1.1.2 (2024-03-04)
 
-  Last change 2023-12-19
+  Last change 2024-03-04
 
-  ©2015-2023 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -391,13 +391,17 @@ type
 ===============================================================================}
 {
   Loading strategy determines what file information will be loaded and decoded
-  or parsed.
+  or parsed and how.
   Only one operation cannot be affected by loading strategy and is always
   performed even when loading strategy indicates no operation - a check whether
   the file actually exists.
   If one strategy requires some other strategy to be active, it means this
   strategy will not produce any result if the required one is not active, it
   does NOT mean an error will occur.
+
+  lsaKeepOpen
+    the file is kept open until the TWinFileInfo object is destroyed, when not
+    present the file is closed as soon as possible
 
   lsaLoadBasicInfo
     load size, times, attributes and other basic info
@@ -430,7 +434,7 @@ type
     lsaParseVersionInfo
 }
 type
-  TWFILoadingStrategyAction = (lsaLoadBasicInfo,lsaDecodeBasicInfo
+  TWFILoadingStrategyAction = (lsaKeepOpen,lsaLoadBasicInfo,lsaDecodeBasicInfo
   {$IFDEF Windows},lsaLoadVersionInfo,lsaParseVersionInfo,lsaLoadFixedFileInfo,
     lsaDecodeFixedFileInfo,lsaVerInfoPredefinedKeys,lsaVerInfoExtractTranslations{$ENDIF});
 
@@ -835,11 +839,11 @@ var
   AInfo,BInfo:  TWinFileInfo;
 begin
 Result := False;
-AInfo := TWinFileInfo.Create(A,[lsaLoadBasicInfo]);
+AInfo := TWinFileInfo.Create(A,[lsaLoadBasicInfo,lsaKeepOpen]);
 try
   If AInfo.Exists then
     begin
-      BInfo := TWinFileInfo.Create(B,[lsaLoadBasicInfo]);
+      BInfo := TWinFileInfo.Create(B,[lsaLoadBasicInfo,lsaKeepOpen]);
       try
         If BInfo.Exists then
         {$IFDEF Windows}
@@ -1757,6 +1761,11 @@ If fFileHandle <> INVALID_HANDLE_VALUE then
               end;
           end;
       end;
+    If not(lsaKeepOpen in fLoadingStrategy) then
+      begin
+        CloseHandle(fFileHandle);
+        fFileHandle := INVALID_HANDLE_VALUE;
+      end;
   end
 else
   begin
@@ -1791,6 +1800,11 @@ If fFileHandle <> -1 then
         If lsaDecodeBasicInfo in fLoadingStrategy then
           DecodeBasicInfo;
       end;
+    If not(lsaKeepOpen in fLoadingStrategy) then
+      begin
+        FpClose(fFileHandle);
+        fFileHandle := -1;
+      end;
   end
 else
   begin
@@ -1810,13 +1824,16 @@ end;
 procedure TWinFileInfo.Finalize;
 begin
 Clear;
-{$IFDEF Windows}
-CloseHandle(fFileHandle);
-fFileHandle := INVALID_HANDLE_VALUE;
-{$ELSE}
-FpClose(fFileHandle); // ignore errors
-fFileHandle := -1;
-{$ENDIF}
+If lsaKeepOpen in fLoadingStrategy then
+  begin
+  {$IFDEF Windows}
+    CloseHandle(fFileHandle);
+    fFileHandle := INVALID_HANDLE_VALUE;
+  {$ELSE}
+    FpClose(fFileHandle); // ignore errors
+    fFileHandle := -1;
+  {$ENDIF}
+  end;
 end;
 
 {-------------------------------------------------------------------------------
