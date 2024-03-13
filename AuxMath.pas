@@ -44,9 +44,9 @@
       about which types and what functions are affected, refer to "Overloading
       information symbols" further down.
 
-  Version 1.1 (2024-03-04)
+  Version 1.2 (2024-03-10)
 
-  Last change (2024-03-04)
+  Last change (2024-03-10)
 
   ©2024 František Milt
 
@@ -315,6 +315,7 @@ type
   EAMInvalidOperation = class(EAMException);
   EAMInvalidValue     = class(EAMException);
   EAMRangeError       = class(EAMException);
+  EAMOverflowError    = class(EAMException);
 
 {===============================================================================
     Public constants
@@ -3084,6 +3085,110 @@ Function CvtU2I(const N: UInt16): Int16; overload;{$IFDEF CanInline} inline;{$EN
 Function CvtU2I(const N: UInt32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function CvtU2I(const N: UInt64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                           Double-width multiplication
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Calculates product of two given numbers (multiplies them) that is twice the
+  width of inputs and returns it in Product output parameter. Result is set to
+  true when the product overflows into higher 64 bits, false otherwise.
+  Making the product double-width ensures that no overflow error (that with
+  information loss) can happen, as the resulting value will always fit into it.
+
+  The same functionality can be achieved by widening the arguments and doing
+  "normal" multiplication, but not with (U)Int64 - and when at implementing for
+  one type, why not do it for all.
+
+  Types Int128 and UInt128 are here only to provide means for returning product
+  of two 64bit values, they cannot be used in any arithmetics.
+}
+type
+  Int128 = packed record
+    case Integer of
+      0:(Lo,Hi:   UInt64);
+      1:(Bytes:   packed array[0..15] of UInt8);
+      2:(Words:   packed array[0..7] of UInt16);
+      3:(DWords:  packed array[0..3] of UInt32);
+      4:(QWords:  packed array[0..1] of UInt64);  
+  end;
+  PInt128 = ^Int128;
+  PPInt128 = ^PInt128;
+
+  UInt128 = packed record
+    case Integer of
+      0:(Lo,Hi:   UInt64);
+      1:(Bytes:   packed array[0..15] of UInt8);
+      2:(Words:   packed array[0..7] of UInt16);
+      3:(DWords:  packed array[0..3] of UInt32);
+      4:(QWords:  packed array[0..1] of UInt64);
+  end;
+  PUInt128 = ^UInt128;
+  PPUInt128 = ^PUInt128;
+
+//------------------------------------------------------------------------------
+
+Function iLongMul(const A,B: Int8; out Product: Int16): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function iLongMul(const A,B: Int16; out Product: Int32): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function iLongMul(const A,B: Int32; out Product: Int64): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function iLongMul(const A,B: Int64; out Product: Int128): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function uLongMul(const A,B: UInt8; out Product: UInt16): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function uLongMul(const A,B: UInt16; out Product: UInt32): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function uLongMul(const A,B: UInt32; out Product: UInt64): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function uLongMul(const A,B: UInt64; out Product: UInt128): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function LongMul(const A,B: Int8; out Product: Int16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: Int16; out Product: Int32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: Int32; out Product: Int64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: Int64; out Product: Int128): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function LongMul(const A,B: UInt8; out Product: UInt16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: UInt16; out Product: UInt32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: UInt32; out Product: UInt64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: UInt64; out Product: UInt128): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+{
+  Following overloads are just wrappers for previous versions of LongMul. The
+  only difference is, that the product is returned in result and overflow is
+  not signaled.
+}
+
+Function iLongMul(const A,B: Int8): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function iLongMul(const A,B: Int16): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function iLongMul(const A,B: Int32): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function iLongMul(const A,B: Int64): Int128; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function uLongMul(const A,B: UInt8): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function uLongMul(const A,B: UInt16): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function uLongMul(const A,B: UInt32): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function uLongMul(const A,B: UInt64): UInt128; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function LongMul(const A,B: Int8): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: Int16): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: Int32): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(DistinctOverloadUInt64E)}
+Function LongMul(const A,B: Int64): Int128; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+
+Function LongMul(const A,B: UInt8): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: UInt16): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LongMul(const A,B: UInt32): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(DistinctOverloadUInt64E)}
+Function LongMul(const A,B: UInt64): UInt128; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+
 implementation
 
 // paranoia...
@@ -3102,7 +3207,7 @@ var
   TwoPow63: Single absolute iTwoPow63;
 
 //------------------------------------------------------------------------------
-{$IF not Declared(NativeUInt64E)}
+{$IF not Declared(NativeUInt64E) or Defined(PurePascal)}
 type
   UInt64Rec = packed record
     case Integer of
@@ -17819,4 +17924,892 @@ begin
 Result := CvtU2I64(N);
 end;
 
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                           Double-width multiplication
+--------------------------------------------------------------------------------
+===============================================================================}
+{-------------------------------------------------------------------------------
+    iLongMul - signed integers
+-------------------------------------------------------------------------------}
+
+Function iLongMul(const A,B: Int8; out Product: Int16): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A              AL              CL           DIL
+               B              DL              DL           SIL
+         Product             ECX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     AL, CL
+    IMUL    DL
+
+    MOV     word ptr [R8], AX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     AL, DIL
+    IMUL    SIL   
+
+    MOV     word ptr [RDX], AX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    IMUL    DL    // AX = AL * DL
+
+    MOV     word ptr [ECX], AX   
+    SETO    AL
+    
+{$ENDIF}
+end;
+{$ELSE}
+begin
+Product := Int16(A) * Int16(B);
+Result := Int16(Int8(Product)) <> Product;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iLongMul(const A,B: Int16; out Product: Int32): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A              AX              CX            DI
+               B              DX              DX            SI
+         Product             ECX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     AX, CX
+    IMUL    DX
+
+    MOV     word ptr [R8], AX
+    MOV     word ptr [R8 + 2], DX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     AX, DI
+    MOV     RCX, RDX
+    IMUL    SI
+
+    MOV     word ptr [RCX], AX
+    MOV     word ptr [RCX + 2], DX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    IMUL    DX    // DX:AX = AX * DX
+
+    MOV     word ptr [ECX], AX
+    MOV     word ptr [ECX + 2], DX
+    SETO    AL
+    
+{$ENDIF}
+end;
+{$ELSE}
+begin
+Product := Int32(A) * Int32(B);
+Result := Int32(Int16(Product)) <> Product;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iLongMul(const A,B: Int32; out Product: Int64): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A             EAX             ECX           EDI
+               B             EDX             EDX           ESI
+         Product             ECX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     EAX, ECX
+    IMUL    EDX
+
+    MOV     dword ptr [R8], EAX
+    MOV     dword ptr [R8 + 4], EDX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     EAX, EDI
+    MOV     RCX, RDX
+    IMUL    ESI
+
+    MOV     dword ptr [RCX], EAX
+    MOV     dword ptr [RCX + 4], EDX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    IMUL    EDX     // EDX:EAX = EAX * EDX
+
+    MOV     dword ptr [ECX], EAX
+    MOV     dword ptr [ECX + 4], EDX
+    SETO    AL
+    
+{$ENDIF}
+end;
+{$ELSE}
+{$UNDEF LOCAL_Q_ENABLE}
+{$IFNDEF FPC}
+  {$IF Defined(AM_OverflowChecks) and (CompilerVersion < 18)}
+    {$Q-}{$DEFINE LOCAL_Q_ENABLE}
+  {$IFEND}
+{$ENDIF}
+begin
+Product := Int64(A) * Int64(B);
+Result := Int64(Int32(Product)) <> Product;
+end;
+{$IFDEF LOCAL_Q_ENABLE}{$Q+}{$ENDIF}
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iLongMul(const A,B: Int64; out Product: Int128): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A          (EBP + 8)          RCX           RDI
+               B          (EBP + 16)         RDX           RSI
+         Product             EAX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     RAX, RCX
+    IMUL    RDX
+
+    MOV     qword ptr [R8], RAX
+    MOV     qword ptr [R8 + 8], RDX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     RAX, RDI
+    MOV     RCX, RDX
+    IMUL    RSI
+
+    MOV     qword ptr [RCX], RAX
+    MOV     qword ptr [RCX + 8], RDX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    PUSH  EBX
+    PUSH  EDI
+    PUSH  ESI
+    PUSH  EBP
+
+    MOV   EBX, dword ptr [A]
+    MOV   ECX, dword ptr [A + 4]
+    MOV   EDI, dword ptr [B]
+    MOV   ESI, dword ptr [B + 4]
+    MOV   EBP, ECX
+    MOV   ECX, EAX
+  {
+    A.Lo ... EBX
+    A.Hi ... EBP
+
+    B.Lo ... EDI
+    B.Hi ... ESI
+
+    ECX ... pointer to product
+  }
+    // A.Lo * B.Lo
+    MOV   EAX, EBX
+    MUL   EDI
+    MOV   dword ptr [ECX], EAX
+    MOV   dword ptr [ECX + 4], EDX
+
+    // A.Hi * B.Hi
+    MOV   EAX, EBP
+    IMUL  ESI
+    MOV   dword ptr [ECX + 8], EAX
+    MOV   dword ptr [ECX + 12], EDX
+
+    // A.Lo * B.Hi
+    // first push the unsigned int (A.Lo), then signed (B.Hi)
+    PUSH  EBX
+    PUSH  ESI
+    CALL  @Int64MulAdd
+
+    // A.Hi * B.Lo
+    // first B.Lo, then A.Hi
+    PUSH  EDI
+    PUSH  EBP
+    CALL  @Int64MulAdd
+
+    // check overflow into higher 64bits
+    MOV   EAX, dword ptr [ECX + 8]
+    MOV   EDX, dword ptr [ECX + 12]
+
+    MOV   EBX, EAX
+    OR    EBX, EDX
+    JZ    @OverflowTestSignCheck
+    // the higher 64bits are non-zero
+    AND   EAX, EDX
+    CMP   EAX, $FFFFFFFF
+    SETNE AL
+    JNE   @RoutineEnd
+
+@OverflowTestSignCheck:
+    // if here, the higher 64bits are either all-zero or all-one
+    XOR   EDX, dword ptr [ECX + 4]
+    SETS  AL
+
+    JMP   @RoutineEnd
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+@Int64MulAdd:
+{
+    I ... signed 32nit integer
+    U ... unsigned 32 bit integer (note U.Hi is always zero)
+
+      I.Lo ... [ESP + 4]    U.Lo ... [ESP + 8]
+
+    Result ... EDX:EAX
+}
+
+    // I.Hi * U.Lo
+    MOV   EAX, [ESP + 4]
+    SAR   EAX, 31
+    MUL   dword ptr [ESP + 8]
+    MOV   EBX, EAX
+
+    // I.Lo * U.Lo
+    MOV   EAX, [ESP + 4]
+    MUL   dword ptr [ESP + 8]
+    ADD   EDX, EBX
+
+    MOV   EBX, EDX
+    SAR   EBX, 31
+    ADD   dword ptr [ECX + 4], EAX
+    ADC   dword ptr [ECX + 8], EDX
+    ADC   dword ptr [ECX + 12], EBX
+
+    RET   8
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+@RoutineEnd:
+
+    // restore callee-save registers
+    POP   EBP
+    POP   ESI
+    POP   EDI
+    POP   EBX
+
+{$ENDIF}
+end;
+{$ELSE}
+{$IF Declared(NativeUInt64E)}
+
+  procedure AddToProduct(SubProduct: Int64);
+  var
+    AddTemp:  UInt64;
+  begin
+    If SubProduct <> 0 then
+      begin
+        AddTemp := UInt64(Product.DWords[1]) + UInt64(Int64Rec(SubProduct).Lo);
+        Product.DWords[1] := UInt32(AddTemp);
+        AddTemp := UInt64(Product.DWords[2]) + UInt64(Int64Rec(SubProduct).Hi) + (AddTemp shr 32);
+        Product.DWords[2] := UInt32(AddTemp);
+        If SubProduct < 0 then
+          AddTemp := UInt64(Product.DWords[3]) + (AddTemp shr 32) + UInt64($FFFFFFFF)
+        else
+          AddTemp := UInt64(Product.DWords[3]) + (AddTemp shr 32);
+        Product.DWords[3] := UInt32(AddTemp);
+      end;
+  end;
+
+begin
+Product.Lo := UInt64(Int64Rec(A).Lo) * UInt64(Int64Rec(B).Lo);
+Product.Hi := UInt64(Int64(Int32(Int64Rec(A).Hi)) * Int64(Int32(Int64Rec(B).Hi)));
+AddToProduct(Int64(Int64Rec(A).Lo) * Int64(Int32((Int64Rec(B).Hi))));
+AddToProduct(Int64(Int32(Int64Rec(A).Hi)) * Int64((Int64Rec(B).Lo)));
+Result := ((Product.Hi <> 0) and (Product.Hi <> UInt64(-1))) or
+          ((Product.Bytes[7] and $80) <> (Product.Bytes[15] and $80));
+end;
+{$ELSE}
+
+  procedure AddToProduct(SubProduct: UInt32; Index: Integer; Signed: Boolean = False);
+  var
+    AddTemp:  UInt32;
+  begin
+    AddTemp := 0;
+    If SubProduct <> 0 then
+      repeat
+        AddTemp := UInt32(Product.Words[Index]) + (SubProduct and $FFFF) + (AddTemp and $FFFF);
+        Product.Words[Index] := UInt16(AddTemp);
+        If Signed then
+          SubProduct := SAR_32(SubProduct,16)
+        else
+          SubProduct := SubProduct shr 16;
+        AddTemp := AddTemp shr 16;
+        Inc(Index);
+      until (Index > High(Product.Words)) or ((AddTemp <= 0) and (SubProduct <= 0) and not Signed);
+  end;
+
+begin
+Product.DWords[0] := UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(UInt64Rec(B).Words[0]));
+Product.DWords[1] := UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(UInt64Rec(B).Words[1]));
+Product.DWords[2] := UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(UInt64Rec(B).Words[2]));
+Product.DWords[3] := UInt32(Int64(Int16(UInt64Rec(A).Words[3])) * Int64(Int16(UInt64Rec(B).Words[3])));
+// unrolled cycles
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(UInt64Rec(B).Words[1])),1);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(UInt64Rec(B).Words[2])),2);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(Int16(UInt64Rec(B).Words[3]))),3,True);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(UInt64Rec(B).Words[0])),1);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(UInt64Rec(B).Words[2])),3);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(Int16(UInt64Rec(B).Words[3]))),4,True);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(UInt64Rec(B).Words[0])),2);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(UInt64Rec(B).Words[1])),3);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(Int16(UInt64Rec(B).Words[3]))),5,True);
+AddToProduct(UInt32(Int64(Int16(UInt64Rec(A).Words[3])) * Int64(UInt64Rec(B).Words[0])),3,True);
+AddToProduct(UInt32(Int64(Int16(UInt64Rec(A).Words[3])) * Int64(UInt64Rec(B).Words[1])),4,True);
+AddToProduct(UInt32(Int64(Int16(UInt64Rec(A).Words[3])) * Int64(UInt64Rec(B).Words[2])),5,True);
+// overflow check
+Result := ((Product.Hi <> 0) and (Product.Hi <> UInt64(-1))) or
+          ((Product.Bytes[7] and $80) <> (Product.Bytes[15] and $80));
+end;
+{$IFEND}
+{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    uLongMul - unsigned integers
+-------------------------------------------------------------------------------}
+
+Function uLongMul(const A,B: UInt8; out Product: UInt16): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A              AL              CL           DIL
+               B              DL              DL           SIL
+         Product             ECX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     AL, CL
+    MUL     DL
+
+    MOV     word ptr [R8], AX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     AL, DIL
+    MUL     SIL   
+
+    MOV     word ptr [RDX], AX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MUL     DL    // AX = AL * DL
+
+    MOV     word ptr [ECX], AX   
+    SETO    AL
+    
+{$ENDIF}
+end;
+{$ELSE}
+begin
+Product := UInt16(A) * UInt16(B);
+Result := (Product and UInt16($FF00)) <> 0;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uLongMul(const A,B: UInt16; out Product: UInt32): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A              AX              CX            DI
+               B              DX              DX            SI
+         Product             ECX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     AX, CX
+    MUL     DX
+
+    MOV     word ptr [R8], AX
+    MOV     word ptr [R8 + 2], DX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     AX, DI
+    MOV     RCX, RDX
+    MUL     SI
+
+    MOV     word ptr [RCX], AX
+    MOV     word ptr [RCX + 2], DX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MUL     DX    // DX:AX = AX * DX
+
+    MOV     word ptr [ECX], AX
+    MOV     word ptr [ECX + 2], DX
+    SETO    AL
+    
+{$ENDIF}
+end;
+{$ELSE}
+begin
+Product := UInt32(Int64(A) * Int64(B));
+Result := (Product and UInt32($FFFF0000)) <> 0;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uLongMul(const A,B: UInt32; out Product: UInt64): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A             EAX             ECX           EDI
+               B             EDX             EDX           ESI
+         Product             ECX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     EAX, ECX
+    MUL     EDX
+
+    MOV     dword ptr [R8], EAX
+    MOV     dword ptr [R8 + 4], EDX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     EAX, EDI
+    MOV     RCX, RDX
+    MUL     ESI
+
+    MOV     dword ptr [RCX], EAX
+    MOV     dword ptr [RCX + 4], EDX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MUL     EDX     // EDX:EAX = EAX * EDX
+
+    MOV     dword ptr [ECX], EAX
+    MOV     dword ptr [ECX + 4], EDX
+    SETO    AL
+    
+{$ENDIF}
+end;
+{$ELSE}
+{$IF Defined(AM_OverflowChecks) and not Declared(NativeUInt64E)}{$Q-}{$IFEND}
+begin
+{$IF Declared(NativeUInt64E)}
+Product := UInt64(A) * UInt64(B);
+{$ELSE}
+Product := UInt64((A and $FFFF) * (B and $FFFF)) +
+          (UInt64((A and $FFFF) * (B shr 16)) shl 16) +
+          (UInt64((A shr 16) * (B and $FFFF)) shl 16) +
+          (UInt64((A shr 16) * (B shr 16)) shl 32);
+{$IFEND}
+Result := (Product and UInt64($FFFFFFFF00000000)) <> 0;
+end;
+{$IF Defined(AM_OverflowChecks) and not Declared(NativeUInt64E)}{$Q+}{$IFEND}
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uLongMul(const A,B: UInt64; out Product: UInt128): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A          (EBP + 8)          RCX           RDI
+               B          (EBP + 16)         RDX           RSI
+         Product             EAX^             R8^          RDX^
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+    MOV     RAX, RCX
+    MUL     RDX
+
+    MOV     qword ptr [R8], RAX
+    MOV     qword ptr [R8 + 8], RDX
+    SETO    AL
+
+  {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    MOV     RAX, RDI
+    MOV     RCX, RDX
+    MUL     RSI
+
+    MOV     qword ptr [RCX], RAX
+    MOV     qword ptr [RCX + 8], RDX
+    SETO    AL
+
+  {$ENDIF}
+{$ELSE}// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+    PUSH  EBX
+    PUSH  EDI
+    PUSH  ESI
+    PUSH  EBP
+
+    MOV   EBX, dword ptr [A]
+    MOV   ECX, dword ptr [A + 4]
+    MOV   EDI, dword ptr [B]
+    MOV   ESI, dword ptr [B + 4] 
+    MOV   EBP, ECX
+    MOV   ECX, EAX
+
+    // A.Lo * B.Lo
+    MOV   EAX, EBX
+    MUL   EDI
+    MOV   dword ptr [ECX], EAX
+    MOV   dword ptr [ECX + 4], EDX
+
+    // A.Hi * B.Hi
+    MOV   EAX, EBP
+    MUL   ESI
+    MOV   dword ptr [ECX + 8], EAX
+    MOV   dword ptr [ECX + 12], EDX
+
+    // A.Lo * B.Hi
+    MOV   EAX, EBX
+    MUL   ESI
+    ADD   dword ptr [ECX + 4], EAX
+    ADC   dword ptr [ECX + 8], EDX
+    // following should never produce carry, but if it does...
+    ADC   dword ptr [ECX + 12], 0
+  {$IFDEF AM_OverflowChecks}
+    // ...then turn carry into overflow (exception)
+  {
+    Btw is there a better way than the following code (other than loading FLAGS
+    with set OF using POPFD, which would require even more instructions and
+    is a disgusting hack)?
+  }
+    MOV   EAX, $80000000
+    SBB   EAX, 0
+    INTO
+  {$ENDIF}
+
+    // A.Hi * B.Lo (also check overflow into higher half)
+    MOV   EAX, EBP
+    MUL   EDI
+    ADD   dword ptr [ECX + 4], EAX
+    ADC   dword ptr [ECX + 8], EDX
+    SETNZ AL
+    ADC   dword ptr [ECX + 12], 0
+    SETNZ DL    
+  {$IFDEF AM_OverflowChecks}
+    MOV   ECX, $80000000
+    SBB   ECX, 0
+    INTO
+  {$ENDIF}
+    OR    AL, DL
+
+    // restore callee-save registers
+    POP   EBP
+    POP   ESI
+    POP   EDI
+    POP   EBX
+    
+{$ENDIF}
+end;
+{$ELSE}
+{$IF Declared(NativeUInt64E)}
+
+  procedure AddToProduct(SubProduct: UInt64);
+  var
+    AddTemp:  UInt64;
+  begin
+    If SubProduct <> 0 then
+      begin
+        AddTemp := UInt64(Product.DWords[1]) + UInt64(UInt64Rec(SubProduct).Lo);
+        Product.DWords[1] := UInt32(AddTemp);
+        AddTemp := UInt64(Product.DWords[2]) + UInt64(UInt64Rec(SubProduct).Hi) + (AddTemp shr 32);
+        Product.DWords[2] := UInt32(AddTemp);
+        AddTemp := UInt64(Product.DWords[3]) + (AddTemp shr 32);
+        Product.DWords[3] := UInt32(AddTemp);
+      {$IFDEF AM_OverflowChecks}
+        If (AddTemp shr 32) <> 0 then
+          raise EAMOverflowError.CreateFmt('uLongMul.AddToProduct: Unexpected overflow (%u).',[AddTemp shr 32]);
+      {$ENDIF}
+      end;
+  end;
+
+begin
+Product.Lo := (A and $FFFFFFFF) * (B and $FFFFFFFF);
+Product.HI := (A shr 32) * (B shr 32);
+AddToProduct((A and $FFFFFFFF) * (B shr 32));
+AddToProduct((A shr 32) * (B and $FFFFFFFF));
+Result := Product.Hi <> 0;
+end;
+{$ELSE}  
+
+  procedure AddToProduct(SubProduct: UInt32; Index: Integer);
+  var
+    AddTemp:  UInt32;
+  begin
+    AddTemp := 0;
+    If SubProduct <> 0 then
+      repeat
+        AddTemp := UInt32(Product.Words[Index]) + (SubProduct and $FFFF) + (AddTemp and $FFFF);
+        Product.Words[Index] := UInt16(AddTemp);
+        SubProduct := SubProduct shr 16;
+        AddTemp := AddTemp shr 16;
+        Inc(Index);
+      until ((AddTemp <= 0) and (SubProduct <= 0)) or (Index > High(Product.Words));
+  {$IFDEF AM_OverflowChecks}
+    If AddTemp <> 0 then
+      raise EAMOverflowError.CreateFmt('uLongMul.AddToProduct: Unexpected overflow (%u).',[AddTemp shr 16]);
+  {$ENDIF}
+  end;
+
+begin
+Product.DWords[0] := UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(UInt64Rec(B).Words[0]));
+Product.DWords[1] := UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(UInt64Rec(B).Words[1]));
+Product.DWords[2] := UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(UInt64Rec(B).Words[2]));
+Product.DWords[3] := UInt32(Int64(UInt64Rec(A).Words[3]) * Int64(UInt64Rec(B).Words[3]));
+// unrolled cycles
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(UInt64Rec(B).Words[1])),1);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(UInt64Rec(B).Words[2])),2);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[0]) * Int64(UInt64Rec(B).Words[3])),3);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(UInt64Rec(B).Words[0])),1);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(UInt64Rec(B).Words[2])),3);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[1]) * Int64(UInt64Rec(B).Words[3])),4);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(UInt64Rec(B).Words[0])),2);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(UInt64Rec(B).Words[1])),3);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[2]) * Int64(UInt64Rec(B).Words[3])),5);  
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[3]) * Int64(UInt64Rec(B).Words[0])),3);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[3]) * Int64(UInt64Rec(B).Words[1])),4);
+AddToProduct(UInt32(Int64(UInt64Rec(A).Words[3]) * Int64(UInt64Rec(B).Words[2])),5);
+// overflow check
+Result := Product.Hi <> 0;
+end;
+{$IFEND}
+{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    LongMul - common-name overloads
+-------------------------------------------------------------------------------}
+
+Function LongMul(const A,B: Int8; out Product: Int16): Boolean;
+begin
+Result := iLongMul(A,B,Product);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: Int16; out Product: Int32): Boolean;
+begin
+Result := iLongMul(A,B,Product);
+end;    
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: Int32; out Product: Int64): Boolean;
+begin
+Result := iLongMul(A,B,Product);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: Int64; out Product: Int128): Boolean;
+begin
+Result := iLongMul(A,B,Product);
+end;
+
+//------------------------------------------------------------------------------
+
+Function LongMul(const A,B: UInt8; out Product: UInt16): Boolean;
+begin
+Result := uLongMul(A,B,Product);
+end;  
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: UInt16; out Product: UInt32): Boolean;
+begin
+Result := uLongMul(A,B,Product);
+end; 
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: UInt32; out Product: UInt64): Boolean;
+begin
+Result := uLongMul(A,B,Product);
+end;  
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: UInt64; out Product: UInt128): Boolean;
+begin
+Result := uLongMul(A,B,Product);
+end;
+
+{-------------------------------------------------------------------------------
+    iLongMul - signed integers (product in result)
+-------------------------------------------------------------------------------}
+
+Function iLongMul(const A,B: Int8): Int16;
+begin
+iLongMul(A,B,Result);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iLongMul(const A,B: Int16): Int32;
+begin
+iLongMul(A,B,Result);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iLongMul(const A,B: Int32): Int64;
+begin
+iLongMul(A,B,Result);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iLongMul(const A,B: Int64): Int128;
+begin
+iLongMul(A,B,Result);
+end;
+
+{-------------------------------------------------------------------------------
+    uLongMul - unsigned integers (product in result)
+-------------------------------------------------------------------------------}
+
+Function uLongMul(const A,B: UInt8): UInt16;
+begin
+uLongMul(A,B,Result);
+end; 
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uLongMul(const A,B: UInt16): UInt32;
+begin
+uLongMul(A,B,Result);
+end;  
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uLongMul(const A,B: UInt32): UInt64;
+begin
+uLongMul(A,B,Result);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uLongMul(const A,B: UInt64): UInt128;
+begin
+uLongMul(A,B,Result);
+end;
+
+{-------------------------------------------------------------------------------
+    LongMul - common-name overloas (product in result)
+-------------------------------------------------------------------------------}
+
+Function LongMul(const A,B: Int8): Int16;
+begin
+iLongMul(A,B,Result);
+end;  
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: Int16): Int32;
+begin
+iLongMul(A,B,Result);
+end;  
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: Int32): Int64;
+begin
+iLongMul(A,B,Result);
+end; 
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: Int64): Int128;
+begin
+iLongMul(A,B,Result);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function LongMul(const A,B: UInt8): UInt16;
+begin
+uLongMul(A,B,Result);
+end;  
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: UInt16): UInt32;
+begin
+uLongMul(A,B,Result);
+end;   
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: UInt32): UInt64;
+begin
+uLongMul(A,B,Result);
+end;   
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LongMul(const A,B: UInt64): UInt128;
+begin
+uLongMul(A,B,Result);
+end;
+{$IFEND}
+
 end.
+

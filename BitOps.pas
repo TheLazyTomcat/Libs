@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.19 (2024-01-26)
+  Version 1.20 (2024-03-14)
 
-  Last change 2024-03-05
+  Last change 2024-03-14
 
   ©2014-2024 František Milt
 
@@ -1296,6 +1296,28 @@ Function CheckAlignment(Address: Pointer; Alignment: TMemoryAlignment): Boolean;
   If the address is aligned, it will return zero.
 }
 Function Misalignment(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+
+{
+  Returns number of bytes that needs to be added to Address to obtain a
+  properly aligned memory address, effectively calculating:
+
+      AlignedMemory(Address,Alignment) - Address
+}
+Function AlignmentOffset(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;
+
+{
+  Returns highest alignment the passed address conforms to.
+  Note that the actual alignment of the address migh be even higher, this
+  function just returns highest value from TMemoryAlignment enum.
+
+  By default the function returns bit alignments (eg. ma64bit), if you want
+  it to return byte alignments (eg ma8byte), set argument ByteAlignments to
+  true.
+
+  If the address is not aligned, then maNone is returned (which should not ever
+  happen, ma1byte or ma8bit should be the worst case).
+}
+Function ResolveAlignment(Address: Pointer; ByteAlignments: Boolean = False): TMemoryAlignment;
 
 //------------------------------------------------------------------------------
 {
@@ -7613,6 +7635,53 @@ begin
 {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
 Result := TMemSize(PtrUInt(Address) - (PtrUInt(Address) and not PtrUInt(Pred(AlignmentBytes(Alignment)))));
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function AlignmentOffset(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;
+var
+  Malign: TMemSize;
+begin
+Malign := Misalignment(Address,Alignment);
+If Malign <> 0 then
+  Result := AlignmentBytes(Alignment) - Malign
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveAlignment(Address: Pointer; ByteAlignments: Boolean = False): TMemoryAlignment;
+
+  Function LowAlignment: TMemoryAlignment;
+  begin
+    If ByteAlignments then
+      Result := ma1byte
+    else
+      Result := ma8bit;
+  end;
+
+  Function HighAlignment: TMemoryAlignment;
+  begin
+    If ByteAlignments then
+      Result := ma256byte
+    else
+      Result := ma2048bit;
+  end;
+
+var
+  i:  TMemoryAlignment;
+begin
+Result := maNone;
+For i := HighAlignment downto LowAlignment do
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+  If (PtrUInt(Address) and PtrUInt(Pred(AlignmentBytes(i)))) = 0 then
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+    begin
+      Result := i;
+      Break{For i};
+    end;
 end;
 
 //------------------------------------------------------------------------------
