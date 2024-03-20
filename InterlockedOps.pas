@@ -47,7 +47,7 @@
 
   Version 1.4.2 (2022-02-21)
 
-  Last change 2024-03-05
+  Last change 2024-03-20
 
   ©2021-2024 František Milt
 
@@ -7724,7 +7724,7 @@ asm
 
           MOV   RAX, R8
 
-    LOCK  CMPXCHG qword ptr [RCX], EDX
+    LOCK  CMPXCHG qword ptr [RCX], RDX
 
   {$ELSE}//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
@@ -8016,7 +8016,7 @@ asm
           XOR   ECX, ECX
     LOCK  XADD  dword ptr [EAX], ECX
 
-          BT    ECX, DX
+          BT    ECX, EDX
 
           SETC  AL
 
