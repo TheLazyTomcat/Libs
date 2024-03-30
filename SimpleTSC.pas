@@ -91,11 +91,11 @@
     measurement runs the whole time only on one processor core (use provided
     auxiliary functions to set thread affinity).
 
-  Version 1.1.1 (2023-11-05)
+  Version 1.1.2 (2024-03-20)
 
-  Last change 2023-12-28
+  Last change 2024-03-20
 
-  ©2023 František Milt
+  ©2023-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1807,6 +1807,7 @@ end;
 {$IFDEF Windows}
 procedure BuildProcessorIDMap;
 var
+  InitialMask:  TSTSCProcessorMask;
   AffinityMask: TSTSCProcessorMask;
   i:            Integer;
   CPUIDResult:  TCPUIDResult;
@@ -1818,15 +1819,20 @@ If CPUIDSupported then
     // init proc nums with invalid values
     For i := Low(VAR_ProcessorIDMap.ProcNums) to High(VAR_ProcessorIDMap.ProcNums) do
       VAR_ProcessorIDMap.ProcNums[i] := -1;
-    // get apic id to cpu number map
-    AffinityMask := 1;
-    For i := Low(VAR_ProcessorIDMap.ProcNums) to Pred(STSC_GetNumberOfProcessors) do
-      begin
-        STSC_SetThreadAffinity(AffinityMask);
-        CPUID(1,@CPUIDResult);
-        VAR_ProcessorIDMap.ProcNums[Byte(CPUIDResult.EBX shr 24)] := i;
-        AffinityMask := AffinityMask shl 1;
-      end;
+    InitialMask := STSC_GetThreadAffinity;
+    try
+      // get apic id to cpu number map
+      AffinityMask := 1;
+      For i := Low(VAR_ProcessorIDMap.ProcNums) to Pred(STSC_GetNumberOfProcessors) do
+        begin
+          STSC_SetThreadAffinity(AffinityMask);
+          CPUID(1,@CPUIDResult);
+          VAR_ProcessorIDMap.ProcNums[Byte(CPUIDResult.EBX shr 24)] := i;
+          AffinityMask := AffinityMask shl 1;
+        end;
+    finally
+      STSC_SetThreadAffinity(InitialMask);
+    end;
   end
 else VAR_ProcessorIDMap.Available := False;
 end;
