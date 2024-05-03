@@ -11,7 +11,7 @@
 
   Version 1.2.3 (2020-07-13)
 
-  Last change 2024-03-05
+  Last change 2024-04-14
 
   ©2018-2024 František Milt
 
@@ -30,11 +30,17 @@
       github.com/TheLazyTomcat/Lib.Adler32
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+    HashBase - github.com/TheLazyTomcat/Lib.HashBase
+
+  Indirect dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit Adler32;

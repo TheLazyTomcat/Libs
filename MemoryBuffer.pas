@@ -31,11 +31,11 @@
     AllowShrink set to false.
     To access the data, always use indicated size.
 
-  Version 1.1.4 (2021-10-15)
+  Version 1.1.5 (2024-05-02)
 
-  Last change 2021-10-15
+  Last change 2024-05-02
 
-  ©2015-2021 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -52,10 +52,33 @@
       github.com/TheLazyTomcat/Lib.MemoryBuffer
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol MemoryBuffer_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit MemoryBuffer;
+{
+  MemoryBuffer_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  MemoryBuffer_UseAuxExceptions to achieve this.
+}
+{$IF Defined(MemoryBuffer_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPU64) or defined(CPU64BITS)}
   {$DEFINE CPU64bit}
@@ -76,7 +99,7 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Memory Buffer - declaration
@@ -99,9 +122,8 @@ type
 {-------------------------------------------------------------------------------
     Memory Buffer - exception classes
 -------------------------------------------------------------------------------}
-
 type
-  EMBException = class(Exception);
+  EMBException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EMBInvalidBuffer = class(EMBException);
   EMBInvalidValue  = class(EMBException);

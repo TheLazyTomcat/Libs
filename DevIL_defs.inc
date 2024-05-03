@@ -1,3 +1,17 @@
+{
+  DevIL_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  DevIL_UseAuxExceptions to achieve this.
+}
+{$IF Defined(DevIL_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
 {$IF defined(CPUX86_64) or defined(CPUX64)}
   {$DEFINE x64}
 {$ELSEIF defined(CPU386)}

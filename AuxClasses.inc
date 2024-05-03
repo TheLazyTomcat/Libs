@@ -11,11 +11,11 @@
 
     This file contains main classes template used by AuxClasses library.
 
-  Version 1.2.1 (2023-11-12)
+  Version 1.2.2 (2024-04-14)
 
-  Last change 2023-11-12
+  Last change 2024-04-28
 
-  ©2018-2023 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -32,7 +32,17 @@
       github.com/TheLazyTomcat/Lib.AuxClasses
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol AuxClasses_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 
@@ -214,7 +224,7 @@ type
     destructor Destroy; override;
     Function LowList: Integer; virtual;
     Function HighList: Integer; virtual;
-    Function CheckList(List: Integer): Boolean; virtual;    
+    Function CheckList(List: Integer): Boolean; virtual;
     Function LowIndex(List: Integer): Integer; virtual; abstract;
     Function HighIndex(List: Integer): Integer; virtual; abstract;
     Function CheckIndex(List,Index: Integer): Boolean; virtual;
@@ -247,7 +257,7 @@ type
 {===============================================================================
 ********************************************************************************
 
-                                 Implementations                                
+                                 Implementations
 
 ********************************************************************************
 ===============================================================================}

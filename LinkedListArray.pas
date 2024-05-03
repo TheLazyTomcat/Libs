@@ -19,9 +19,9 @@
     A specialized class (TIntegerLinkedListArray) with Integer as item type is
     implemented and provided as an example.
 
-  Version 1.1 (2023-11-19)
+  Version 1.1.1 (2024-05-02)
 
-  Last change 2024-02-03
+  Last change 2024-05-02
 
   ©2018-2024 František Milt
 
@@ -41,12 +41,23 @@
 
   Dependencies:
     AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions       - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
   * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
 
-  BinaryStreamingLite can be replaced by full BinaryStreaming.    
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol LinkedListArray_UseAuxExceptions for details).
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 (*******************************************************************************
@@ -306,6 +317,19 @@ end;
 
 *******************************************************************************)
 unit LinkedListArray;
+{
+  LinkedListArray_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  LinkedListArray_UseAuxExceptions to achieve this.
+}
+{$IF Defined(LinkedListArray_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -319,13 +343,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ELLAException = class(Exception);
+  ELLAException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ELLAInvalidValue       = class(ELLAException);
   ELLAIncompatibleObject = class(ELLAException);

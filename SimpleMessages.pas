@@ -41,9 +41,9 @@
     For more information on this unit, contact the author or consult with the
     source code.
 
-  Version 1.0 alpha 2 (requires extensive testing) (2022-10-20)
+  Version 1.0 alpha 3 (requires extensive testing) (2024-05-03)
 
-  Last change 2024-02-03
+  Last change 2024-05-03
 
   ©2022-2024 František Milt
 
@@ -62,40 +62,56 @@
       github.com/TheLazyTomcat/Lib.SimpleMessages
 
   Dependencies:
-    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitVector          - github.com/TheLazyTomcat/Lib.BitVector
+  * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    MemVector          - github.com/TheLazyTomcat/Lib.MemVector
+    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+  * WinSyncObjs        - github.com/TheLazyTomcat/Lib.WinSyncObjs
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleMessages_UseAuxExceptions for details).
+
+  Library LinSyncObjs is required only when compiling for Linux OS.
+
+  Library WinSyncObjs is required only when compiling for Windows OS.
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
-  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     BitOps              - github.com/TheLazyTomcat/Lib.BitOps
-    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
-    MemVector           - github.com/TheLazyTomcat/Lib.MemVector
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1
-    SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+    SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
-
-  Libraries UInt64Utils and WinSyncObjs are required only when compiling for
-  Windows OS.
-
-  Libraries LinSyncObjs and SimpleFutex are required only when compiling for
-  Linux OS.
-
-  Library SimpleCPUID might not be required when compiling for Windows OS,
-  depending on defined symbols in InterlockedOps and BitOps libraries.
-
-  BinaryStreamingLite can be replaced by full BinaryStreaming.
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimpleMessages;
+{
+  SimpleMessages_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleMessages_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleMessages_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -119,17 +135,14 @@ interface
 uses
   SysUtils, {$IFNDEF Windows}BaseUnix, {$ENDIF}
   AuxTypes, AuxClasses, BitVector, MemVector, SharedMemoryStream,
-{$IFDEF Windows}
-  WinSyncObjs
-{$ELSE}
-  LinSyncObjs
-{$ENDIF};
+  {$IFDEF Windows}WinSyncObjs{$ELSE}LinSyncObjs{$ENDIF}
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESMException = class(Exception);
+  ESMException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESMSystemError      = class(ESMException);
   ESMInvalidValue     = class(ESMException);

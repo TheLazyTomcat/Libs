@@ -126,9 +126,9 @@
       - every successful acquire of a synchronizer MUST be paired by a release,
         synhronizers are not automalically released
 
-  Version 1.3.1 (2021-12-24)
+  Version 1.3.2 (2024-05-02)
 
-  Last change 2024-03-05
+  Last change 2024-05-02
 
   ©2016-2024 František Milt
 
@@ -147,15 +147,37 @@
       github.com/TheLazyTomcat/Lib.FastLocks
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
-  SimpleCPUID might not be required, see library InterlockedOps for details.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol FastLocks_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit FastLocks;
+{
+  FastLocks_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  FastLocks_UseAuxExceptions to achieve this.
+}
+{$IF Defined(FastLocks_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -203,13 +225,13 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EFLException = class(Exception);
+  EFLException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EFLCounterError = class(EFLException);
   EFLInvalidValue = class(EFLException);

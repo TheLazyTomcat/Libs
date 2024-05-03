@@ -37,11 +37,11 @@
       WARNING - waiting on many objects should also be considered an
                 experimental implementation.
 
-  Version 1.2 (2022-12-26)
+  Version 1.2.1 (2024-05-03)
 
-  Last change 2023-12-29
+  Last change 2024-05-03
 
-  ©2016-2023 František Milt
+  ©2016-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -58,25 +58,46 @@
       github.com/TheLazyTomcat/Lib.WinSyncObjs
 
   Dependencies:
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses       - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions    - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes         - github.com/TheLazyTomcat/Lib.AuxTypes
+    InterlockedOps   - github.com/TheLazyTomcat/Lib.InterlockedOps
+    NamedSharedItems - github.com/TheLazyTomcat/Lib.NamedSharedItems
+    StrRect          - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils      - github.com/TheLazyTomcat/Lib.UInt64Utils
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol WinSyncObjs_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath            - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-    NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1               - github.com/TheLazyTomcat/Lib.SHA1
     SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
-
-  Library SimpleCPUID might not be required, depending on defined symbols in
-  InterlockedOps and BitOps libraries.
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit WinSyncObjs;
+{
+  WinSyncObjs_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  WinSyncObjs_UseAuxExceptions to achieve this.
+}
+{$IF Defined(WinSyncObjs_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF not(defined(MSWINDOWS) or defined(WINDOWS))}
   {$MESSAGE FATAL 'Unsupported operating system.'}
@@ -107,13 +128,14 @@ interface
 
 uses
   Windows, SysUtils,
-  AuxTypes, AuxClasses, NamedSharedItems;
+  AuxTypes, AuxClasses, NamedSharedItems
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EWSOException = class(Exception);
+  EWSOException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EWSOTimestampError         = class(EWSOException);
   EWSOTimeConversionError    = class(EWSOException);

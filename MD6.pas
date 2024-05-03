@@ -55,36 +55,30 @@
       github.com/TheLazyTomcat/Lib.MD6
 
   Dependencies:
-    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
+    CrossSyncObjs      - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+
+  Indirect dependencies:
+    AuxExceptions       - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
-    BitOps              - github.com/TheLazyTomcat/Lib.BitOps
-  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
-  * BitVector           - github.com/TheLazyTomcat/Lib.BitVector
-    CrossSyncObjs       - github.com/TheLazyTomcat/Lib.CrossSyncObjs
-    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
+    LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1
-  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
     SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-    StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
-
-  Libraries UInt64Utils and WinSyncObjs are required only when compiling for
-  Windows OS.
-
-  Libraries BitVector, LinSyncObjs and SimpleFutex are required only when
-  compiling for Linux OS.
-
-  Library SimpleCPUID might not be required, depending on defined symbols in
-  InterlockedOps and BitOps libraries.
-
-  BinaryStreamingLite can be replaced by full BinaryStreaming.
+    SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
+    WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
 
 ===============================================================================}
 unit MD6;

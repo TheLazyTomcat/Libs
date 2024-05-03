@@ -44,9 +44,9 @@
       about which types and what functions are affected, refer to "Overloading
       information symbols" further down.
 
-  Version 1.2 (2024-03-10)
+  Version 1.2.1 (2024-04-14)
 
-  Last change (2024-03-10)
+  Last change (2024-04-14)
 
   ©2024 František Milt
 
@@ -65,7 +65,17 @@
       github.com/TheLazyTomcat/Lib.AuxMath
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol AuxMath_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo 
 
 ===============================================================================}
 unit AuxMath;
@@ -80,6 +90,20 @@ unit AuxMath;
 {$IFDEF AuxMath_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  AuxMath_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  AuxMath_UseAuxExceptions to achieve this.
+}
+{$IF Defined(AuxMath_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF ENDIAN_BIG}
   {$MESSAGE FATAL 'Big-endian system not supported'}  // because of memory overlays
@@ -149,7 +173,7 @@ interface
 
 uses
   SysUtils,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Overloading information symbols
@@ -310,7 +334,7 @@ const
     Library-specific exceptions
 ===============================================================================}
 type
-  EAMException = class(Exception);
+  EAMException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EAMInvalidOperation = class(EAMException);
   EAMInvalidValue     = class(EAMException);

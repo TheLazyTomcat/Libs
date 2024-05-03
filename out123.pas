@@ -14,13 +14,13 @@
 
     More info about the mpg123 library can be found at: https://www.mpg123.de
 
-  Version 1.0.5 (2023-05-16)
+  Version 1.0.6 (2024-05-03)
 
   Build against library version 1.25.13 (libout123 API version 2)
 
-  Last change 2023-05-16
+  Last change 2024-05-03
 
-  ©2018-2023 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -37,11 +37,21 @@
       github.com/TheLazyTomcat/Bnd.mpg123
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-    DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
-    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    DynLibUtils   - github.com/TheLazyTomcat/Lib.DynLibUtils
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol mpg123_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
 
   Translation notes:
     - macros were expanded in-place or implemented as normal functions

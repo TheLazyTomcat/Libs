@@ -40,13 +40,13 @@
               execute any of its code concurrently (in more than one thread at
               any given time).
 
-  Version 1.0 (2023-05-27)
+  Version 1.0.1 (2024-05-03)
 
   Build against DevIL library version 1.8.0
 
-  Last change 2023-05-27
+  Last change 2024-05-03
 
-  ©2023 František Milt
+  ©2023-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -63,11 +63,21 @@
       github.com/TheLazyTomcat/Bnd.DevIL
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-    DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
-    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    DynLibUtils   - github.com/TheLazyTomcat/Lib.DynLibUtils
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol DevIL_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit DevIL;
@@ -78,7 +88,7 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 const
   IL_UNICODE = {$IFDEF DevIL_Unicode}True{$ELSE}False{$ENDIF};
@@ -87,7 +97,7 @@ const
     Library-specific exceptions
 ===============================================================================}
 type
-  EILException = class(Exception);
+  EILException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EILStreamTooLarge = class(EILException);
 

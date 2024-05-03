@@ -28,11 +28,11 @@
       - quick sort (could use some testing and optimizations)
       - bogo sort (only for fun and tests)
 
-  Version 1.1.2 (2023-04-17)
+  Version 1.1.3 (2024-05-02)
 
-  Last change 2023-04-17
+  Last change 2024-05-02
 
-  ©2018-2023 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -49,11 +49,36 @@
       github.com/TheLazyTomcat/Lib.ListSorters
 
   Dependencies:
-    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol ListSorters_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit ListSorters;
+{
+  ListSorters_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  ListSorters_UseAuxExceptions to achieve this.
+}
+{$IF Defined(ListSorters_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -64,13 +89,13 @@ interface
 
 uses
   SysUtils,
-  AuxClasses;
+  AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ELSException = class(Exception);
+  ELSException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ELSNotAssigned = class(ELSException);
 

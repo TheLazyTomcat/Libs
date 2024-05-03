@@ -29,9 +29,9 @@
 
       NOTE - type Half is declared in unit AuxTypes, not here.
 
-  Version 1.1.4 (2023-04-15)
+  Version 1.1.5 (2024-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-04-28
 
   ©2017-2024 František Milt
 
@@ -50,12 +50,24 @@
       github.com/TheLazyTomcat/Lib.Float16
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
-  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM      - github.com/TheLazyTomcat/Lib.BasicUIM
+  * SimpleCPUID   - github.com/TheLazyTomcat/Lib.SimpleCPUID
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol Float16Utils_UseAuxExceptions for details).
 
   SimpleCPUID is required only when AllowF16CExtension symbol is defined and
   PurePascal symbol is not defined.
+
+  Libraries AuxExceptions and SimpleCPUID might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit Float16Utils;
@@ -70,6 +82,20 @@ unit Float16Utils;
 {$IFDEF Float16Utils_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  Float16Utils_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  Float16Utils_UseAuxExceptions to achieve this.
+}
+{$IF Defined(Float16Utils_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND} 
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPUX86_64) or defined(CPUX64)}
   {$DEFINE x64}
@@ -133,7 +159,8 @@ interface
 
 uses
   SysUtils,
-  AuxTypes {contains declaration of type Half};
+  AuxTypes {contains declaration of type Half}
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {-------------------------------------------------------------------------------
     Some predefined Half values and other useful constants
@@ -155,7 +182,7 @@ const
     Library-specific exceptions - declaration
 ===============================================================================}
 type
-  EF16UException = class(Exception);
+  EF16UException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EF16UInvalidFlag      = class(EF16UException);
   EF16UUnknownFunction  = class(EF16UException);

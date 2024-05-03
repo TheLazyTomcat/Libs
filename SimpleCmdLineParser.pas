@@ -160,11 +160,11 @@
           -t                general object
           string'string     general object
 
-  Version 2.0.1 (2023-03-23)
+  Version 2.0.2 (2024-05-03)
 
-  Last change 2023-12-28
+  Last change 2024-05-03
 
-  ©2017-2023 František Milt
+  ©2017-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -181,14 +181,39 @@
       github.com/TheLazyTomcat/Lib.SimpleCmdLineParser
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-  * StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+  * StrRect       - github.com/TheLazyTomcat/Lib.StrRect
 
-    Library StrRect is required only when compiling for Windows OS.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleCmdLineParser_UseAuxExceptions for details).
+
+  Library StrRect is required only when compiling for Windows OS.
+
+  Libraries AuxExceptions and StrRect might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimpleCmdLineParser;
+{
+  SimpleCmdLineParser_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleCmdLineParser_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleCmdLineParser_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -210,13 +235,13 @@ interface
 
 uses
   SysUtils,
-  AuxClasses;
+  AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESCLPException = class(Exception);
+  ESCLPException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESCLPIndexOutOfBounds = class(ESCLPException);
   ESCLPInvalidValue     = class(ESCLPException);

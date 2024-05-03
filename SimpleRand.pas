@@ -40,11 +40,11 @@
       NOTE - TSimpleRandBuffered returns DIFFERENT numbers than TSimpleRand for
              the same seed and call sequence.
 
-  Version 1.0 (2023-08-22)
+  Version 1.0.1 (2024-05-03)
 
-  Last change 2023-12-28
+  Last change 2024-05-03
 
-  ©2023 František Milt
+  ©2023-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -61,24 +61,45 @@
       github.com/TheLazyTomcat/Lib.SimpleRand
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    SHA3               - github.com/TheLazyTomcat/Lib.SHA3
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitOps        - github.com/TheLazyTomcat/Lib.BitOps
+    SHA3          - github.com/TheLazyTomcat/Lib.SHA3
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
+  * UInt64Utils   - github.com/TheLazyTomcat/Lib.UInt64Utils
 
-  SimpleCPUID might not be needed, see BitOps library for details.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleRand_UseAuxExceptions for details).
 
   UInt64Utils is required only in compilers that do not have full support for
   unsigned 64 bits wide integers (UInt64, QWord).
 
+  Libraries AuxExceptions and UInt64Utils might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
+    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
+
 ===============================================================================}
 unit SimpleRand;
+{
+  SimpleRand_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleRand_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleRand_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -104,13 +125,13 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, AuxClasses, SHA3;
+  AuxTypes, AuxClasses, SHA3{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESRException = class(Exception);
+  ESRException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESRInvalidValue    = class(ESRException);
   ESRSeedError       = class(ESRException);

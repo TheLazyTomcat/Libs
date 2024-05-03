@@ -31,11 +31,11 @@
              specialized program, it was not manually written. The code was
              copied, so if BS contains some error, it might appear here too.
 
-  Build from BinaryStreaming of version 2.0.2 (2023-12-24 / 2024-02-03)             
+  Build from BinaryStreaming of version 2.0.3 (2024-04-14)             
 
-  Version 1.0 (2024-02-03)
+  Version 1.0.1 (2024-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-04-14
 
   ©2024 František Milt
 
@@ -54,11 +54,33 @@
       github.com/TheLazyTomcat/Lib.BinaryStreamingLite
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect  - github.com/TheLazyTomcat/Lib.StrRect
+   *AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions  
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes       
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect   
+
+  Library AuxExceptions is required only when rebasing local exception
+  classes (see symbol BinaryStreamingLite_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo    
 
 ===============================================================================}
 unit BinaryStreamingLite;
+{
+  BinaryStreamingLite_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  BinaryStreamingLite_UseAuxExceptions to achieve this.
+}
+{$IF Defined(BinaryStreamingLite_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------  
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -77,13 +99,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, StrRect;
+  AuxTypes, StrRect {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EBSLException = class(Exception);
+  EBSLException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
 {===============================================================================
 --------------------------------------------------------------------------------

@@ -15,11 +15,11 @@
     Since the interface is slightly different, it is not intended as a direct
     drop-in replacement.
 
-  Version 1.1 (2022-05-23)
+  Version 1.1.1 (2024-02-03)
 
-  Last change 2023-12-27
+  Last change 2024-02-03
 
-  ©2019-2023 František Milt
+  ©2019-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -36,15 +36,38 @@
       github.com/TheLazyTomcat/Lib.RegistryEx
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
+  * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
+    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
     WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
-    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol RegistryEx_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit RegistryEx;
+{
+  RegistryEx_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  RegistryEx_UseAuxExceptions to achieve this.
+}
+{$IF Defined(RegistryEx_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPU64) or defined(CPU64BITS)}
   {$DEFINE CPU64bit}
@@ -72,13 +95,13 @@ interface
 
 uses
   Windows, SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ERXException = class(Exception);
+  ERXException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ERXTimeConversionError = class(ERXException);
   ERXInvalidValue        = class(ERXException);

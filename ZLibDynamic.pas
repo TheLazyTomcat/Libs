@@ -16,11 +16,11 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.4 (2024-01-14)
+  Version 1.1.5 (2024-05-03)
 
   Build against zlib version 1.3
 
-  Last change 2024-01-14
+  Last change 2024-05-03
 
   ©2017-2024 František Milt
 
@@ -39,13 +39,21 @@
       github.com/TheLazyTomcat/Bnd.ZLib
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-    DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
-  * WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
-    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    DynLibUtils   - github.com/TheLazyTomcat/Lib.DynLibUtils
 
-  Library WindowsVersion is only needed when compiling for Windows OS.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol ZLib_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit ZLibDynamic;

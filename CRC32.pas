@@ -30,7 +30,7 @@
 
   Version 1.7.3 (2023-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-05-02
 
   ©2011-2024 František Milt
 
@@ -49,16 +49,23 @@
       github.com/TheLazyTomcat/Lib.CRC32
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
+    HashBase    - github.com/TheLazyTomcat/Lib.HashBase
+  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
-    SimpleCPUID is required only when neither PurePascal nor CRC32_PurePascal
-    symbol is defined and symbol CRC32C_Accelerated is defined.
+  SimpleCPUID is required only when neither PurePascal nor CRC32_PurePascal
+  symbol is defined and symbol CRC32C_Accelerated is defined.
+
+  Library SimpleCPUID might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit CRC32;

@@ -16,11 +16,11 @@
       NOTE - since proper implementation of futexes is not particularly easy,
              there are probably errors. If you find any, please let me know.
 
-  Version 1.1 (2022-06-06)
+  Version 1.1.1 (2024-05-03)
 
-  Last change 2022-10-03
+  Last change 2024-05-03
 
-  ©2021-2022 František Milt
+  ©2021-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -37,15 +37,38 @@
       github.com/TheLazyTomcat/Lib.SimpleFutex
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxMath        - github.com/TheLazyTomcat/Lib.AuxMath
     InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
-  SimpleCPUID might not be required, see library InterlockedOps for details.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleFutex_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimpleFutex;
+{
+  SimpleFutex_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleFutex_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleFutex_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(LINUX) and Defined(FPC)}
   {$DEFINE Linux}
@@ -68,13 +91,13 @@ interface
 
 uses
   SysUtils, UnixType,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESFException = class(Exception);
+  ESFException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESFTimeError    = class(ESFException);
   ESFFutexError   = class(ESFException);

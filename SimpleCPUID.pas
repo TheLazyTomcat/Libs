@@ -14,9 +14,9 @@
     Should be compatible with any Windows and Linux system running on x86(-64)
     architecture.
 
-  Version 1.3 (2023-04-23)
+  Version 1.3.1 (2024-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-04-14
 
   ©2016-2024 František Milt
 
@@ -34,9 +34,6 @@
 
       github.com/TheLazyTomcat/Lib.SimpleCPUID
 
-  Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
-
   Sources:
     - en.wikipedia.org/wiki/CPUID
     - sandpile.org/x86/cpuid.htm
@@ -44,6 +41,18 @@
     - AMD64 Architecture Programmer’s Manual; Publication #40332 Revision 4.02
       (November 2020)
     - AMD CPUID Specification; Publication #25481 Revision 2.34 (September 2010)
+
+  Dependencies:
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleCPUID_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimpleCPUID;
@@ -60,6 +69,20 @@ unit SimpleCPUID;
 {$IFDEF SimpleCPUID_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  SimpleCPUID_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleCPUID_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleCPUID_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(CPUX86_64) or Defined(CPUX64)}
   {$DEFINE x64}
@@ -100,13 +123,13 @@ interface
 
 uses
   SysUtils,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESCIDException = class(Exception);
+  ESCIDException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESCIDSystemError      = class(ESCIDException);
   ESCIDIndexOutOfBounds = class(ESCIDException);
@@ -483,7 +506,7 @@ type
   PCPUSet = ^TCPUSet;
 
 {===============================================================================
-    TSimpleCPUIDEx - class declaration                                               
+    TSimpleCPUIDEx - class declaration
 ===============================================================================}
 type
   TSimpleCPUIDEx = class(TSimpleCPUID)
@@ -1512,7 +1535,7 @@ begin
 with fInfo.SupportedExtensions do
   begin
     // FPU - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    
+
     X87         := fInfo.ProcessorFeatures.FPU;
     EmulatedX87 := GetBit(GetMSW,2);
     MMX         := fInfo.ProcessorFeatures.MMX and not EmulatedX87;
@@ -1566,7 +1589,7 @@ with fInfo.SupportedExtensions do
     // AVX2  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     AVX2 := fInfo.ProcessorFeatures.AVX2 and AVX;
-    
+
     // AVX-512 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     If fInfo.ProcessorFeatures.OSXSAVE then
@@ -1704,7 +1727,7 @@ end;
 ===============================================================================}
 {===============================================================================
     TSimpleCPUIDEx - class implementation
-===============================================================================} 
+===============================================================================}
 {-------------------------------------------------------------------------------
     TSimpleCPUIDEx - protected methods
 -------------------------------------------------------------------------------}

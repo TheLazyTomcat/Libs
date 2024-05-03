@@ -48,11 +48,11 @@
                   This can lead to a deadlocks (especially if you try to create
                   both ends in the same thread), so be careful.
 
-  Version 1.1.1 (2023-01-13)
+  Version 1.1.2 (2024-05-03)
 
-  Last change 2023-05-01
+  Last change 2024-05-03
 
-  ©2022-2023 František Milt
+  ©2022-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -69,24 +69,49 @@
       github.com/TheLazyTomcat/Lib.SimplePipes
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxClasses       - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions    - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes         - github.com/TheLazyTomcat/Lib.AuxTypes
+    InterlockedOps   - github.com/TheLazyTomcat/Lib.InterlockedOps
+    NamedSharedItems - github.com/TheLazyTomcat/Lib.NamedSharedItems
+  * StrRect          - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimplePipes_UseAuxExceptions for details).
+
+  Library StrRect is required only when compiling for Windows OS.
+
+  Libraries AuxExceptions and StrRect might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    AuxMath            - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-    NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1               - github.com/TheLazyTomcat/Lib.SHA1
     SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
+    SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-
-  SimpleFutex library is required only when compiling for Linux OS.
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimplePipes;
+{
+  SimplePipes_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimplePipes_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimplePipes_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -106,13 +131,14 @@ interface
 
 uses
   SysUtils,{$IFNDEF Windows} baseunix,{$ENDIF}
-  AuxTypes, AuxClasses, NamedSharedItems;
+  AuxTypes, AuxClasses, NamedSharedItems
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESPException = class(Exception);
+  ESPException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESPSystemError    = class(ESPException);
   ESPNoServer       = class(ESPException);

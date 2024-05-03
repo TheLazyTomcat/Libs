@@ -138,9 +138,9 @@
       This all means one important thing - you have to free the returned object
       after use to prevent memory leak!
 
-  version 1.0 (2023-10-20)
+  version 1.0.1 (2024-05-03)
 
-  Last change 2024-03-05
+  Last change 2024-05-03
 
   ©2023-2024 František Milt
 
@@ -159,16 +159,37 @@
       github.com/TheLazyTomcat/Bnd.WinGDIPlus
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
-    DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
-  * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    DynLibUtils   - github.com/TheLazyTomcat/Lib.DynLibUtils
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
 
-  Library SimpleCPUID might not be needed, see DynLibUtils library for details.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol WinGDIPlus_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit WinGDIPlus;
+{
+  WinGDIPlus_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  WinGDIPlus_UseAuxExceptions to achieve this.
+}
+{$IF Defined(WinGDIPlus_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF not(defined(MSWINDOWS) or defined(WINDOWS))}
   {$MESSAGE FATAL 'Unsupported operating system.'}
@@ -252,13 +273,13 @@ interface
 uses
   Windows, SysUtils, Classes, ActiveX{!! for IStream}, Math,
   {$IFDEF FPC} jwawingdi,{$ENDIF}
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {!!-----------------------------------------------------------------------------
     Library-specific exceptions
 -------------------------------------------------------------------------------}
 type
-  EGDIPlusException = class(Exception);
+  EGDIPlusException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EGDIPlusError             = class(EGDIPlusException);
   EGDIPlusIndexOutOfBounds  = class(EGDIPlusException);

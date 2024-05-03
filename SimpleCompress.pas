@@ -33,19 +33,20 @@
       github.com/TheLazyTomcat/Lib.SimpleCompress
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
-    MemoryBuffer   - github.com/TheLazyTomcat/Lib.MemoryBuffer
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
-  * DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
-  * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    ZLibUtils      - github.com/TheLazyTomcat/Lib.ZLibUtils
-  * WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
-    ZLib           - github.com/TheLazyTomcat/Bnd.ZLib
+    AuxClasses   - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes     - github.com/TheLazyTomcat/Lib.AuxTypes
+    MemoryBuffer - github.com/TheLazyTomcat/Lib.MemoryBuffer
+    StrRect      - github.com/TheLazyTomcat/Lib.StrRect
+    WinFileInfo  - github.com/TheLazyTomcat/Lib.WinFileInfo
+    ZLibUtils    - github.com/TheLazyTomcat/Lib.ZLibUtils
 
-  Libraries DynLibUtils, SimpleCPUID and WindowsVersion are needed only when
-  compiling for Windows OS.
+  Indirect dependencies:
+    AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
+    DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
+    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+    ZLib           - github.com/TheLazyTomcat/Bnd.ZLib
 
 ===============================================================================}
 unit SimpleCompress;

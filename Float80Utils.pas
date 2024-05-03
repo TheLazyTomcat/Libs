@@ -44,9 +44,9 @@
       summary flag bit is not set both for masked and unmasked exceptions.
       Top of the stack, busy and stack fault flags are outright ignored.
 
-  Version 1.1 (2021-02-03)
+  Version 1.1.1 (2024-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-04-14
 
   ©2020-2024 František Milt
 
@@ -65,7 +65,17 @@
       github.com/TheLazyTomcat/Lib.Float80Utils
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol Float80Utils_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit Float80Utils; 
@@ -80,6 +90,20 @@ unit Float80Utils;
 {$IFDEF Float80_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  Float80Utils_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  Float80Utils_UseAuxExceptions to achieve this.
+}
+{$IF Defined(Float80Utils_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF ENDIAN_BIG}
   // sadly, I have no way of developing for BE systems :(
@@ -120,14 +144,15 @@ interface
 
 uses
   SysUtils,
-  AuxTypes {contains declaration of Float80 type};
+  AuxTypes {contains declaration of Float80 type}
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions - declaration
 ===============================================================================}
 
 type
-  EF80UException = class(Exception);
+  EF80UException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EF80UInvalidFlag = class(EF80UException);
 

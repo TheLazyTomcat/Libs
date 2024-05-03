@@ -17,11 +17,11 @@
     absolutely no documentation. But, I am open to suggestions, if anyone will
     be interested.
 
-  Version 1.1 (2023-04-14)
+  Version 1.1.1 (2024-04-14)
 
-  Last change 2023-04-14
+  Last change 2024-04-14
 
-  ©2023 František Milt
+  ©2023-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -38,10 +38,33 @@
       github.com/TheLazyTomcat/Lib.BasicUIM
 
   Dependencies:
-    none
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol BasicUIM_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit BasicUIM;
+{
+  BasicUIM_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  BasicUIM_UseAuxExceptions to achieve this.
+}
+{$IF Defined(BasicUIM_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND} 
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFpc}
@@ -51,13 +74,14 @@ unit BasicUIM;
 interface
 
 uses
-  SysUtils;
+  SysUtils
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EUIMException = class(Exception);
+  EUIMException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EUIMIndexOutOfBounds  = class(EUIMException);
   EUIMInvalidValue      = class(EUIMException);

@@ -30,9 +30,9 @@
              problems. Use them with caution and if you find any bugs, please
              report them.
 
-  Version 1.0.4 (2022-10-28)
+  Version 1.0.5 (2024-05-03)
 
-  Last change 2024-02-03
+  Last change 2024-05-03
 
   ©2022-2024 František Milt
 
@@ -51,26 +51,45 @@
       github.com/TheLazyTomcat/Lib.LinSyncObjs
 
   Dependencies:
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
+    BitVector          - github.com/TheLazyTomcat/Lib.BitVector
+    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+    SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol LinSyncObjs_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
-  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
-    BitOps              - github.com/TheLazyTomcat/Lib.BitOps
-    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
-    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
-    NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
-    SHA1                - github.com/TheLazyTomcat/Lib.SHA1
+    BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
-    SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
-
-  BinaryStreamingLite can be replaced by full BinaryStreaming.
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit LinSyncObjs;
+{
+  LinSyncObjs_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  LinSyncObjs_UseAuxExceptions to achieve this.
+}
+{$IF Defined(LinSyncObjs_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(LINUX) and Defined(FPC)}
   {$DEFINE Linux}
@@ -95,13 +114,13 @@ interface
 uses
   SysUtils, BaseUnix, PThreads,
   AuxTypes, AuxClasses, BitVector, SimpleFutex, SharedMemoryStream,
-  NamedSharedItems;
+  NamedSharedItems{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ELSOException = class(Exception);
+  ELSOException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ELSOSysInitError  = class(ELSOException);
   ELSOSysFinalError = class(ELSOException);

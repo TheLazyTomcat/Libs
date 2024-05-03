@@ -9,11 +9,11 @@
 
   Auxiliary classes and other class-related things
 
-  Version 1.2.1 (2023-11-12)
+  Version 1.2.2 (2024-04-14)
 
-  Last change 2023-11-12
+  Last change 2024-04-28
 
-  ©2018-2023 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -30,7 +30,17 @@
       github.com/TheLazyTomcat/Lib.AuxClasses
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol AuxClasses_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit AuxClasses;
@@ -45,6 +55,20 @@ unit AuxClasses;
 {$IFDEF AuxClasses_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  AuxClasses_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  AuxClasses_UseAuxExceptions to achieve this.
+}
+{$IF Defined(AuxClasses_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPUX86_64) or defined(CPUX64)}
   {$DEFINE x64}
@@ -74,13 +98,13 @@ interface
 
 uses
   SysUtils,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EACException = class(Exception);
+  EACException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EACIndexOutOfBounds  = class(EACException);
   EACIncompatibleClass = class(EACException);
@@ -200,9 +224,8 @@ Function GetInstanceString(Instance: TObject): String;
 {$DEFINE AC_Include_Declaration}
   {$DEFINE AC_Include_Interfaced}
     {$INCLUDE '.\AuxClasses.inc'}
-  {$UNDEF AC_Include_Interfaced}    
+  {$UNDEF AC_Include_Interfaced}
 {$UNDEF AC_Include_Declaration}
-
 
 implementation
 
@@ -272,7 +295,7 @@ end;
 {$DEFINE AC_Include_Implementation}
   {$DEFINE AC_Include_Interfaced}
     {$INCLUDE '.\AuxClasses.inc'}
-  {$UNDEF AC_Include_Interfaced}    
+  {$UNDEF AC_Include_Interfaced}
 {$UNDEF AC_Include_Implementation}
 
 end.

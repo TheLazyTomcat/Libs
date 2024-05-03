@@ -20,11 +20,11 @@
     arbitrary, there are no performance optimizations and it is probably bugged.
     It was written only as a product of curiosity and should be seen as such.
 
-  Version 1.0 alpha (2023-05-09)
+  Version 1.0 alpha 2 (2024-05-03)
 
-  Last change 2023-12-29
+  Last change 2024-05-03
 
-  ©2023 František Milt
+  ©2023-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -42,17 +42,38 @@
 
   Dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
 
-  SimpleCPUID might not be needed, see BitOps library for details.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleHuffman_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimpleHuffman;
+{
+  SimpleHuffman_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleHuffman_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleHuffman_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -80,13 +101,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESHException = class(Exception);
+  ESHException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESHInvalidValue     = class(ESHException);
   ESHInvalidState     = class(ESHException);

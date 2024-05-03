@@ -91,9 +91,9 @@
     measurement runs the whole time only on one processor core (use provided
     auxiliary functions to set thread affinity).
 
-  Version 1.1.2 (2024-03-20)
+  Version 1.1.3 (2024-05-03)
 
-  Last change 2024-03-20
+  Last change 2024-05-03
 
   ©2023-2024 František Milt
 
@@ -112,8 +112,19 @@
       github.com/TheLazyTomcat/Lib.SimpleTSC
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    SimpleCPUID   - github.com/TheLazyTomcat/Lib.SimpleCPUID
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleTSC_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimpleTSC;
@@ -131,6 +142,20 @@ unit SimpleTSC;
 {$IFDEF SimpleTSC_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  SimpleTSC_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleTSC_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleTSC_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(CPUX86_64) or Defined(CPUX64)}
   {$DEFINE x64}
@@ -164,13 +189,13 @@ interface
 
 uses
   SysUtils, {$IFNDEF Windows}baseunix,{$ENDIF}
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESTSCException = class(Exception);
+  ESTSCException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESTSCInvalidValue       = class(ESTSCException);
   ESTSCInvalidState       = class(ESTSCException);

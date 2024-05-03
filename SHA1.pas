@@ -30,16 +30,19 @@
       github.com/TheLazyTomcat/Lib.SHA1
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
+    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitOps   - github.com/TheLazyTomcat/Lib.BitOps
+    HashBase - github.com/TheLazyTomcat/Lib.HashBase
 
-  SimpleCPUID might not be needed, see BitOps library for details.
+  Indirect dependencies:
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
+    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SHA1;

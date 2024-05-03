@@ -18,9 +18,9 @@
     irrespective of how it is declared (in 64bit windows programs, it is
     usually declared as a simple alias for type double (64bits)).
 
-  Version 2.1 (2024-02-14)
+  Version 2.1.1 (2024-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-04-28
 
   ©2015-2024 František Milt
 
@@ -39,11 +39,36 @@
       github.com/TheLazyTomcat/Lib.FloatHex
 
   Dependencies:
-    AuxTypes     - github.com/TheLazyTomcat/Lib.AuxTypes
-    Float80Utils - github.com/TheLazyTomcat/Lib.Float80Utils
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    Float80Utils  - github.com/TheLazyTomcat/Lib.Float80Utils
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol FloatHex_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit FloatHex;
+{
+  FloatHex_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  FloatHex_UseAuxExceptions to achieve this.
+}
+{$IF Defined(FloatHex_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF ENDIAN_BIG}
   {$MESSAGE FATAL 'Big-endian system not supported'}
@@ -66,11 +91,11 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, Float80Utils;
+  AuxTypes, Float80Utils{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 type
   // library-specific exceptions, unused atm.
-  EFHException = class(Exception);
+  EFHException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
 {===============================================================================
 --------------------------------------------------------------------------------

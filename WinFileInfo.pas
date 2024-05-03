@@ -21,9 +21,9 @@
     compiled for other systems too. But in such case, it provides only a
     limited file information set.
 
-  Version 1.1.2 (2024-03-04)
+  Version 1.1.3 (2024-04-28)
 
-  Last change 2024-03-04
+  Last change 2024-04-28
 
   ©2015-2024 František Milt
 
@@ -42,13 +42,36 @@
       github.com/TheLazyTomcat/Lib.WinFileInfo
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
-  * StrRect  - github.com/TheLazyTomcat/Lib.StrRect
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+  * StrRect       - github.com/TheLazyTomcat/Lib.StrRect
 
-    StrRect is required only when compiling for Windows OS.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol WinFileInfo_UseAuxExceptions for details).
+
+  StrRect is required only when compiling for Windows OS.
+
+  Library StrRect might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
 
 ===============================================================================}
 unit WinFileInfo;
+{
+  WinFileInfo_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  WinFileInfo_UseAuxExceptions to achieve this.
+}
+{$IF Defined(WinFileInfo_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -73,13 +96,13 @@ interface
 
 uses
   SysUtils, Classes, {$IFDEF Windows}Windows,{$ELSE}UnixType,{$ENDIF}
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EWFIException = class(Exception);
+  EWFIException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EWFIFileError        = class(EWFIException);
   EWFIProcessingError  = class(EWFIException);

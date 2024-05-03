@@ -22,9 +22,9 @@
     to be inherited from in a descendant class that implements vector for a
     specific item type. An integer vector is implemented as an example.
 
-  Version 1.2.3 (2023-11-05)
+  Version 1.2.4 (2024-05-02)
 
-  Last change 2024-02-03
+  Last change 2024-05-02
 
   ©2016-2024 František Milt
 
@@ -44,12 +44,23 @@
 
   Dependencies:
     AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions       - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
   * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
 
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol MemVector_UseAuxExceptions for details).
+
   BinaryStreamingLite can be replaced by full BinaryStreaming.
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 (*******************************************************************************
@@ -258,6 +269,19 @@ end;
 
 *******************************************************************************)
 unit MemVector;
+{
+  MemVector_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  MemVector_UseAuxExceptions to achieve this.
+}
+{$IF Defined(MemVector_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -272,13 +296,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EMVException = class(Exception);
+  EMVException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EMVIndexOutOfBounds  = class(EMVException);
   EMVForeignMemory     = class(EMVException);

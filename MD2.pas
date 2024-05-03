@@ -30,11 +30,17 @@
       github.com/TheLazyTomcat/Lib.MD2
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+    HashBase - github.com/TheLazyTomcat/Lib.HashBase
+
+  Indirect dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit MD2;

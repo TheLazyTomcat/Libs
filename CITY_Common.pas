@@ -13,7 +13,7 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2023-12-27
+  Last change 2024-04-28
 
   ©2016-2023 František Milt
 
@@ -32,18 +32,23 @@
       github.com/TheLazyTomcat/Lib.CityHash
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase  
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
+    BitOps      - github.com/TheLazyTomcat/Lib.BitOps
+    HashBase    - github.com/TheLazyTomcat/Lib.HashBase
+  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
 
   SimpleCPUID is required only when PurePascal symbol is not defined.
-  Also, it might be needed by BitOps library, see there for details.
+
+  Library SimpleCPUID might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit CITY_Common;

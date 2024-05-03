@@ -13,7 +13,7 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2023-12-27
+  Last change 2024-04-28
 
   ©2016-2023 František Milt
 
@@ -32,18 +32,23 @@
       github.com/TheLazyTomcat/Lib.CityHash
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase  
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
+    BitOps      - github.com/TheLazyTomcat/Lib.BitOps
+    HashBase    - github.com/TheLazyTomcat/Lib.HashBase
+  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
 
   SimpleCPUID is required only when PurePascal symbol is not defined.
-  Also, it might be needed by BitOps library, see there for details.
+
+  Library SimpleCPUID might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit CITY_1_1_1;
@@ -284,32 +289,34 @@ Function CityMurmur(s: Pointer; len: TMemSize; seed: UInt128): UInt128;
 var
   a,b,c,d:  UInt64;
   l:        PtrInt;
+  s_temp:   Pointer;
 begin
+s_temp := s;
 a := UInt128Low64(seed);
 b := UInt128High64(seed);
 l := len - 16;
 If l <= 0 then  // len <= 16
   begin
     a := ShiftMix(a * k1) * k1;
-    c := b * k1 + HashLen0to16(s,len);
+    c := b * k1 + HashLen0to16(s_temp,len);
     If len >= 8 then
-      d := ShiftMix(a + Fetch64(s))
+      d := ShiftMix(a + Fetch64(s_temp))
     else
       d := ShiftMix(a + c);
   end
 else
   begin
-    c := HashLen16(Fetch64(s,len - 8) + k1,a);
-    d := HashLen16(b + len,c + Fetch64(s,len - 16));
+    c := HashLen16(Fetch64(s_temp,len - 8) + k1,a);
+    d := HashLen16(b + len,c + Fetch64(s_temp,len - 16));
     a := a + d;
     repeat
-      a := a xor (ShiftMix(Fetch64(s) * k1) * k1);
+      a := a xor (ShiftMix(Fetch64(s_temp) * k1) * k1);
       a := a * k1;
       b := b xor a;
-      c := c xor (ShiftMix(Fetch64(s,8) * k1) * k1);
+      c := c xor (ShiftMix(Fetch64(s_temp,8) * k1) * k1);
       c := c * k1;
       d := d xor c;
-      PTR_ADVANCEVAR(s,16);
+      PTR_ADVANCEVAR(s_temp,16);
       l := l - 16;
     until l <= 0;
   end;
@@ -327,24 +334,26 @@ var
   h,g,f:          UInt32;
   a0,a1,a2,a3,a4: UInt32;
   iters:          TMemSize;
+  s_temp:         Pointer;
 begin
+s_temp := s;
 If len <= 24 then
   begin
     case len of
-      0..4:   Result := Hash32Len0to4(s,len);
-      5..12:  Result := Hash32Len5to12(s,len);
+      0..4:   Result := Hash32Len0to4(s_temp,len);
+      5..12:  Result := Hash32Len5to12(s_temp,len);
     else
-      Result := Hash32Len13to24(s,len);
+      Result := Hash32Len13to24(s_temp,len);
     end;
     Exit;
   end;
 // len > 24
 h := len; g := c1 * len; f := g;
-a0 := Rotate32(Fetch32(s,len - 4) * c1,17) * c2;
-a1 := Rotate32(Fetch32(s,len - 8) * c1,17) * c2;
-a2 := Rotate32(Fetch32(s,len - 16) * c1,17) * c2;
-a3 := Rotate32(Fetch32(s,len - 12) * c1,17) * c2;
-a4 := Rotate32(Fetch32(s,len - 20) * c1,17) * c2;
+a0 := Rotate32(Fetch32(s_temp,len - 4) * c1,17) * c2;
+a1 := Rotate32(Fetch32(s_temp,len - 8) * c1,17) * c2;
+a2 := Rotate32(Fetch32(s_temp,len - 16) * c1,17) * c2;
+a3 := Rotate32(Fetch32(s_temp,len - 12) * c1,17) * c2;
+a4 := Rotate32(Fetch32(s_temp,len - 20) * c1,17) * c2;
 h := h xor a0;
 h := Rotate32(h,19);
 h := h * 5 + $e6546b64;
@@ -362,11 +371,11 @@ f := Rotate32(f,19);
 f := f * 5 + $e6546b64;
 iters := (len - 1) div 20;
 repeat
-  a0 := Rotate32(Fetch32(s) * c1,17) * c2;
-  a1 := Fetch32(s,4);
-  a2 := Rotate32(Fetch32(s,8) * c1,17) * c2;
-  a3 := Rotate32(Fetch32(s,12) * c1,17) * c2;
-  a4 := Fetch32(s,16);
+  a0 := Rotate32(Fetch32(s_temp) * c1,17) * c2;
+  a1 := Fetch32(s_temp,4);
+  a2 := Rotate32(Fetch32(s_temp,8) * c1,17) * c2;
+  a3 := Rotate32(Fetch32(s_temp,12) * c1,17) * c2;
+  a4 := Fetch32(s_temp,16);
   h := h xor a0;
   h := Rotate32(h,18);
   h := h * 5 + $e6546b64;
@@ -385,7 +394,7 @@ repeat
   h := EndianSwap(h);
   f := f + a0;
   PERMUTE3(f,h,g);
-  PTR_ADVANCEVAR(s,20);
+  PTR_ADVANCEVAR(s_temp,20);
   Dec(iters);
 until iters <= 0;
 g := Rotate32(g,11) * c1;
@@ -466,10 +475,12 @@ var
   v,w:        UInt128;
   x,y,z:      UInt64;
   tail_done:  TMemSize;
+  s_temp:     Pointer;
 begin
+s_temp := s;
 If len < 128 then
   begin
-    Result := CityMurmur(s,len,seed);
+    Result := CityMurmur(s_temp,len,seed);
     Exit;
   end;
 // We expect len >= 128 to be the common case.  Keep 56 bytes of state:
@@ -477,30 +488,30 @@ If len < 128 then
 x := UInt128Low64(seed);
 y := UInt128High64(seed);
 z := len * k1;
-v.First := Rotate(y xor k1,49) * k1 + Fetch64(s);
-v.Second := Rotate(v.First,42) * k1 + Fetch64(s,8);
+v.First := Rotate(y xor k1,49) * k1 + Fetch64(s_temp);
+v.Second := Rotate(v.First,42) * k1 + Fetch64(s_temp,8);
 w.First := Rotate(y + z,35) * k1 + x;
-w.Second := Rotate(x + Fetch64(s,88),53) * k1;
+w.Second := Rotate(x + Fetch64(s_temp,88),53) * k1;
 // This is the same inner loop as CityHash64(), manually unrolled.
 repeat
-  x := Rotate(x + y + v.First + Fetch64(s,8),37) * k1;
-  y := Rotate(y + v.Second + Fetch64(s,48),42) * k1;
+  x := Rotate(x + y + v.First + Fetch64(s_temp,8),37) * k1;
+  y := Rotate(y + v.Second + Fetch64(s_temp,48),42) * k1;
   x := x xor w.second;
-  y := y + (v.First + Fetch64(s,40));
+  y := y + (v.First + Fetch64(s_temp,40));
   z := Rotate(z + w.First,33) * k1;
-  v := WeakHashLen32WithSeeds(s,v.Second * k1,x + w.First);
-  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s,32),z + w.Second,y + Fetch64(s,16));
+  v := WeakHashLen32WithSeeds(s_temp,v.Second * k1,x + w.First);
+  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,32),z + w.Second,y + Fetch64(s_temp,16));
   SWAP(z,x);
-  PTR_ADVANCEVAR(s,64);
-  x := Rotate(x + y + v.First + Fetch64(s,8),37) * k1;
-  y := Rotate(y + v.Second + Fetch64(s,48),42) * k1;
+  PTR_ADVANCEVAR(s_temp,64);
+  x := Rotate(x + y + v.First + Fetch64(s_temp,8),37) * k1;
+  y := Rotate(y + v.Second + Fetch64(s_temp,48),42) * k1;
   x := x xor w.second;
-  y := y + (v.First + Fetch64(s,40));
+  y := y + (v.First + Fetch64(s_temp,40));
   z := Rotate(z + w.First,33) * k1;
-  v := WeakHashLen32WithSeeds(s,v.Second * k1,x + w.First);
-  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s,32),z + w.Second,y + Fetch64(s,16));
+  v := WeakHashLen32WithSeeds(s_temp,v.Second * k1,x + w.First);
+  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,32),z + w.Second,y + Fetch64(s_temp,16));
   SWAP(z,x);
-  PTR_ADVANCEVAR(s,64);
+  PTR_ADVANCEVAR(s_temp,64);
   len := len - 128;
 until len < 128;
 x := x + Rotate(v.First + z,49) * k0;
@@ -514,11 +525,11 @@ while tail_done < len do
   begin
     tail_done := tail_done + 32;
     y := Rotate(x + y,42) * k0 + v.Second;
-    w.First := w.First + Fetch64(s,len - tail_done + 16);
+    w.First := w.First + Fetch64(s_temp,len - tail_done + 16);
     x := x * k0 + w.First;
-    z := z + (w.Second + Fetch64(s,len - tail_done));
+    z := z + (w.Second + Fetch64(s_temp,len - tail_done));
     w.Second := w.Second + v.First;
-    v := WeakHashLen32WithSeeds(PTR_ADVANCE(s,len - tail_done),v.First + z,v.Second);
+    v := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,len - tail_done),v.First + z,v.Second);
     v.First := v.First * k0;
   end;
 // At this point our 56 bytes of state should contain more than
@@ -552,15 +563,16 @@ procedure CityHashCrc256Long(s: Pointer; len: TMemSize; seed: UInt32; out result
 var
   a,b,c,d,e,f,g,h,x,y,z:  UInt64;
   iters:                  TMemSize;
+  s_temp:                 Pointer;
 
   procedure CHUNK(r: Integer);
   begin
     PERMUTE3(x,z,y);
-    b := b + Fetch64(s);
-    c := c + Fetch64(s,8);
-    d := d + Fetch64(s,16);
-    e := e + Fetch64(s,24);
-    f := f + Fetch64(s,32);
+    b := b + Fetch64(s_temp);
+    c := c + Fetch64(s_temp,8);
+    d := d + Fetch64(s_temp,16);
+    e := e + Fetch64(s_temp,24);
+    f := f + Fetch64(s_temp,32);
     a := a + b;
     h := h + f;
     b := b + c;
@@ -573,17 +585,18 @@ var
     x := _mm_crc32_u64(x,f + a);
     e := Rotate(e,r);
     c := c + e;
-    PTR_ADVANCEVAR(s,40);
+    PTR_ADVANCEVAR(s_temp,40);
   end;
 
 begin
-a := Fetch64(s,56) + k0;
-b := Fetch64(s,96) + k0;
+s_temp := s;
+a := Fetch64(s_temp,56) + k0;
+b := Fetch64(s_temp,96) + k0;
 result[0] := HashLen16(b,len);
 c := result[0];
-result[1] := Fetch64(s,120) * k0 + len;
+result[1] := Fetch64(s_temp,120) * k0 + len;
 d := result[1];
-e := Fetch64(s,184) + seed;
+e := Fetch64(s_temp,184) + seed;
 f := 0;
 g := 0;
 h := c + d;
@@ -614,7 +627,7 @@ while len >= 40 do
   end;
 If len > 0 then
   begin
-    PTR_ADVANCEVAR(s,len - 40);
+    PTR_ADVANCEVAR(s_temp,len - 40);
     CHUNK(33);
     e := e xor Rotate(a,43);
     h := h + Rotate(b,42);

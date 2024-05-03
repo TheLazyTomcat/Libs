@@ -57,9 +57,9 @@
         In Linux, this list might not be accurate as the threads can be created
         and/or destroyed during the enumeration.
 
-  Version 1.2 (2024-03-04)
+  Version 1.2.2 (2024-04-20)
 
-  Last change 2024-03-04
+  Last change 2024-04-20
 
   ©2019-2024 František Milt
 
@@ -89,6 +89,8 @@
   Libraries StrRect, UInt64Utils and WinFileInfo are required only when symbol
   AllowExtendedException is defined. Also, StrRect is required only when
   compiling for Windows OS and UInt64Utils when compiling for Linux OS.
+
+  Library StrRect might also be required as an indirect dependency.
 
 ===============================================================================}
 unit AuxExceptions;

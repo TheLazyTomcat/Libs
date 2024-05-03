@@ -12,9 +12,9 @@
     Utility functions for 64bit unsigned integers. Meant mainly for compilers
     that do not have full native support for this type (eg. Delphi 7).
 
-  Version 1.0.5 (2024-02-17)
+  Version 1.0.6 (2024-04-28)
 
-  Last change 2024-03-05
+  Last change 2024-04-28
 
   ©2018-2024 František Milt
 
@@ -33,10 +33,32 @@
       github.com/TheLazyTomcat/Lib.UInt64Utils
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol UInt64Utils_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit UInt64Utils;
+{
+  UInt64Utils_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  UInt64Utils_UseAuxExceptions to achieve this.
+}
+{$IF Defined(UInt64Utils_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -55,10 +77,10 @@ interface
 
 uses
   SysUtils,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 type
-  EUI64UException = class(Exception);
+  EUI64UException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EUI64UConvertError = class(EUI64UException);
 

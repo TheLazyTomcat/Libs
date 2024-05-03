@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.20 (2024-03-14)
+  Version 1.20.1 (2024-04-14)
 
-  Last change 2024-03-14
+  Last change 2024-04-28
 
   ©2014-2024 František Milt
 
@@ -33,12 +33,24 @@
       github.com/TheLazyTomcat/Lib.BitOps
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
-  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM      - github.com/TheLazyTomcat/Lib.BasicUIM
+  * SimpleCPUID   - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
-    SimpleCPUID is required only when AllowASMExtensions symbol is defined and
-    PurePascal symbol is not defined.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol BitOps_UseAuxExceptions for details).
+
+  SimpleCPUID is required only when AllowASMExtensions symbol is defined and
+  PurePascal symbol is not defined.
+
+  Libraries AuxExceptions and SimpleCPUID might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit BitOps;
@@ -53,6 +65,20 @@ unit BitOps;
 {$IFDEF BitOps_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  BitOps_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  BitOps_UseAuxExceptions to achieve this.
+}
+{$IF Defined(BitOps_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPU64) or defined(CPU64BITS)}
   {$DEFINE CPU64bit}
@@ -158,13 +184,13 @@ interface
 
 uses
   SysUtils,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EBOException = class(Exception);
+  EBOException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EBOUnknownFunction  = class(EBOException);
   EBONoImplementation = class(EBOException);

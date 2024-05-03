@@ -46,17 +46,20 @@
       github.com/TheLazyTomcat/Lib.InstanceControl
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+
+  Indirect dependencies:
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxMath            - github.com/TheLazyTomcat/Lib.AuxMath
+    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
-
-  Some libraries might not be needed, depending on targer operating system and
-  other settings, see library SharedMemoryStream for details.
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit InstanceControl;

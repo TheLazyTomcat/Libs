@@ -16,9 +16,9 @@
     There are also contexts which offer more advanced options, but they are
     currently untested - use them with caution.
 
-  Version 1.3.1 (2023-10-18)
+  Version 1.3.2 (2024-05-03)
 
-  Last change 2024-03-05
+  Last change 2024-05-03
 
   ©2020-2024 František Milt
 
@@ -37,14 +37,25 @@
       github.com/TheLazyTomcat/Lib.DynLibUtils
 
   Dependencies:
+  * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
   * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
   * WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
 
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol DynLibUtils_UseAuxExceptions for details).
+
   Library SimpleCPUID is required only when compiling for x86(-64) CPU.
 
   Library WindowsVersion is required only when compiling for Windows OS.
+
+  Libraries AuxExceptions and SimpleCPUID might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit DynLibUtils;
@@ -62,6 +73,20 @@ unit DynLibUtils;
 {$IFDEF DynLibUtils_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  DynLibUtils_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  DynLibUtils_UseAuxExceptions to achieve this.
+}
+{$IF Defined(DynLibUtils_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPU64) or defined(CPU64BITS)}
   {$DEFINE CPU64bit}
@@ -110,13 +135,13 @@ interface
 
 uses
   {$IFDEF Windows}Windows,{$ENDIF} SysUtils, Classes,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EDLUException = class(Exception);
+  EDLUException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EDLULibraryOpenError = class(EDLUException);
   EDLUInvalidParameter = class(EDLUException);

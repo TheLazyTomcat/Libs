@@ -45,9 +45,9 @@
     thread(s). Whatever the function returns is a state that was valid during
     the internal lock.
 
-  Version 1.4.2 (2022-02-21)
+  Version 1.4.3 (2024-05-02)
 
-  Last change 2024-03-20
+  Last change 2024-05-02
 
   ©2021-2024 František Milt
 
@@ -66,10 +66,22 @@
       github.com/TheLazyTomcat/Lib.InterlockedOps
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+  * SimpleCPUID   - github.com/TheLazyTomcat/Lib.SimpleCPUID
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol InterlockedOps_UseAuxExceptions for details).
 
   SimpleCPUID is required only when symbol AssertInstructions is defined.
+
+  Libraries AuxExceptions and SimpleCPUID might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit InterlockedOps;
@@ -87,6 +99,20 @@ unit InterlockedOps;
 {$IFDEF InterlockedOps_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  InterlockedOps_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  InterlockedOps_UseAuxExceptions to achieve this.
+}
+{$IF Defined(InterlockedOps_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPUX86_64) or defined(CPUX64)}
   {$DEFINE x64}
@@ -223,7 +249,7 @@ interface
 
 uses
   SysUtils,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Informative public constants
@@ -256,7 +282,7 @@ type
     Library-specific exception classes
 ===============================================================================}
 type
-  EILOException = class(Exception);
+  EILOException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EILOUnsupportedInstruction   = class(EILOException);
   EILOUnsupportedImplementation = class(EILOException);

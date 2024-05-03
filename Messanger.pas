@@ -41,9 +41,9 @@
     handlers - the endpoint will be dispatching all received messages to the
     handler for processing.
 
-  Version 2.0.3 (2022-10-26)
+  Version 2.0.4 (2024-05-03)
 
-  Last change 2024-02-03
+  Last change 2024-05-03
 
   ©2016-2024 František Milt
 
@@ -62,41 +62,53 @@
       github.com/TheLazyTomcat/Lib.Messanger
 
   Dependencies:
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    CrossSyncObjs - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    MemVector     - github.com/TheLazyTomcat/Lib.MemVector
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol Messanger_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
+    BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     BitOps              - github.com/TheLazyTomcat/Lib.BitOps
-  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
-  * BitVector           - github.com/TheLazyTomcat/Lib.BitVector
-    CrossSyncObjs       - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
-    MemVector           - github.com/TheLazyTomcat/Lib.MemVector
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1
     SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+    SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
-
-  Libraries UInt64Utils and WinSyncObjs are required only when compiling for
-  Windows OS.
-
-  Libraries BitVector, LinSyncObjs and SimpleFutex are required only when
-  compiling for Linux OS.
-
-  Library SimpleCPUID might not be required when compiling for Windows OS,
-  depending on defined symbols in InterlockedOps and BitOps libraries.
-
-  BinaryStreamingLite can be replaced by full BinaryStreaming.
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
+    WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
 
 ===============================================================================}
 unit Messanger;
+{
+  Messanger_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  Messanger_UseAuxExceptions to achieve this.
+}
+{$IF Defined(Messanger_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -116,13 +128,14 @@ interface
 
 uses
   SysUtils, Classes,{$IFNDEF Windows} BaseUnix,{$ENDIF}
-  AuxTypes, AuxClasses, MemVector, CrossSyncObjs;
+  AuxTypes, AuxClasses, MemVector, CrossSyncObjs
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EMsgrException = class(Exception);
+  EMsgrException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EMsgrTimestampError   = class(EMsgrException);
   EMsgrIndexOutOfBounds = class(EMsgrException);

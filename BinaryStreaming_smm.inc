@@ -9,9 +9,9 @@
 
   Binary streaming - streamer macro-methods template
 
-  Version 2.0.2 (2023-12-24)
+  Version 2.0.3 (2024-04-14)
 
-  Last change 2024-02-03
+  Last change 2024-04-14
 
   ©2015-2024 František Milt
 
@@ -30,9 +30,20 @@
       github.com/TheLazyTomcat/Lib.BinaryStreaming
 
   Dependencies:
-    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect    - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol BinaryStreaming_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 {$IFDEF BS_INC_MM}

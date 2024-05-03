@@ -11,11 +11,11 @@
 
     Utility classes for data (de)compression build on zlib library.
 
-  Version 1.0.9 (2022-10-26)
+  Version 1.0.10 (2024-05-03)
 
-  Last change 2022-10-26
+  Last change 2024-05-03
 
-  ©2018-2022 František Milt
+  ©2018-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -32,19 +32,40 @@
       github.com/TheLazyTomcat/Lib.ZLibUtils
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
-    MemoryBuffer   - github.com/TheLazyTomcat/Lib.MemoryBuffer
-    ZLib           - github.com/TheLazyTomcat/Bnd.ZLib
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    MemoryBuffer  - github.com/TheLazyTomcat/Lib.MemoryBuffer
+    ZLib          - github.com/TheLazyTomcat/Bnd.ZLib
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol ZLibUtils_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
     DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
-
-  Library WindowsVersion is only needed when compiling for Windows OS.
+    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
+    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit ZLibUtils;
+{
+  ZLibUtils_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  ZLibUtils_UseAuxExceptions to achieve this.
+}
+{$IF Defined(ZLibUtils_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -75,7 +96,7 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses, MemoryBuffer,
+  AuxTypes, AuxClasses, MemoryBuffer{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF},
   ZLibCommon;
 
 {$IFDEF FPC_DisableWarns}
@@ -135,7 +156,7 @@ type
 //------------------------------------------------------------------------------
 
 type
-  EZError = class(Exception)
+  EZError = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF})
   protected
     fErrorCode: int;
   public

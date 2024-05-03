@@ -1,3 +1,17 @@
+{
+  mpg123_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  mpg123_UseAuxExceptions to achieve this.
+}
+{$IF Defined(mpg123_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
 {$IF not(Defined(WINDOWS) or Defined(MSWINDOWS))}
   {$MESSAGE FATAL 'Unsupported operating system.'}
 {$IFEND}

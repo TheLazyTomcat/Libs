@@ -27,11 +27,11 @@
     In non-main thread, you are responsible to call this method - so the
     behavior is technically the same as in Windows OS.
 
-  Version 1.2.1 (2022-10-26)
+  Version 1.2.2 (2024-05-03)
 
-  Last change 2022-10-26
+  Last change 2024-05-03
 
-  ©2015-2022 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -48,21 +48,42 @@
       github.com/TheLazyTomcat/Lib.SimpleTimer
 
   Dependencies:
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
-  * UtilityWindow  - github.com/TheLazyTomcat/Lib.UtilityWindow
-  * MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
-  * WndAlloc       - github.com/TheLazyTomcat/Lib.WndAlloc
-  * StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-  * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+  * UtilityWindow - github.com/TheLazyTomcat/Lib.UtilityWindow
 
-  SimpleCPUID is required only when PurePascal symbol is not defined.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleTimer_UseAuxExceptions for details).
 
-  Libraries UtilityWindow, MulticastEvent, WndAlloc, StrRect and SimpleCPUID
-  are required only when compiling for Windows OS.
+  Library UtilityWindow is required only when compiling for Windows OS.
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath        - github.com/TheLazyTomcat/Lib.AuxMath
+    MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
+    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
+    WndAlloc       - github.com/TheLazyTomcat/Lib.WndAlloc
 
 ===============================================================================}
 unit SimpleTimer;
+{
+  SimpleTimer_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleTimer_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleTimer_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -84,13 +105,14 @@ interface
 
 uses
   {$IFDEF Windows}Windows, Messages,{$ENDIF} SysUtils,
-  AuxTypes, AuxClasses{$IFDEF Windows}, UtilityWindow{$ENDIF};
+  AuxTypes, AuxClasses{$IFDEF Windows}, UtilityWindow{$ENDIF}
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESTException = class(Exception);
+  ESTException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESTTimerSetupError    = class(ESTException);
 {$IFDEF Linux}

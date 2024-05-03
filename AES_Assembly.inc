@@ -14,9 +14,9 @@
 
   Version 2.0 (2021-04-05)
 
-  Last change 2021-04-05
+  Last change 2024-05-02
 
-  ©2016-2021 František Milt
+  ©2016-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -33,14 +33,19 @@
       github.com/TheLazyTomcat/Lib.AES
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    CipherBase         - github.com/TheLazyTomcat/Lib.CipherBase
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    CipherBase  - github.com/TheLazyTomcat/Lib.CipherBase
+  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
   SimpleCPUID is required only when PurePascal symbol is not defined.
+
+  Indirect dependencies:
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 

@@ -16,11 +16,11 @@
     It also implements and provides version helper functions and macros along
     with some utility functions.
 
-  Version 1.2 (2021-12-13)
+  Version 1.2.1 (2024-05-03)
 
-  Last change 2021-12-13
+  Last change 2024-05-03
 
-  ©2021 František Milt
+  ©2021-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -37,11 +37,33 @@
       github.com/TheLazyTomcat/Lib.WindowsVersion
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect  - github.com/TheLazyTomcat/Lib.StrRect
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol WindowsVersion_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit WindowsVersion;
+{
+  WindowsVersion_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  WindowsVersion_UseAuxExceptions to achieve this.
+}
+{$IF Defined(WindowsVersion_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF not(defined(WINDOWS) or defined(MSWINDOWS))}
   {$MESSAGE FATAL 'Unsupported operating system.'}
@@ -56,13 +78,13 @@ interface
 
 uses
   SysUtils, Windows,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EWVException = class(Exception);
+  EWVException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EWVSystemError = class(EWVException);
 

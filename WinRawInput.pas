@@ -13,9 +13,9 @@
     implemented as normal functions) used in handling of raw input in Windows
     operating system.
 
-  Version 1.2.2 (2019-10-02)
+  Version 1.2.3 (2024-05-03)
 
-  Last change 2024-03-05
+  Last change 2024-05-03
 
   ©2016-2024 František Milt  
 
@@ -34,10 +34,33 @@
       github.com/TheLazyTomcat/Bnd.WinRawInput
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes  
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol WinRawInput_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo 
 
 ===============================================================================}
 unit WinRawInput;
+{
+  WinRawInput_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  WinRawInput_UseAuxExceptions to achieve this.
+}
+{$IF Defined(WinRawInput_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPU64) or defined(CPU64BITS)}
   {$DEFINE CPU64bit}
@@ -69,7 +92,8 @@ unit WinRawInput;
 interface
 
 uses
-  Windows, SysUtils;
+  Windows, SysUtils
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {
   Basic types used in Raw Input structures and function parameters.
@@ -565,7 +589,7 @@ procedure ConvertFromWoW64(Data: Pointer; ChangeSize: Boolean = False); overload
 Function IsWoW64: Boolean;
 
 type
-  EWRIException = class(Exception);
+  EWRIException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
 implementation
 

@@ -63,9 +63,9 @@
 
       All metadata (signature, context ID) are written with little endianess.
 
-  Version 1.0.1 (2022-10-26)
+  Version 1.0.2 (2024-05-03)
 
-  Last change 2024-02-03
+  Last change 2024-05-03
 
   ©2022-2024 František Milt
 
@@ -84,15 +84,39 @@
       github.com/TheLazyTomcat/Lib.TaggedBinaryData
 
   Dependencies:
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions       - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
   * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
-    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol TaggedBinaryData_UseAuxExceptions for details).
 
   BinaryStreamingLite can be replaced by full BinaryStreaming.
 
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
+
 ===============================================================================}
 unit TaggedBinaryData;
+{
+  TaggedBinaryData_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  TaggedBinaryData_UseAuxExceptions to achieve this.
+}
+{$IF Defined(TaggedBinaryData_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -105,13 +129,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ETBDException = class(Exception);
+  ETBDException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ETBDInvalidValue = class(ETBDException);
 

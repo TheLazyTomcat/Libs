@@ -64,11 +64,11 @@
     Therefore, in this mode, you are not responsible for managing instances of
     the named value list.
 
-  Version 1.3.4 (2023-03-24)
+  Version 1.3.5 (2024-05-03)
 
-  Last change 2023-03-24
+  Last change 2024-05-03
 
-  ©2020-2023 František Milt
+  ©2020-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -85,11 +85,36 @@
       github.com/TheLazyTomcat/Lib.SimpleNamedValues
 
   Dependencies:
-    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol SimpleNamedValues_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit SimpleNamedValues;
+{
+  SimpleNamedValues_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  SimpleNamedValues_UseAuxExceptions to achieve this.
+}
+{$IF Defined(SimpleNamedValues_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -106,13 +131,13 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESNVException = class(Exception);
+  ESNVException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESNVIndexOutOfBounds  = class(ESNVException);
   ESNVInvalidValue      = class(ESNVException);

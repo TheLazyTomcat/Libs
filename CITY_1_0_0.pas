@@ -13,7 +13,7 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2023-12-27
+  Last change 2024-04-28
 
   ©2016-2023 František Milt
 
@@ -32,18 +32,23 @@
       github.com/TheLazyTomcat/Lib.CityHash
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase  
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
+    BitOps      - github.com/TheLazyTomcat/Lib.BitOps
+    HashBase    - github.com/TheLazyTomcat/Lib.HashBase
+  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
 
   SimpleCPUID is required only when PurePascal symbol is not defined.
-  Also, it might be needed by BitOps library, see there for details.
+
+  Library SimpleCPUID might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit CITY_1_0_0;
@@ -216,31 +221,33 @@ Function CityMurmur(s: Pointer; len: TMemSize; seed: UInt128): UInt128;
 var
   a,b,c,d:  UInt64;
   l:        PtrInt;
+  s_temp:   Pointer;
 begin
+s_temp := s;
 a := UInt128Low64(seed);
 b := UInt128High64(seed);
 l := len - 16;
 If l <= 0 then  // len <= 16
   begin
-    c := b * k1 + HashLen0to16(s,len);
+    c := b * k1 + HashLen0to16(s_temp,len);
     If len >= 8 then
-      d := Rotate(a + UNALIGNED_LOAD64(s),32)
+      d := Rotate(a + UNALIGNED_LOAD64(s_temp),32)
     else
       d := Rotate(a + c,32);
   end
 else
   begin
-    c := HashLen16(UNALIGNED_LOAD64(s,len - 8) + k1,a);
-    d := HashLen16(b + len,c + UNALIGNED_LOAD64(s,len - 16));
+    c := HashLen16(UNALIGNED_LOAD64(s_temp,len - 8) + k1,a);
+    d := HashLen16(b + len,c + UNALIGNED_LOAD64(s_temp,len - 16));
     a := a + d;
     repeat
-      a := a xor (ShiftMix(UNALIGNED_LOAD64(s) * k1) * k1);
+      a := a xor (ShiftMix(UNALIGNED_LOAD64(s_temp) * k1) * k1);
       a := a * k1;
       b := b xor a;
-      c := c xor (ShiftMix(UNALIGNED_LOAD64(s,8) * k1) * k1);
+      c := c xor (ShiftMix(UNALIGNED_LOAD64(s_temp,8) * k1) * k1);
       c := c * k1;
       d := d xor c;
-      PTR_ADVANCEVAR(s,16);
+      PTR_ADVANCEVAR(s_temp,16);
       l := l - 16;
     until l <= 0;
   end;
@@ -257,40 +264,42 @@ Function CityHash64(s: Pointer; len: TMemSize): UInt64;
 var
   x,y,z:  UInt64;
   v,w:    UInt128;
+  s_temp: Pointer;
 begin
+s_temp := s;
 If len <= 64 then
   begin
     case len of
-       0..16: Result := HashLen0To16(s,len);
-      17..32: Result := HashLen17To32(s,len);
+       0..16: Result := HashLen0To16(s_temp,len);
+      17..32: Result := HashLen17To32(s_temp,len);
     else
      {33..64}
-      Result := HashLen33to64(s,len);
+      Result := HashLen33to64(s_temp,len);
     end;
     Exit;
   end;
 // For strings over 64 bytes we hash the end first, and then as we
 // loop we keep 56 bytes of state: v, w, x, y, and z.
-x := UNALIGNED_LOAD64(s);
-y := UNALIGNED_LOAD64(s,len - 16) xor k1;
-z := UNALIGNED_LOAD64(s,len - 56) xor k0;
-v := WeakHashLen32WithSeeds(PTR_ADVANCE(s,len - 64),len,y);
-w := WeakHashLen32WithSeeds(PTR_ADVANCE(s,len - 32),len * k1,k0);
+x := UNALIGNED_LOAD64(s_temp);
+y := UNALIGNED_LOAD64(s_temp,len - 16) xor k1;
+z := UNALIGNED_LOAD64(s_temp,len - 56) xor k0;
+v := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,len - 64),len,y);
+w := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,len - 32),len * k1,k0);
 z := z + ShiftMix(v.Second) * k1;
 x := Rotate(z + x,39) * k1;
 y := Rotate(y,33) * k1;
 // Decrease len to the nearest multiple of 64, and operate on 64-byte chunks.
 len := (len - 1) and not TMemSize(63);
 repeat
-  x := Rotate(x + y + v.First + UNALIGNED_LOAD64(s,16),37) * k1;
-  y := Rotate(y + v.Second + UNALIGNED_LOAD64(s,48),42) * k1;
+  x := Rotate(x + y + v.First + UNALIGNED_LOAD64(s_temp,16),37) * k1;
+  y := Rotate(y + v.Second + UNALIGNED_LOAD64(s_temp,48),42) * k1;
   x := x xor w.Second;
   y := y xor v.First;
   z := Rotate(z xor w.First,33);
-  v := WeakHashLen32WithSeeds(s,v.Second * k1,x + w.First);
-  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s,32),z + w.Second,y);
+  v := WeakHashLen32WithSeeds(s_temp,v.Second * k1,x + w.First);
+  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,32),z + w.Second,y);
   SWAP(z,x);
-  PTR_ADVANCEVAR(s,64);
+  PTR_ADVANCEVAR(s_temp,64);
   len := len - 64;
 until len <= 0;
 Result := HashLen16(HashLen16(v.First,w.First) + ShiftMix(y) * k1 + z,
@@ -318,10 +327,12 @@ var
   v,w:        UInt128;
   x,y,z:      UInt64;
   tail_done:  TMemSize;
+  s_temp:     Pointer;
 begin
+s_temp := s;
 If len < 128 then
   begin
-    Result := CityMurmur(s,len,seed);
+    Result := CityMurmur(s_temp,len,seed);
     Exit;
   end;
 // We expect len >= 128 to be the common case.  Keep 56 bytes of state:
@@ -329,30 +340,30 @@ If len < 128 then
 x := UInt128Low64(seed);
 y := UInt128High64(seed);
 z := len * k1;
-v.First := Rotate(y xor k1,49) * k1 + UNALIGNED_LOAD64(s);
-v.Second := Rotate(v.First,42) * k1 + UNALIGNED_LOAD64(s,8);
+v.First := Rotate(y xor k1,49) * k1 + UNALIGNED_LOAD64(s_temp);
+v.Second := Rotate(v.First,42) * k1 + UNALIGNED_LOAD64(s_temp,8);
 w.First := Rotate(y + z,35) * k1 + x;
-w.Second := Rotate(x + UNALIGNED_LOAD64(s,88),53) * k1;
+w.Second := Rotate(x + UNALIGNED_LOAD64(s_temp,88),53) * k1;
 // This is the same inner loop as CityHash64(), manually unrolled.
 repeat
-  x := Rotate(x + y + v.First + UNALIGNED_LOAD64(s,16),37) * k1;
-  y := Rotate(y + v.Second + UNALIGNED_LOAD64(s,48),42) * k1;
+  x := Rotate(x + y + v.First + UNALIGNED_LOAD64(s_temp,16),37) * k1;
+  y := Rotate(y + v.Second + UNALIGNED_LOAD64(s_temp,48),42) * k1;
   x := x xor w.Second;
   y := y xor v.First;
   z := Rotate(z xor w.First,33);
-  v := WeakHashLen32WithSeeds(s,v.Second * k1,x + w.First);
-  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s,32),z + w.Second,y);
+  v := WeakHashLen32WithSeeds(s_temp,v.Second * k1,x + w.First);
+  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,32),z + w.Second,y);
   SWAP(z,x);
-  PTR_ADVANCEVAR(s,64);
-  x := Rotate(x + y + v.First + UNALIGNED_LOAD64(s,16),37) * k1;
-  y := Rotate(y + v.Second + UNALIGNED_LOAD64(s,48),42) * k1;
+  PTR_ADVANCEVAR(s_temp,64);
+  x := Rotate(x + y + v.First + UNALIGNED_LOAD64(s_temp,16),37) * k1;
+  y := Rotate(y + v.Second + UNALIGNED_LOAD64(s_temp,48),42) * k1;
   x := x xor w.Second;
   y := y xor v.First;
   z := Rotate(z xor w.First,33);
-  v := WeakHashLen32WithSeeds(s,v.Second * k1,x + w.First);
-  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s,32),z + w.Second,y);
+  v := WeakHashLen32WithSeeds(s_temp,v.Second * k1,x + w.First);
+  w := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,32),z + w.Second,y);
   SWAP(z, x);
-  PTR_ADVANCEVAR(s,64);
+  PTR_ADVANCEVAR(s_temp,64);
   len := len - 128;
 until len < 128;
 y := y + Rotate(w.First,37) * k0 + z;
@@ -363,10 +374,10 @@ while tail_done < len do
   begin
     tail_done := tail_done + 32;
     y := Rotate(y - x,42) * k0 + v.Second;
-    w.First := w.First + UNALIGNED_LOAD64(s,len - tail_done + 16);
+    w.First := w.First + UNALIGNED_LOAD64(s_temp,len - tail_done + 16);
     x := Rotate(x,49) * k0 + w.First;
     w.First := w.First + v.First;
-    v := WeakHashLen32WithSeeds(PTR_ADVANCE(s,len - tail_done),v.First,v.Second);
+    v := WeakHashLen32WithSeeds(PTR_ADVANCE(s_temp,len - tail_done),v.First,v.Second);
   end;
 // At this point our 48 bytes of state should contain more than
 // enough information for a strong 128-bit hash.  We use two

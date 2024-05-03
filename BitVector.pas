@@ -12,9 +12,9 @@
     Provides classes that can be used to access individual bits of memory in
     a list-like manner.
 
-  Version 1.4.2 (2024-02-03)
+  Version 1.4.3 (2024-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-04-14
 
   ©2015-2024 František Milt
 
@@ -34,19 +34,40 @@
 
   Dependencies:
     AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions       - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
   * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     BitOps              - github.com/TheLazyTomcat/Lib.BitOps
-  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
 
-    SimpleCPUID might not be needed, see BitOps library for details.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol BitVector_UseAuxExceptions for details).
 
-    BinaryStreamingLite can be replaced by full BinaryStreaming.
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit BitVector;
+{
+  BitVector_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  BitVector_UseAuxExceptions to achieve this.
+}
+{$IF Defined(BitVector_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------ 
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -67,13 +88,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EBVException = class(Exception);
+  EBVException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EBVIndexOutOfBounds       = class(EBVException);
   EBVNonReallocatableMemory = class(EBVException);

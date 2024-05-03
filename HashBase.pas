@@ -18,11 +18,11 @@
     stored in a memory buffer and then the processing is run as a whole at
     finalization.
 
-  Version 1.0.4 (2023-04-17)
+  Version 1.0.5 (2024-04-14)
 
-  Last change 2023-04-17
+  Last change 2024-04-28
 
-  ©2020-2023 František Milt
+  ©2020-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -39,13 +39,37 @@
       github.com/TheLazyTomcat/Lib.HashBase
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+  * AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol HashBase_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit HashBase;
+{
+  HashBase_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  HashBase_UseAuxExceptions to achieve this.
+}
+{$IF Defined(HashBase_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -58,13 +82,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EHASHException = class(Exception);
+  EHASHException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EHASHNoStream     = class(EHASHException);
   EHASHInvalidState = class(EHASHException);

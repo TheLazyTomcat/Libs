@@ -20,11 +20,11 @@
                 ProcessMessages) in the same thread where you want to process
                 the messages, otherwise it will not work!
 
-  Version 1.5 (2022-10-24)
+  Version 1.5.1 (2024-05-03)
 
-  Last change 2022-10-24
+  Last change 2024-05-03
 
-  ©2015-2022 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -42,16 +42,38 @@
 
   Dependencies:
     AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
     MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
-  * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-    WndAlloc       - github.com/TheLazyTomcat/Lib.WndAlloc    
+    WndAlloc       - github.com/TheLazyTomcat/Lib.WndAlloc
 
-    SimpleCPUID is required only when PurePascal symbol is not defined.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol UtilityWindow_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath     - github.com/TheLazyTomcat/Lib.AuxMath
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit UtilityWindow;
+{
+  UtilityWindow_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  UtilityWindow_UseAuxExceptions to achieve this.
+}
+{$IF Defined(UtilityWindow_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF not(defined(WINDOWS) or defined(MSWINDOWS))}
   {$MESSAGE FATAL 'Unsupported operating system.'}
@@ -69,10 +91,10 @@ interface
 
 uses
   Windows, Messages, SysUtils,
-  AuxClasses, MulticastEvent;
+  AuxClasses, MulticastEvent{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 type
-  EUWException = class(Exception);
+  EUWException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EUWSystemEror = class(EUWException);
 

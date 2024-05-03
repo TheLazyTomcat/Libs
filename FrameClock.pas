@@ -89,11 +89,11 @@
               it is not guaranteed to work reliably. Measuring across system
               reboots will straight-up fail to produce anything sensible.
 
-  Version 1.0.2 (2023-11-05)
+  Version 1.0.3 (2024-01-14)
 
-  Last change 2023-11-05
+  Last change 2024-01-28
 
-  ©2020-2023 František Milt
+  ©2020-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -110,11 +110,37 @@
       github.com/TheLazyTomcat/Lib.FrameClock
 
   Dependencies:
-    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxMath       - github.com/TheLazyTomcat/Lib.AuxMath
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol FrameClock_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit FrameClock;
+{
+  FrameClock_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  FrameClock_UseAuxExceptions to achieve this.
+}
+{$IF Defined(FrameClock_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -136,10 +162,10 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 type
-  EFCException = class(Exception);
+  EFCException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EFCHighResolutionFail = class(EFCException);
   EFCSystemException    = class(EFCException);

@@ -56,9 +56,9 @@
       This solution is sligtly faster than the pascal one, but it is a nasty
       hack and requires the use of SSE2 instruction and SSE register.
 
-  Version 1.2.1 (2020-03-09)
+  Version 1.2.2 (2024-05-03)
 
-  Last change 2024-03-05
+  Last change 2024-05-03
 
   ©2015-2024 František Milt
 
@@ -77,15 +77,26 @@
       github.com/TheLazyTomcat/Lib.WndAlloc
 
   Dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
-  * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxMath       - github.com/TheLazyTomcat/Lib.AuxMath
+  * SimpleCPUID   - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
 
-    SimpleCPUID is required only when PurePascal symbol is not defined.
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol WndAlloc_UseAuxExceptions for details).
+
+  SimpleCPUID is required only when PurePascal symbol is not defined.
+
+  Libraries AuxExceptions and SimpleCPUID might also be required as an indirect
+  dependencies.
+
+  Indirect dependencies:
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit WndAlloc;
-
 {
   WndAlloc_PurePascal
 
@@ -97,6 +108,20 @@ unit WndAlloc;
 {$IFDEF WndAlloc_PurePascal}
   {$DEFINE PurePascal}
 {$ENDIF}
+
+{
+  WndAlloc_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  WndAlloc_UseAuxExceptions to achieve this.
+}
+{$IF Defined(WndAlloc_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPUX86_64) or defined(CPUX64)}
   {$DEFINE x64}
@@ -150,20 +175,20 @@ unit WndAlloc;
 interface
 
 uses
-  Windows, SysUtils, Classes, SyncObjs;
+  Windows, SysUtils, Classes, SyncObjs
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
 --------------------------------------------------------------------------------
                               TUtilityWindowManager
 --------------------------------------------------------------------------------
 ===============================================================================}
-
 const
   WA_MAXWINDOWS_DEF  = 512;
   WA_WINDOWCLASS_DEF = 'TUtilityWindow';
 
 type
-  EWAException = class(Exception);
+  EWAException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EWAOutOfResources = class(EWAException);
 

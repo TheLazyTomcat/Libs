@@ -25,11 +25,11 @@
                 do so will raise an EBFSInvalidValue exception in the
                 constructor.
 
-  Version 1.1 (2023-10-24)
+  Version 1.1.1 (2024-04-14)
 
-  Last change 2023-10-24
+  Last change 2024-04-14
 
-  ©2023 František Milt
+  ©2023-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -46,10 +46,33 @@
       github.com/TheLazyTomcat/Lib.BufferedFileStream
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol BufferedFileStream_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit BufferedFileStream;
+{
+  BufferedFileStream_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  BufferedFileStream_UseAuxExceptions to achieve this.
+}
+{$IF Defined(BufferedFileStream_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -63,13 +86,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes;
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exception
 ===============================================================================}
 type
-  EBFSException = class(Exception);
+  EBFSException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EBFSInvalidValue = class(EBFSException);
   EBFSFlushError   = class(EBFSException);

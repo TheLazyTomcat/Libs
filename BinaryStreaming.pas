@@ -89,9 +89,9 @@
     read (does not apply to Get* functions, as they are returning the value
     being read).
 
-  Version 2.0.2 (2023-12-24)
+  Version 2.0.3 (2024-04-14)
 
-  Last change 2024-03-05
+  Last change 2024-04-14
 
   ©2015-2024 František Milt
 
@@ -110,9 +110,20 @@
       github.com/TheLazyTomcat/Lib.BinaryStreaming
 
   Dependencies:
-    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
-    StrRect    - github.com/TheLazyTomcat/Lib.StrRect
+    AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol BinaryStreaming_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit BinaryStreaming;
@@ -122,6 +133,19 @@ unit BinaryStreaming;
   ignored.
 *)
 {<lite-unit>}
+{
+  BinaryStreaming_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  BinaryStreaming_UseAuxExceptions to achieve this.
+}
+{$IF Defined(BinaryStreaming_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {<lite-begin>}
 {<lite-ln>}
@@ -203,7 +227,8 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses{$IFNDEF FPC}, StrRect{$ENDIF};
+  AuxTypes, AuxClasses{$IFNDEF FPC}, StrRect{$ENDIF}
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {<lite-begin>}
 {<lite-block-replace-begin EBS EBSL>}
@@ -211,7 +236,7 @@ uses
     Library-specific exceptions
 ===============================================================================}
 type
-  EBSException = class(Exception);
+  EBSException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 {<lite-end-ln>}
 
   EBSUnsupportedVarType = class(EBSException);

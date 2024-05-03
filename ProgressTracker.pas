@@ -42,9 +42,9 @@
     and other two each 1/4, we can achieve so when defining absolute length of
     the first stage as 2 and as 1 for the other two.
 
-  Version 2.0.2 (2023-01-24)
+  Version 2.0.3 (2024-05-03)
 
-  Last change 2024-02-03
+  Last change 2024-05-03
 
   ©2017-2024 František Milt
 
@@ -64,15 +64,38 @@
 
   Dependencies:
     AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions       - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
   * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
 
-  BinaryStreamingLite can be replaced by full BinaryStreaming.  
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol ProgressTracker_UseAuxExceptions for details).
+
+  BinaryStreamingLite can be replaced by full BinaryStreaming.
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit ProgressTracker;
+{
+  ProgressTracker_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  ProgressTracker_UseAuxExceptions to achieve this.
+}
+{$IF Defined(ProgressTracker_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -95,13 +118,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exeptions
 ===============================================================================}
 type
-  EPTException = class(Exception);
+  EPTException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EPTIndexOutOfBounds  = class(EPTException);
   EPTInvalidValue      = class(EPTException);

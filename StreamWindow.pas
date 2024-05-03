@@ -41,9 +41,9 @@
               Or use method SynchonizePosition before switching operation to
               the window every time you change target stream.
 
-  Version 1.0 (2024-01-28)
+  Version 1.0.1 (2024-05-03)
 
-  Last change (2024-01-28)
+  Last change (2024-05-03)
 
   ©2024 František Milt
 
@@ -62,10 +62,33 @@
       github.com/TheLazyTomcat/Lib.StreamWindow
 
   Dependencies:
-    none
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol StreamWindow_UseAuxExceptions for details).
+
+  Indirect dependencies:
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect     - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit StreamWindow;
+{
+  StreamWindow_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  StreamWindow_UseAuxExceptions to achieve this.
+}
+{$IF Defined(StreamWindow_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -75,13 +98,14 @@ unit StreamWindow;
 interface
 
 uses
-  SysUtils, Classes;
+  SysUtils, Classes
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ESWExceptin = class(Exception);
+  ESWExceptin = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESWInvalidValue = class(ESWExceptin);
 

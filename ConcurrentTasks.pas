@@ -48,9 +48,9 @@
           Result := not Terminated;
         end;
 
-  Version 1.2 (2022-09-30)
+  Version 1.2.1 (2024-05-03)
 
-  Last change 2024-02-03
+  Last change 2024-05-03
 
   ©2017-2024 František Milt
 
@@ -69,42 +69,54 @@
       github.com/TheLazyTomcat/Lib.ConcurrentTasks
 
   Dependencies:
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
-    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
+    AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
+    CrossSyncObjs  - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
+    Messanger      - github.com/TheLazyTomcat/Lib.Messanger
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol ConcurrentTasks_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
-  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     BitOps              - github.com/TheLazyTomcat/Lib.BitOps
-  * BitVector           - github.com/TheLazyTomcat/Lib.BitVector
-    CrossSyncObjs       - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
     MemVector           - github.com/TheLazyTomcat/Lib.MemVector
-    Messanger           - github.com/TheLazyTomcat/Lib.Messanger
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1
     SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
+    SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
-
-  Libraries UInt64Utils and WinSyncObjs are required only when compiling for
-  Windows OS.
-
-  Libraries BitVector, LinSyncObjs and SimpleFutex are required only when
-  compiling for Linux OS.
-
-  Library SimpleCPUID might not be required when compiling for Windows OS,
-  depending on defined symbols in InterlockedOps and BitOps libraries.
-
-  BinaryStreamingLite can be replaced by full BinaryStreaming.
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
+    WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
 
 ===============================================================================}
 unit ConcurrentTasks;
+{
+  ConcurrentTasks_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  ConcurrentTasks_UseAuxExceptions to achieve this.
+}
+{$IF Defined(ConcurrentTasks_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
   {$DEFINE Windows}
@@ -126,13 +138,14 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses, Messanger, CrossSyncObjs;
+  AuxTypes, AuxClasses, Messanger, CrossSyncObjs
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  ECNSTException = class(Exception);
+  ECNSTException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ECNSTIndexOutOfBounds = class(ECNSTException);
   ECNTSInvalidValue     = class(ECNSTException);

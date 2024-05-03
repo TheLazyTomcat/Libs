@@ -30,9 +30,9 @@
     object is running in a main thread of an GUI application, the message
     processing and dispatching is done automatically by the Application object.
 
-  Version 2.0 (2022-10-24)
+  Version 2.0.1 (2024-05-03)
 
-  Last change 2024-03-05
+  Last change 2024-05-03
 
   ©2015-2024 František Milt
 
@@ -51,52 +51,63 @@
       github.com/TheLazyTomcat/Lib.WinMsgComm
 
   Dependencies:
-    AuxClasses          - github.com/TheLazyTomcat/Lib.AuxClasses
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitVector          - github.com/TheLazyTomcat/Lib.BitVector
+    CRC32              - github.com/TheLazyTomcat/Lib.CRC32
+    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
+  * SimpleMessages     - github.com/TheLazyTomcat/Lib.SimpleMessages
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+  * UtilityWindow      - github.com/TheLazyTomcat/Lib.UtilityWindow
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol WinMsgComm_UseAuxExceptions for details).
+
+  Library SimpleMessages is required only when compiling for Linux OS or when
+  UseWindowsMessages symbol is not defined.
+
+  Library UtilityWindow is required only when compiling for Windows OS and
+  symbol UseWindowsMessages is defined.
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
-  * BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     BitOps              - github.com/TheLazyTomcat/Lib.BitOps
-    BitVector           - github.com/TheLazyTomcat/Lib.BitVector
-    CRC32               - github.com/TheLazyTomcat/Lib.CRC32
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
-    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
-  * ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
-  * MemVector           - github.com/TheLazyTomcat/Lib.MemVector
-  * MulticastEvent      - github.com/TheLazyTomcat/Lib.MulticastEvent
-  * NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
-  * SHA1                - github.com/TheLazyTomcat/Lib.SHA1
-    SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream
-  * SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
-  * SimpleMessages      - github.com/TheLazyTomcat/Lib.SimpleMessages
+    LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
+    MemVector           - github.com/TheLazyTomcat/Lib.MemVector
+    MulticastEvent      - github.com/TheLazyTomcat/Lib.MulticastEvent
+    NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
+    SHA1                - github.com/TheLazyTomcat/Lib.SHA1
+    SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex         - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
-  * UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
-  * UtilityWindow       - github.com/TheLazyTomcat/Lib.UtilityWindow
-  * WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
-  * WndAlloc            - github.com/TheLazyTomcat/Lib.WndAlloc
-
-  SimpleCPUID library might not be needed, depending on defined symbols in
-  other libraries.
-
-  Libraries MulticastEvent, UtilityWindow ans WndAlloc are required only when
-  compiling for Windows OS and symbol UseWindowsMessages is defined.
-
-  Libraries UInt64Utils and WinSyncObjs are required only when compiling for
-  Windows OS and symbol UseWindowsMessages is not defined.
-
-  Libraries ListSorters, MemVector, NamedSharedItems, SHA1 and SimpleMessages
-  are required only when compiling for Linux OS or when UseWindowsMessages
-  symbol is not defined.
-
-  Libraries LinSyncObjs and SimpleFutex are required only when compiling for
-  Linux OS.
-
-  BinaryStreamingLite can be replaced by full BinaryStreaming.
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
+    WinSyncObjs         - github.com/TheLazyTomcat/Lib.WinSyncObjs
+    WndAlloc            - github.com/TheLazyTomcat/Lib.WndAlloc
 
 ===============================================================================}
 unit WinMsgComm;
+{
+  WinMsgComm_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  WinMsgComm_UseAuxExceptions to achieve this.
+}
+{$IF Defined(WinMsgComm_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF Defined(CPU64) or Defined(CPU64BITS)}
   {$DEFINE CPU64bit}
@@ -230,13 +241,14 @@ interface
 uses
   {$IFDEF UseWindowsMessages}Windows, Messages,{$ENDIF} SysUtils,
   AuxTypes, AuxClasses, BitVector, CRC32, SharedMemoryStream,
-  {$IFDEF UseWindowsMessages}UtilityWindow{$ELSE}SimpleMessages{$ENDIF};
+  {$IFDEF UseWindowsMessages}UtilityWindow{$ELSE}SimpleMessages{$ENDIF}
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
-  EWMCException = class(Exception);
+  EWMCException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EWMCInvalidConnection = class(EWMCException);
   EWMCInvalidOperation  = class(EWMCException);

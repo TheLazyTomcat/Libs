@@ -14,11 +14,11 @@
     At this moment, only base class for symmetric block cipher is implemented
     (used for Rijndael/AES), more will probably be implemented later.
 
-  Version 1.0.5 (2022-10-25)
+  Version 1.0.6 (2024-05-02)
 
-  Last change 2023-12-19
+  Last change 2024-05-02
 
-  ©2021-2023 František Milt
+  ©2021-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -35,13 +35,37 @@
       github.com/TheLazyTomcat/Lib.CipherBase
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
-    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+  * AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol CipherBase_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit CipherBase;
+{
+  CipherBase_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  CipherBase_UseAuxExceptions to achieve this.
+}
+{$IF Defined(CipherBase_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IF defined(CPU64) or defined(CPU64BITS)}
   {$DEFINE CPU64bit}
@@ -72,13 +96,13 @@ interface
 
 uses
   SysUtils, Classes,
-  AuxTypes, AuxClasses;
+  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Libray-specific exceptions
 ===============================================================================}
 type
-  ECipherException = class(Exception);
+  ECipherException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ECipherInvalidState = class(ECipherException);
   ECipherInvalidValue = class(ECipherException);

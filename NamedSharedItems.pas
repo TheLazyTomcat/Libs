@@ -40,11 +40,11 @@
     Length of the item name is not explicitly limited, but is not recommended
     to be zero.
 
-  Version 1.1.3 (2022-12-03)
+  Version 1.1.4 (2024-05-03)
 
-  Last change 2023-05-01
+  Last change 2024-05-03
 
-  ©2021-2023 František Milt
+  ©2021-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -61,27 +61,45 @@
       github.com/TheLazyTomcat/Lib.NamedSharedItems
 
   Dependencies:
-    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+  * AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     SHA1               - github.com/TheLazyTomcat/Lib.SHA1
     SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
-    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
-    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
-  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
-  * InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
-  * SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
+
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol NamedSharedItems_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
+
+  Indirect dependencies:
+    AuxMath            - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
-
-  Libraries SimpleFutex and InterlockedOps are required only when compiling for
-  Linux operating system.
-
-  SimpleCPUID might not be required, depending on defined symbols in libraries
-  InterlockedOps and BitOps.
+    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit NamedSharedItems;
+{
+  NamedSharedItems_UseAuxExceptions
+
+  If you want library-specific exceptions to be based on more advanced classes
+  provided by AuxExceptions library instead of basic Exception class, and don't
+  want to or cannot change code in this unit, you can define global symbol
+  NamedSharedItems_UseAuxExceptions to achieve this.
+}
+{$IF Defined(NamedSharedItems_UseAuxExceptions)}
+  {$DEFINE UseAuxExceptions}
+{$IFEND}
+
+//------------------------------------------------------------------------------
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -92,13 +110,14 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, AuxClasses, SHA1, SharedMemoryStream;
+  AuxTypes, AuxClasses, SHA1, SharedMemoryStream
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exception
 ===============================================================================}
 type
-  ENSIException = class(Exception);
+  ENSIException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ENSIInvalidValue        = class(ENSIException);
   ENSIOutOfResources      = class(ENSIException);
