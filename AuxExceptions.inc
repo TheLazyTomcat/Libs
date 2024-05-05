@@ -49,6 +49,7 @@
   Library StrRect might also be required as an indirect dependency.
 
 ===============================================================================}
+{!tun_end!} // ignore this line
 {$IFDEF AE_Include_Defs}
 {
   AuxExceptions_PurePascal

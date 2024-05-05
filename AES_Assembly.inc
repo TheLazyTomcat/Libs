@@ -48,6 +48,7 @@
     WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
+{!tun_end!} // ignore this line
 
 {$IFDEF KeyExpand_128_RoundCommon}
     SHUFPS    XMM1, XMM1, $FF

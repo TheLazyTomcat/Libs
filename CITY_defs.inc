@@ -49,6 +49,7 @@
     WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
+{!tun_end!} // ignore this line
 {
   CityHash_PurePascal
 

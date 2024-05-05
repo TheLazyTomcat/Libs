@@ -46,6 +46,7 @@
     WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
+{!tun_end!} // ignore this line
 {$IFDEF BS_INC_MM}
 var
   OldPosition:  Int64;
