@@ -16,11 +16,11 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.5 (2024-05-03)
+  Version 1.1.6 (2024-05-10)
 
-  Build against zlib version 1.3
+  Build against zlib version 1.3.1
 
-  Last change 2024-05-03
+  Last change 2024-05-10
 
   ©2017-2024 František Milt
 

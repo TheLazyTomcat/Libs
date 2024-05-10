@@ -16,11 +16,11 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.5 (2024-05-03)
+  Version 1.1.6 (2024-05-10)
 
-  Build against zlib version 1.3
+  Build against zlib version 1.3.1
 
-  Last change 2024-05-03
+  Last change 2024-05-10
 
   ©2017-2024 František Milt
 
@@ -74,7 +74,7 @@ const
 {$IFDEF Windows}
   LibName = 'zlib1.dll';
 {$ELSE}
-  LibName = 'libz.so.1.3';
+  LibName = 'libz.so.1.3.1';
 {$ENDIF}
 
 type
@@ -133,11 +133,11 @@ const
   WBITS_GZIP = 31;
 
 const
-  ZLIB_VERSION         = AnsiString('1.3');
-  ZLIB_VERNUM          = $1300;
+  ZLIB_VERSION         = AnsiString('1.3.1');
+  ZLIB_VERNUM          = $1310;
   ZLIB_VER_MAJOR       = 1;
   ZLIB_VER_MINOR       = 3;
-  ZLIB_VER_REVISION    = 0;
+  ZLIB_VER_REVISION    = 1;
   ZLIB_VER_SUBREVISION = 0;
 
 (*

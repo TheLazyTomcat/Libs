@@ -16,11 +16,11 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.5 (2024-05-03)
+  Version 1.1.6 (2024-05-10)
 
-  Build against zlib version 1.3
+  Build against zlib version 1.3.1
 
-  Last change 2024-05-03
+  Last change 2024-05-10
 
   ©2017-2024 František Milt
 
@@ -758,10 +758,10 @@ Function inflateSync(strm: z_streamp): int; cdecl; external;
      inflateSync returns Z_OK if a possible full flush point has been found,
    Z_BUF_ERROR if no more input was provided, Z_DATA_ERROR if no flush point
    has been found, or Z_STREAM_ERROR if the stream structure was inconsistent.
-   In the success case, the application may save the current current value of
-   total_in which indicates where valid compressed data was found.  In the
-   error case, the application may repeatedly call inflateSync, providing more
-   input each time, until success or end of the input data.
+   In the success case, the application may save the current value of total_in
+   which indicates where valid compressed data was found.  In the error case,
+   the application may repeatedly call inflateSync, providing more input each
+   time, until success or end of the input data.
 *)
 
 Function inflateCopy(dest, source: z_streamp): int; cdecl; external;
@@ -1548,13 +1548,13 @@ Function crc32_combine(crc1, crc2: uLong; len2: z_off_t): uLong; cdecl; external
    seq1 and seq2 with lengths len1 and len2, CRC-32 check values were
    calculated for each, crc1 and crc2.  crc32_combine() returns the CRC-32
    check value of seq1 and seq2 concatenated, requiring only crc1, crc2, and
-   len2.
+   len2. len2 must be non-negative.
 *)
 
 Function crc32_combine_gen(len2: z_off_t): uLong; cdecl; external;
 (*
      Return the operator corresponding to length len2, to be used with
-   crc32_combine_op().
+   crc32_combine_op(). len2 must be non-negative.
 *)
 
 Function crc32_combine_op(crc1: uLong; crc2: uLong; op: uLong): uLong; cdecl; external;
