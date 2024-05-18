@@ -31,9 +31,9 @@
       WARNING - remembed that all system-specific limitations still apply here
                 (eg. max 64 events in WaitForMultipleEvents on Windows).
 
-  Version 1.1 (2022-12-26)
+  Version 1.1.1 (2024-05-15)
 
-  Last change 2024-02-03
+  Last change 2024-05-15
 
   ©2022-2024 František Milt
 
@@ -466,7 +466,8 @@ case WaitResult of
   WinSyncObjs.wrAbandoned:  Result := wrSignaled;
   WinSyncObjs.wrTimeout:    Result := wrTimeout;
 {$ELSE}
-  LinSyncObjs.wrSignaled:   Result := wrSignaled;
+  LinSyncObjs.wrSignaled,
+  LinSyncObjs.wrAbandoned:  Result := wrSignaled;
   LinSyncObjs.wrTimeout:    Result := wrTimeout;
 {$ENDIF}
 else

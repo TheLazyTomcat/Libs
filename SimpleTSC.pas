@@ -12,24 +12,26 @@
     Provides means of reading Time-Stamp Counter (TSC) Model-Specific Register
     (MSR), which can be used for high-resolution time measurements.
 
-      NOTE - this register is present only on IA-32 and AMD64 processors.
+      NOTE - this register is present only on IA-32 (x86) and AMD64 (x86-64,
+             x64) processors.
 
     Because proper use of TSC requires manipulation of thread affinity and
-    potentially also priority, a set of auxiliary functions manipulation those
+    potentially also priority, a set of auxiliary functions manipulating those
     thread properties is also provided.
 
     The TSC register is 64 bits wide, but time-stamp type used here is declared
     as Int64 (that is, a signed value). This could pose problems in comparisons
     and arithmetics, if the bit 63 of the TSC would be set. Therefore, all time-
-    stamps returned by implemented functions (with notable exception being
-    STSC_GetTSCFull) are masked so that bit 63 (sign bit) is always clear (0).
+    stamps returned by implemented functions (with noted exceptions) are masked
+    so that bit 63 (sign bit) is always clear (0).
 
     The TSC is NOT guaranteed to be present and/or enabled on all systems, and
     most functions also require another instructions (memory fences) which too
     are not guaranteed to be supported everywhere.
     So, in initialization section of this unit, it is discerned whether the
-    register is present on the CPU, is enabled (not disabled) by the OS and
-    whether other required instructions are also supported.
+    register is present on the CPU, is enabled (or, more precisely, not
+    disabled) by the OS and whether other required instructions are also
+    supported.
     Because this unit also provides some auxiliry funtions that do not depend
     on presence of this register, it has been decided to not raise an exception
     if the TSC is not supported.
@@ -41,7 +43,7 @@
       functions:
 
         STSC_GetTSC
-        STSC_GetTSCFull
+        STSC_GetFullTSC
 
       If the set contains tscSupported, you can, in addition, also call
       following functions:
@@ -49,6 +51,9 @@
         STSC_GetTSCEnter
         STSC_GetTSCLeave
         STSC_GetTSCFence
+        STSC_GetFullTSCEnter
+        STSC_GetFullTSCLeave
+        STSC_GetFullTSCFence
         STSC_Start
         STSC_TimePoint
         STSC_End
@@ -61,7 +66,7 @@
       even if the returned set is empty.
 
     TSC is a counter register, which means it is monotonically incremented each
-    cycle, but frequency of of these cycles might not be constant.
+    cycle, but frequency of these cycles might not be constant.
 
       In very old processors (Pentium 4, Pentium M, ...), the register is
       incremented in every internal processor clock cycle. If CPU frequency
@@ -91,9 +96,9 @@
     measurement runs the whole time only on one processor core (use provided
     auxiliary functions to set thread affinity).
 
-  Version 1.1.3 (2024-05-03)
+  Version 1.2 (2024-05-18)
 
-  Last change 2024-05-03
+  Last change 2024-05-18
 
   ©2023-2024 František Milt
 
@@ -178,6 +183,8 @@ unit SimpleTSC;
   {$MODESWITCH ClassicProcVars+}
   {$MODESWITCH PointerToProcVar+}
   {$ASMMODE Intel}
+  {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -258,14 +265,6 @@ type
 Function STSC_GetTSC: TSTSCTimeStamp; register; assembler;
 
 {
-  STSC_GetTSCUnmasked
-
-  Returns full value of time-stamp counter (TSC) register, without masking
-  bit #63 in the result.
-}
-Function STSC_GetTSCFull: TSTSCTimeStamp; register; assembler;
-
-{
   STSC_GetTSCEnter
 
   Returns value of time-stamp counter (TSC) register while ensuring that the
@@ -296,12 +295,45 @@ Function STSC_GetTSCFence: TSTSCTimeStamp; register; assembler;
 
 //------------------------------------------------------------------------------
 {
+  STSC_GetFullTSC
+
+  Returns full value of time-stamp counter (TSC) register, without masking
+  bit #63 in the result.
+}
+Function STSC_GetFullTSC: TSTSCTimeStamp; register; assembler;
+
+{
+  STSC_GetFullTSCEnter
+
+  Works the same as STSC_GetTSCEnter, but returns the value in full width,
+  without masking bit #63.
+}
+Function STSC_GetFullTSCEnter: TSTSCTimeStamp; register; assembler;
+
+{
+  STSC_GetFullTSCLeave
+
+  Works the same as STSC_GetTSCLeave, but returns the value with bit #63
+  unmasked.
+}
+Function STSC_GetFullTSCLeave: TSTSCTimeStamp; register; assembler;
+
+{
+  STSC_GetFullTSCFence
+
+  Works the same as STSC_GetTSCFence, but returns the value with bit #63
+  unmasked.
+}
+Function STSC_GetFullTSCFence: TSTSCTimeStamp; register; assembler;
+
+//------------------------------------------------------------------------------
+{
   STSC_GetDistance
 
   Returns distance (forward difference) between two given time-stamps.
   If TimeStampThen is higher than TimeStampNow, it is assumed the lower 63 bits
   of TSC owerflowed (unlikely, but possible) and the distance is calculated as
-  such (note that only SINGLE overflow event is assumed, because overflowing
+  such (note that only ONE overflow event is assumed, because overflowing
   multiple times would take at least decades, if not centuries - as per Intel's
   documentation, which states that the counter should not overflow within 10
   years).
@@ -455,6 +487,14 @@ type
     CPU affinity functions - processor mask manipulation
 -------------------------------------------------------------------------------}
 {
+  STSC_InitProcessorMask
+
+  Fills all bits in the given processor mask to selected value (true = all bits
+  set, false(default) = all bits clear).
+}
+procedure STSC_InitProcessorMask(out ProcessorMask: TSTSCProcessorMask; Value: Boolean = False);
+
+{
   STSC_GetProcessorMaskBit
 
   Returns true when selected Bit in the ProcessorMask is 1, false otherwise.
@@ -484,6 +524,76 @@ procedure STSC_SetProcessorMaskBit(var ProcessorMask: TSTSCProcessorMask; Bit: I
 }
 procedure STSC_ClrProcessorMaskBit(var ProcessorMask: TSTSCProcessorMask; Bit: Integer);
 
+{
+  STSC_CplProcessorMaskBit
+
+  Complements (switches) selected Bit in the ProcessorMask and returns its
+  original value.
+
+  When Bit is out of allowable range, an exception of type ESTSCInvalidValue is
+  raised.
+}
+Function STSC_CplProcessorMaskBit(var ProcessorMask: TSTSCProcessorMask; Bit: Integer): Boolean;
+
+{-------------------------------------------------------------------------------
+    CPU affinity functions - process affinity
+-------------------------------------------------------------------------------}
+{
+  STSC_GetProcessHandleAffinity
+
+  Returns affinity mask of the selected (opened) process.
+
+  In Windows, the ProcessHandle argument must be a previously opened handle to
+  a process or current process pseudo-handle.
+  In Linux, this argument must be process ID (the call is equivalent to calling
+  STSC_GetProcessAffinity).
+}
+Function STSC_GetProcessHandleAffinity(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}): TSTSCProcessorMask;
+
+{
+  STSC_GetProcessAffinity
+
+  Returns affinity mask of the selected process.
+}
+Function STSC_GetProcessAffinity(ProcessID: TSTSCProcessID): TSTSCProcessorMask; overload;
+
+{
+  STSC_GetProcessAffinity
+
+  Returns affinity mask of the calling process.
+}
+Function STSC_GetProcessAffinity: TSTSCProcessorMask; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetProcessHandleAffinity
+
+  Sets processor affinity mask of selected (opened) process to a value passed
+  in argument AffinityMask and returns its previous affinity.
+
+  In Windows, the ProcessHandle argument must be a previously opened handle to
+  a process or current process pseudo-handle.
+  In Linux, this argument must be process ID (the call is equivalent to calling
+  STSC_SetProcessAffinity).
+}
+Function STSC_SetProcessHandleAffinity(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask;
+
+{
+  STSC_SetProcessHandleAffinity
+
+  Sets processor affinity mask of selected process to a value passed in
+  argument AffinityMask and returns its previous affinity.
+}
+Function STSC_SetProcessAffinity(ProcessID: TSTSCProcessID; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask; overload;
+
+{
+  STSC_SetProcessHandleAffinity
+
+  Sets processor affinity mask of calling process to a value passed in
+  argument AffinityMask and returns its previous affinity.
+}
+Function STSC_SetProcessAffinity(AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask; overload;
+
 {-------------------------------------------------------------------------------
     CPU affinity functions - logical processor availability
 -------------------------------------------------------------------------------}
@@ -498,7 +608,8 @@ Function STSC_GetNumberOfProcessors: Integer;
   STSC_GetAvailableProcessors
 
   Returns affinity mask of the current process. This can be used to discern
-  which CPU(s) can be used by a thread.
+  which CPU(s) can be used by a thread. Equivalent to calling argument-less
+  overload of STSC_GetProcessAffinity.
 }
 Function STSC_GetAvailableProcessors: TSTSCProcessorMask;
 
@@ -516,11 +627,52 @@ Function STSC_ProcessorAvailable(ProcessorID: Integer): Boolean;
     CPU affinity functions - thread affinity
 -------------------------------------------------------------------------------}
 {
+  STSC_GetThreadHandleAffinity
+
+  Returns affinity mask of the selected (opened) thread.
+
+  In Windows, argument ThreadHandle must be a previously opened handle to a
+  thread or current thread pseudo-handle.
+  In Linux, this argument must contain a thread ID (call is then equivalent to
+  STSC_GetThreadAffinity).
+}
+Function STSC_GetThreadHandleAffinity(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): TSTSCProcessorMask;
+
+{
+  STSC_GetThreadAffinity
+
+  Returns affinity mask of the selected thread.
+}
+Function STSC_GetThreadAffinity(ThreadID: TSTSCThreadID): TSTSCProcessorMask; overload;
+
+{
   STSC_GetThreadAffinity
 
   Returns affinity mask of the calling thread.
 }
-Function STSC_GetThreadAffinity: TSTSCProcessorMask;
+Function STSC_GetThreadAffinity: TSTSCProcessorMask; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetThreadHandleAffinity
+
+  Sets affinity mask of the selected (opened) thread according to parameter
+  AffinityMask and returns its previous value.
+
+  In Windows, argument ThreadHandle must be a previously opened handle to a
+  thread or current thread pseudo-handle.
+  In Linux, this argument must contain a thread ID (call is then equivalent to
+  STSC_SetThreadAffinity).
+}
+Function STSC_SetThreadHandleAffinity(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask; overload;
+
+{
+  STSC_SetThreadAffinity
+
+  Sets affinity mask of the selected thread according to parameter AffinityMask
+  and returns its previous value.
+}
+Function STSC_SetThreadAffinity(ThreadID: TSTSCThreadID; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask; overload;
 
 {
   STSC_SetThreadAffinity
@@ -528,8 +680,9 @@ Function STSC_GetThreadAffinity: TSTSCProcessorMask;
   Sets affinity mask of the calling thread according to parameter AffinityMask
   and returns its previous value.
 }
-Function STSC_SetThreadAffinity(AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask;
+Function STSC_SetThreadAffinity(AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask; overload;
 
+//------------------------------------------------------------------------------
 {
   STSC_GetThreadProcessor
 
@@ -553,8 +706,12 @@ Function STSC_SetThreadAffinity(AffinityMask: TSTSCProcessorMask): TSTSCProcesso
     If it is not present, then the number is obtained using SimpleCPUID library
     (which is required by this unit anyway), more specifically from a mapping
     of local APIC IDs to processor numbers (this mapping is constructed at the
-    unit initialization). If the APIC ID cannot be mapped then processor 0 is
+    unit initialization). If the APIC ID cannot be mapped, then processor 0 is
     returned.
+
+    You can use STSC_SupportedFeatures to see what method is being used. When
+    its result contains tscSysProcID then the system call is used, when this
+    flag is not included, then APIC ID mapping is used.
 }
 Function STSC_GetThreadProcessor: Integer;
 
@@ -574,7 +731,7 @@ Function STSC_SetThreadProcessor(ProcessorID: Integer): TSTSCProcessorMask;
     Priority funtions - declaration
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Priority funtions - process priority
+    Priority funtions - process priority class
 -------------------------------------------------------------------------------}
 type
 {
@@ -582,14 +739,35 @@ type
 
   Priority classes are meaningless in Linux.
   
-  Values pcProcModeBcgrBegin and pcProcModeBcgrEnd are never returned as
+  Values pcBackgroundModeBegin and pcBackgroundModeEnd are never returned as
   process priority class. Use them only when setting priority class, but first
-  consult Windows SDK documentation for details.
+  consult Windows SDK documentation for details. Note that these two values
+  can only be used when operating on current process, never on foreign process.
 }
   TSCSCPriorityClass = (pcIdle,pcBelowNormal,pcNormal,pcAboveNormal,pcHigh,
-                        pcRealtime,pcProcModeBcgrBegin,pcProcModeBcgrEnd);
+                        pcRealtime,pcBackgroundModeBegin,pcBackgroundModeEnd);
 
 //------------------------------------------------------------------------------
+{
+  STSC_GetPriorityClass
+
+  Returns priority class of selected (opened) process. Has meaning only in
+  Windows OS, in Linux it always returns pcNormal (arguments are ignored).
+
+  For details about priority classes, refer to Windows SDK documentation.
+}
+Function STSC_GetProcessHandlePriorityClass(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}): TSCSCPriorityClass;
+
+{
+  STSC_GetPriorityClass
+
+  Returns priority class of selected process. Has meaning only in Windows OS,
+  in Linux it always returns pcNormal (arguments are ignored).
+
+  For details about priority classes, refer to Windows SDK documentation.
+}
+Function STSC_GetProcessPriorityClass(ProcessID: TSTSCProcessID): TSCSCPriorityClass; overload;
+
 {
   STSC_GetPriorityClass
 
@@ -598,7 +776,30 @@ type
 
   For details about priority classes, refer to Windows SDK documentation.
 }
-Function STSC_GetPriorityClass: TSCSCPriorityClass;
+Function STSC_GetProcessPriorityClass: TSCSCPriorityClass; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetPriorityClass
+
+  Sets priority class of selected (opened) process and returns its previous
+  value. Has meaning only in Windows OS, in Linux it does nothing and always
+  returns pcNormal (arguments are ignored).
+
+  For details about priority classes, refer to Windows SDK documentation.
+}
+Function STSC_SetProcessHandlePriorityClass(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}; PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass;
+
+{
+  STSC_SetPriorityClass
+
+  Sets priority class of selected process and returns its previous value. Has
+  meaning only in Windows OS, in Linux it does nothing and always returns
+  pcNormal (arguments are ignored).
+
+  For details about priority classes, refer to Windows SDK documentation.
+}
+Function STSC_SetProcessPriorityClass(ProcessID: TSTSCProcessID; PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass; overload;
 
 {
   STSC_SetPriorityClass
@@ -609,10 +810,153 @@ Function STSC_GetPriorityClass: TSCSCPriorityClass;
 
   For details about priority classes, refer to Windows SDK documentation.
 }
-Function STSC_SetPriorityClass(PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass;
+Function STSC_SetProcessPriorityClass(PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass; overload;
 
 {-------------------------------------------------------------------------------
-    Priority funtions - thread priority
+    Priority funtions - process priority boost
+-------------------------------------------------------------------------------}
+{
+  STSC_GetProcessHandlePriorityBoost
+
+  Returns state of priority boost for selected (opened) process.
+
+  Priority boost is Windows-specific option, in Linux this function always
+  returns false (arguments are ignored).
+}
+Function STSC_GetProcessHandlePriorityBoost(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}): Boolean;
+
+{
+  STSC_GetProcessPriorityBoost
+
+  Returns state of priority boost for selected process.
+
+  Priority boost is Windows-specific option, in Linux this function always
+  returns false (arguments are ignored).
+}
+Function STSC_GetProcessPriorityBoost(ProcessID: TSTSCProcessID): Boolean; overload;
+
+{
+  STSC_GetProcessPriorityBoost
+
+  Returns state of priority boost for calling process.
+
+  Priority boost is Windows-specific option, in Linux this function always
+  returns false (arguments are ignored).
+}
+Function STSC_GetProcessPriorityBoost: Boolean; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetProcessHandlePriorityBoost
+
+  Sets state of priority boost for selected (opened) process and returns its
+  previous state.
+
+  Note that setting priority boost for a process changes this setting for all
+  existing and future threads belonging to that process.
+
+  Priority boost is Windows-specific option, in Linux this function does
+  nothing and always returns false (arguments are ignored).
+}
+Function STSC_SetProcessHandlePriorityBoost(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}; EnablePriorityBoost: Boolean): Boolean;
+
+{
+  STSC_SetProcessPriorityBoost
+
+  Sets state of priority boost for selected process and returns its previous
+  state.
+
+  Note that setting priority boost for a process changes this setting for all
+  existing and future threads belonging to that process.
+
+  Priority boost is Windows-specific option, in Linux this function does
+  nothing and always returns false (arguments are ignored).
+}
+Function STSC_SetProcessPriorityBoost(ProcessID: TSTSCProcessID; EnablePriorityBoost: Boolean): Boolean; overload;
+
+{
+  STSC_SetProcessPriorityBoost
+
+  Sets state of priority boost for calling process and returns its previous
+  state.
+
+  Note that setting priority boost for a process changes this setting for all
+  existing and future threads belonging to that process.
+
+  Priority boost is Windows-specific option, in Linux this function does
+  nothing and always returns false (arguments are ignored).
+}
+Function STSC_SetProcessPriorityBoost(EnablePriorityBoost: Boolean): Boolean; overload;
+
+{-------------------------------------------------------------------------------
+    Priority funtions - thread priority boost
+-------------------------------------------------------------------------------}
+{
+  STSC_GetThreadHandlePriorityBoost
+
+  Returns state of priority boost for selected (opened) thread.
+
+  Priority boost is Windows-specific option, in Linux this function always
+  returns false (arguments are ignored).
+}
+Function STSC_GetThreadHandlePriorityBoost(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): Boolean;
+
+{
+  STSC_GetThreadPriorityBoost
+
+  Returns state of priority boost for selected thread.
+
+  Priority boost is Windows-specific option, in Linux this function always
+  returns false (arguments are ignored).
+}
+Function STSC_GetThreadPriorityBoost(ThreadID: TSTSCThreadID): Boolean; overload;
+
+{
+  STSC_GetThreadPriorityBoost
+
+  Returns state of priority boost for calling thread.
+
+  Priority boost is Windows-specific option, in Linux this function always
+  returns false (arguments are ignored).
+}
+Function STSC_GetThreadPriorityBoost: Boolean; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetThreadHandlePriorityBoost
+
+  Sets state of priority boost for selected (opened) thread and returns its
+  previous state.
+
+  Priority boost is Windows-specific option, in Linux this function does
+  nothing and always returns false (arguments are ignored).
+}
+Function STSC_SetThreadHandlePriorityBoost(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; EnablePriorityBoost: Boolean): Boolean;
+
+{
+  STSC_SetThreadHandlePriorityBoost
+
+  Sets state of priority boost for selected thread and returns its previous
+  state.
+
+  Priority boost is Windows-specific option, in Linux this function does
+  nothing and always returns false (arguments are ignored).
+}
+Function STSC_SetThreadPriorityBoost(ThreadID: TSTSCThreadID; EnablePriorityBoost: Boolean): Boolean; overload;
+
+{
+  STSC_SetThreadHandlePriorityBoost
+
+  Sets state of priority boost for calling thread and returns its previous
+  state.
+
+  Priority boost is Windows-specific option, in Linux this function does
+  nothing and always returns false (arguments are ignored).
+}
+Function STSC_SetThreadPriorityBoost(EnablePriorityBoost: Boolean): Boolean; overload;
+
+{-------------------------------------------------------------------------------
+    Priority funtions - thread scheduling policy
 -------------------------------------------------------------------------------}
 type
 {
@@ -625,55 +969,84 @@ type
 
     NOTE - spNormal and spOther are denoting the same policy (SCHED_OTHER).
 }
-  TSTSCSchedPolicy = (spUnknown,spNormal,spOther,spFifo,spRR,spBatch,spIso,spIdle,spDeadline);
+  TSTSCSchedPolicy = (spNormal,spOther,spFifo,spRR,spBatch,spIso,spIdle,spDeadline);
 
 //------------------------------------------------------------------------------
 {
   STSC_GetThreadSchedulingPolicy
 
-  Returns current scheduling policy of the calling thread. Has meaning only in
-  Linux, in Windows it will always return spUnknown.
+  Returns scheduling policy of the selected thread. Has meaning only in Linux,
+  in Windows it will always return spNormal.
 }
-Function STSC_GetThreadSchedulingPolicy: TSTSCSchedPolicy;
+Function STSC_GetThreadSchedulingPolicy(ThreadID: TSTSCThreadID): TSTSCSchedPolicy; overload;
+
+{
+  STSC_GetThreadSchedulingPolicy
+
+  Returns current scheduling policy of the calling thread. Has meaning only in
+  Linux, in Windows it will always return spNormal.
+}
+Function STSC_GetThreadSchedulingPolicy: TSTSCSchedPolicy; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetThreadSchedulingPolicy
+
+  Sets selected scheduling policy for the selected thread and returns the
+  previous one. Has meaning only in Linux, in Windows it does nothing and
+  always returns spNormal.
+
+  When setting spFifo or spRR policy, the scheduling priority is set to 0.5
+  times the range implemented by system. In all other cases it is set to zero.
+
+  Note that spISO cannot be set because it is not implemented in Linux atm.
+  Also spDeadline policy cannot be selected using this function - it requires
+  different mechanism (in both cases it will fail with an ESTSCSystemError
+  exception).
+
+    WARNING - Thread running in an unprivileged process might not be able to
+              change scheduling policy of other thread (the function will fail
+              with ESTSCSystemError exception), depending on current and
+              selected new policy. See linux documentation (sched(7)) for more
+              details.
+}
+Function STSC_SetThreadSchedulingPolicy(ThreadID: TSTSCThreadID; SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy; overload;
 
 {
   STSC_SetThreadSchedulingPolicy
 
   Sets selected scheduling policy for the calling thread and returns the
   previous one. Has meaning only in Linux, in Windows it does nothing and
-  always returns spUnknown.
+  always returns spNormal.
 
-  When setting spFifo or spRR policy, the scheduling priority is set to 50.
-  In all other cases it is set to zero.
+  Refer to previous overload of STSC_SetThreadSchedulingPolicy for more
+  details.
 
-  Note that spDeadline policy cannot be selected using this function (if will
-  fail).
-
-    WARNING - Unprivileged process might not be able to change its own
-              scheduling policy, depending on current and selected policy
-              (eg. it seems to be possible to change from SCHED_OTHER to
-              SCHED_IDLE or SCHED_BATCH, I need to do some research into this).
+    WARNING - Thread running in an unprivileged process might not be able to
+              change its own scheduling policy (the function will fail with
+              ESTSCSystemError exception), depending on current and selected
+              new policy. See linux documentation (sched(7)) for details.
 }
-Function STSC_SetThreadSchedulingPolicy(SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy;
+Function STSC_SetThreadSchedulingPolicy(SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy; overload;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    Priority funtions - system thread priority
+-------------------------------------------------------------------------------}
 {
-  STSC_GetSysThreadPriority
-
-  Returns priority of the calling thread as it is represented in the system.
+  System priority values
 
   Windows
 
-    Higher number means higher priority. Numerical value of the priority can
-    be in range -15..+15. Value of 0 is normal priority.
-
-    For more details, consult Windows SDK.
+    Higher number means higher priority. Numerical value of the priority can be
+    in range -15..+15. Value of 0 is normal priority. But note that some
+    special priorities are ouside of this range, namely those for background
+    processing mode.
 
   Linux
 
-    Number returned in Linux highly depends on current scheduling priority.
+    Value in Linux highly depends on current scheduling priority.
 
-    For spNormal and spOther (which is the same), a value of nice is returned.
+    For spNormal and spOther (which is the same), a value of nice is used.
     This can be from interval +19..-20, where lower number means higher
     priority. Value of 0 is normal priority.
 
@@ -684,33 +1057,129 @@ Function STSC_SetThreadSchedulingPolicy(SchedulingPolicy: TSTSCSchedPolicy): TST
              this can change in the future if Linux moves closer to the
              standard.
 
-      WARNING - Unprivileged process/thread cannot increase its own nice value,
-                even if it was lowered previously and now is only returned to
-                original value.
-                Since kernel 2.6.12, it should be posssible to decrease nice
-                value from an unprivileged process depending on a soft limit
-                RLIMIT_NICE. But this limit is usually zero anyway, and again
-                only privileged process can change this limit, so not much
-                changes.
+    For spFifo and spRR, the scheduling priority is used - here higher value
+    means higher priority. Range of this value depends on the system
+    implemenation. It is usually from 1 up to 99, value of 50 can then be
+    considered a normal priority. You can use functions STSC_GetSysPriorityMin
+    and STSC_GetSysPriorityMax to get the range.
 
-    For spFifo and spRR, the scheduling priority is returned. This can range
-    from 1 up to 99, where higher value means higher priority. Value of 50 can
-    be considered a normal priority.
-
-    For all other policies, zero is returned as they do not have priorities.
+    All other policies have no support for priorities (both minimum and
+    maximum is indicated as 0 and setting its value does nothing).
 }
-Function STSC_GetSysThreadPriority: Integer;
+{
+  STSC_GetSysPriorityMin
+
+  Returns minimum value of priority for any thread with given sheduling policy.
+
+  Sheduling policy has meaning only in Linux, it is completely ignored in
+  Windows OS - there the function always returns -15.
+
+  In Linux, the value depends on given scheduling policy - for spNormal and
+  spOther, 19 is always returned ("nice" value), for spFifo and spRR the value
+  (scheduling priority) is obtained from the system (by a call to system
+  function sched_get_priority_min). For other policies, 0 (zero) is returned.
+}
+Function STSC_GetSysPriorityMin(SchedulingPolicy: TSTSCSchedPolicy = spNormal): Integer;
+
+{
+  STSC_GetSysPriorityMax
+
+  Returns maximum value of priority for any thread with given sheduling policy.
+
+  Sheduling policy has meaning only in Linux, it is completely ignored in
+  Windows OS - there the function always returns +15.
+
+  In Linux, the value depends on given scheduling policy - for spNormal and
+  spOther, -20 is always returned, for spFifo and spRR the value is obtained
+  from the system (by a call to system function sched_get_priority_max). For
+  other policies, 0 (zero) is returned.
+}
+Function STSC_GetSysPriorityMax(SchedulingPolicy: TSTSCSchedPolicy = spNormal): Integer;
+
+//------------------------------------------------------------------------------
+{
+  STSC_GetSysThreadHandlePriority
+
+  Returns priority of the selected (opened) thread as it is represented in the
+  system.
+
+  In Windows, argument ThreadHandle must be a previously opened handle to a
+  thread or current thread pseudo-handle.
+  In Linux, this argument must contain a thread ID (call is then equivalent to
+  STSC_GetSysThreadPriority).
+
+  See declaration of system thread priority functions for more details.
+}
+Function STSC_GetSysThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): Integer;
+
+{
+  STSC_GetSysThreadPriority
+
+  Returns priority of the selected thread as it is represented in the system.
+
+  See declaration of system thread priority functions for more details
+}
+Function STSC_GetSysThreadPriority(ThreadID: TSTSCThreadID): Integer; overload;
+
+{
+  STSC_GetSysThreadPriority
+
+  Returns priority of the calling thread as it is represented in the system.
+
+  See declaration of system thread priority functions for more details
+}
+Function STSC_GetSysThreadPriority: Integer; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetSysThreadHandlePriority
+
+  Sets priority of selected (opened) thread and returns its previous value.
+
+  In Windows, argument ThreadHandle must be a previously opened handle to a
+  thread or current thread pseudo-handle.
+  In Linux, this argument must contain a thread ID (call is then equivalent to
+  STSC_SetSysThreadPriority).
+
+  For details about usable values, see declaration of system thread priority
+  functions.
+}
+Function STSC_SetSysThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; SysThreadPriority: Integer): Integer;
+
+{
+  STSC_SetSysThreadPriority
+
+  Sets priority of selected thread and returns its previous value.
+
+  For details about usable values, see declaration of system thread priority
+  functions.
+}
+Function STSC_SetSysThreadPriority(ThreadID: TSTSCThreadID; SysThreadPriority: Integer): Integer; overload;
 
 {
   STSC_SetSysThreadPriority
 
   Sets priority of calling thread and returns its previous value.
 
-  For details about usable values, refer to STSC_GetSysThreadPriority.
-}
-Function STSC_SetSysThreadPriority(SysThreadPriority: Integer): Integer;
+  For details about usable values, see declaration of system thread priority
+  functions.
 
-//------------------------------------------------------------------------------
+    WARNING - Unprivileged process/thread cannot increase its own nice value,
+              even if it was lowered previously and now is only returned to
+              original value.
+              Since kernel 2.6.12, it should be posssible to decrease nice
+              value from an unprivileged process depending on a soft limit
+              RLIMIT_NICE. But this limit is usually zero anyway, and again
+              only privileged process can change this limit, so not much
+              changes.
+              The same goes for realtime-policy priority - there RLIMIT_RTPRIO
+              limit applies (also since kernel 2.6.12).
+}
+Function STSC_SetSysThreadPriority(SysThreadPriority: Integer): Integer; overload;
+
+{-------------------------------------------------------------------------------
+    Priority funtions - thread priority
+-------------------------------------------------------------------------------}
 type
 {
   TSTSCThreadPriority
@@ -721,8 +1190,8 @@ type
     Windows running the program might not support all of them (consult Windows
     SDK documentation for details).
 
-      Values tpThrdModeBcgrBegin and tpThrdModeBcgrEnd are never returned as
-      thread priority value, but can be used when setting thread priority.
+      Values tpBackgroundModeBegin and tpBackgroundModeEnd are never returned
+      as thread priority value, but can be used when setting thread priority.
 
       Values tpLowestRTx and tpHighestRTx are returned and can be set only when
       the current process has pcRealtime priority class (when you set them for
@@ -735,8 +1204,8 @@ type
 
     Only values from tpIdle up to tpTimeCritical are valid in Linux.
 
-    If you use tpThrdModeBcgrBegin or tpThrdModeBcgrEnd, then an exception of
-    class ESTSCInvalidValue will be raised.
+    If you use tpBackgroundModeBegin or tpBackgroundModeEnd, then an exception
+    of class ESTSCInvalidValue will be raised.
 
     Values tpLowestRTx are silently converted to tpLowest and tpHighestRTx are
     converted to tpHighest.
@@ -747,41 +1216,98 @@ type
     values is converted to a single enum, when converting to system value, the
     enum is converted to a single numerical value.
 
-                      |     getting priority    ||     setting priority    |
-                      |-----------------------------------------------------
-                      |    nice    |    prio    ||    nice    |    prio    |
-    ------------------------------------------------------------------------
-      tpIdle          |     19     |      1     ||     19     |      1     |
-      tpLowest        |   10..18   |    2..25   ||     18     |      2     |
-      tpBelowNormal   |    1..9    |   26..49   ||      9     |     26     |
-      tpNormal        |      0     |     50     ||      0     |     50     |
-      tpAboveNormal   |  -10..-1   |   51..74   ||    -10     |     74     |
-      tpHighest       |  -19..-11  |   75..98   ||    -19     |     98     |
-      tpTimeCritical  |    -20     |     99     ||    -20     |     99     |
+    Because scheduling priority does not have static range, but can be
+    implementation-dependent, it is calculated as a fraction of range that is
+    implemented by the system - the table lists only the fractions. Following
+    formulas are used for conversions:
+
+        prio = Trunc(Min + ((Max - Min) * frac))
+        frac = (prio - Min) / (Max - Min)
+
+
+                      |     getting priority     ||     setting priority    |
+                      |------------------------------------------------------
+                      |    nice    |    prio     ||    nice    |    prio    |
+    -------------------------------------------------------------------------
+      tpIdle          |     19     | (-inf,0.00] ||     19     |    0.00    |
+      tpLowest        |   10..18   | (0.00,0.25] ||     18     |    0.05    |
+      tpBelowNormal   |    1..9    | (0.25,0.49] ||      9     |    0.30    |
+      tpNormal        |      0     | (0.49,0.51) ||      0     |    0.50    |
+      tpAboveNormal   |  -10..-1   | [0.51,0.75) ||    -10     |    0.70    |
+      tpHighest       |  -19..-11  | [0.75,1.00) ||    -19     |    0.95    |
+      tpTimeCritical  |    -20     | [1.00,+inf) ||    -20     |    1.00    |
+    -------------------------------------------------------------------------
 }
   TSTSCThreadPriority = (tpIdle,tpLowest,tpBelowNormal,tpNormal,tpAboveNormal,
-    tpHighest,tpTimeCritical,tpThrdModeBcgrBegin,tpThrdModeBcgrEnd,tpLowestRT7,
-    tpLowestRT6,tpLowestRT5,tpLowestRT4,tpLowestRT3,tpHighestRT3,tpHighestRT4,
-    tpHighestRT5,tpHighestRT6);
+    tpHighest,tpTimeCritical,tpBackgroundModeBegin,tpBackgroundModeEnd,
+    tpLowestRT7,tpLowestRT6,tpLowestRT5,tpLowestRT4,tpLowestRT3,
+    tpHighestRT3,tpHighestRT4,tpHighestRT5,tpHighestRT6);
 
 //------------------------------------------------------------------------------
+{
+  STSC_GetThreadHandlePriority
+
+  Returns selected (opened) thread priority converted to TSTSCThreadPriority
+  type. Refer to this type for details about the conversion (mainly in Linux).
+
+  In Windows, argument ThreadHandle must be a previously opened handle to a
+  thread or current thread pseudo-handle.
+  In Linux, this argument must contain a thread ID (call is then equivalent to
+  STSC_GetThreadPriority).
+}
+Function STSC_GetThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): TSTSCThreadPriority;
+
+{
+  STSC_GetThreadPriority
+
+  Returns selected thread priority converted to TSTSCThreadPriority type. Refer
+  to this type for details about the conversion.
+}
+Function STSC_GetThreadPriority(ThreadID: TSTSCThreadID): TSTSCThreadPriority; overload;
+
 {
   STSC_GetThreadPriority
 
   Returns calling thread priority converted to TSTSCThreadPriority type. Refer
-  to this type for details about the conversion (mainly in Linux).
+  to this type for details about the conversion.
 }
-Function STSC_GetThreadPriority: TSTSCThreadPriority;
+Function STSC_GetThreadPriority: TSTSCThreadPriority; overload;
+
+//------------------------------------------------------------------------------
+{
+  STSC_SetThreadHandlePriority
+
+  Sets priority of the selected (opened) thread and returns its original value.
+
+  In Windows, argument ThreadHandle must be a previously opened handle to a
+  thread or current thread pseudo-handle.
+  In Linux, this argument must contain a thread ID (call is then equivalent to
+  STSC_SetThreadPriority)
+
+    WARNING - In Linux, all limitations mentioned earlier for system priority
+              value still apply here.
+}
+Function STSC_SetThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority; overload;
+
+{
+  STSC_SetThreadPriority
+
+  Sets priority of the selected thread and returns its original value.
+
+    WARNING - In Linux, all limitations mentioned earlier for system priority
+              value still apply here.
+}
+Function STSC_SetThreadPriority(ThreadID: TSTSCThreadID; ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority; overload;
 
 {
   STSC_SetThreadPriority
 
   Sets priority of the calling thread and returns its original value.
 
-    WARNING - In Linux, all limitations mentioned in the description of function
-              STSC_GetSysThreadPriority still apply here.
+    WARNING - In Linux, all limitations mentioned earlier for system priority
+              value still apply here.
 }
-Function STSC_SetThreadPriority(ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority;
+Function STSC_SetThreadPriority(ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority; overload;
 
 implementation
 
@@ -792,6 +1318,11 @@ uses
   syscall, pthreads,
 {$ENDIF}
   SimpleCPUID;
+
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -840,18 +1371,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function STSC_GetTSCFull: TSTSCTimeStamp; register; assembler;
-asm
-    RDTSC
-
-{$IFDEF x64}
-    SHL   RDX, 32
-    OR    RAX, RDX
-{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
-
 Function STSC_GetTSCEnter: TSTSCTimeStamp; register; assembler;
 asm
     RDTSC
@@ -889,6 +1408,60 @@ asm
     LFENCE
 
     AND   EDX, $7FFFFFFF
+{$IFDEF x64}
+    SHL   RDX, 32
+    OR    RAX, RDX
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function STSC_GetFullTSC: TSTSCTimeStamp; register; assembler;
+asm
+    RDTSC
+
+{$IFDEF x64}
+    SHL   RDX, 32
+    OR    RAX, RDX
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function STSC_GetFullTSCEnter: TSTSCTimeStamp; register; assembler;
+asm
+    RDTSC
+    LFENCE
+
+{$IFDEF x64}
+    SHL   RDX, 32
+    OR    RAX, RDX
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function STSC_GetFullTSCLeave: TSTSCTimeStamp; register; assembler;
+asm
+    MFENCE
+    LFENCE
+    RDTSC
+
+{$IFDEF x64}
+    SHL   RDX, 32
+    OR    RAX, RDX
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function STSC_GetFullTSCFence: TSTSCTimeStamp; register; assembler;
+asm
+    MFENCE
+    LFENCE
+    RDTSC
+    LFENCE
+
 {$IFDEF x64}
     SHL   RDX, 32
     OR    RAX, RDX
@@ -1150,6 +1723,29 @@ end;
 
 Function GetProcessAffinityMask(hProcess: THandle; lpProcessAffinityMask,lpSystemAffinityMask: PPtrUInt): BOOL; stdcall; external kernel32;
 procedure GetNativeSystemInfo(lpSystemInfo: PSystemInfo); stdcall; external kernel32;
+Function OpenThread(dwDesiredAccess: DWORD; bInheritHandle: BOOL; dwThreadId: DWORD): THandle; stdcall; external kernel32;
+
+Function GetProcessPriorityBoost(hProcess: THandle; pDisablePriorityBoost: PBOOL): BOOL; stdcall; external kernel32;
+Function SetProcessPriorityBoost(hProcess: THandle; DisablePriorityBoost: BOOL): BOOL; stdcall; external kernel32;
+
+Function GetThreadPriorityBoost(hThread: THandle; pDisablePriorityBoost: PBOOL): BOOL; stdcall; external kernel32;
+Function SetThreadPriorityBoost(hThread: THandle; DisablePriorityBoost: BOOL): BOOL; stdcall; external kernel32;
+
+const
+{
+  Following constants are missing in old Delphi.
+}
+  THREAD_QUERY_INFORMATION = $00000040;
+  THREAD_SET_INFORMATION   = $00000020;
+
+  BELOW_NORMAL_PRIORITY_CLASS = $00004000;
+  ABOVE_NORMAL_PRIORITY_CLASS = $00008000;
+
+  PROCESS_MODE_BACKGROUND_BEGIN = $00100000;
+  PROCESS_MODE_BACKGROUND_END   = $00200000;
+
+  THREAD_MODE_BACKGROUND_BEGIN = $00010000;
+  THREAD_MODE_BACKGROUND_END   = $00020000;
 
 {$ELSE}
 
@@ -1165,10 +1761,15 @@ Function sched_setscheduler(pid: pid_t; policy: cint; param: psched_param): cint
 Function sched_getparam(pid: pid_t; param: psched_param): cint; cdecl; external;
 Function sched_setparam(pid: pid_t; param: psched_param): cint; cdecl; external;
 
+Function sched_get_priority_min(policy: cint): cint; cdecl; external;
+Function sched_get_priority_max(policy: cint): cint; cdecl; external;
+
 Function sysconf(name: cInt): cLong; cdecl; external;
 
-Function getpriority(which: cInt; who: cInt): cInt; cdecl external;
-Function setpriority(which: cInt; who: cInt; prio: cInt): cInt; cdecl external;
+Function getpriority(which: cint; who: cint): cint; cdecl external;
+Function setpriority(which: cint; who: cint; prio: cint): cint; cdecl external;
+
+Function getrlimit(resource: cint; rlim: PRLimit): cint; cdecl; external;
 
 const
   SCHED_NORMAL   = 0;
@@ -1181,6 +1782,8 @@ const
 
   _SC_NPROCESSORS_ONLN = 84;
 
+  RLIMIT_RTPRIO = 14;
+
 {$ENDIF}
 
 {===============================================================================
@@ -1188,12 +1791,60 @@ const
 ===============================================================================}
 {$IFDEF Windows}
 var
+  VAR_NtQueryInformationThread: Function(
+    ThreadHandle:             THandle;
+    ThreadInformationClass:   Integer;  // THREADINFOCLASS enumeration
+    ThreadInformation:        Pointer;
+    ThreadInformationLength:  ULONG;
+    ReturnLength:             PULONG): Integer{NTSTATUS, 0 = success}; stdcall = nil;
+
+//------------------------------------------------------------------------------
+
+Function GetProcessIdOfThread(Thread: THandle): DWORD; stdcall;
+type
+{
+  TThreadInfo
+
+  This structure is only a wild guess - I had no internet connection when I
+  wrote this, therefore I had no access to any documentation. What is here is
+  just what I have observed when trying to call NtQueryInformationThread on
+  WinXP.
+  And because this is not used in newer systems, I do not care about the fact
+  that the mentioned function and this structure might differ in newer systems
+  (I also doubt it will be retroactively changed in WinXP by some patch now).
+}
+  TThreadInfo = record
+    _unknown1_,
+    _unknown2_:         PtrUInt;
+    ProcessID:          PtrUInt;
+    ThreadID:           PtrUInt;
+    ThreadAffinity:     PtrUInt;
+    ThreadDynPriority:  Int32;    // dynamic priority
+    ThreadPriority:     Int32;    // dunno, maybe something else
+  end;
+var
+  ThreadInfo:   TThreadInfo;
+  ReturnValue:  Integer;
+begin
+If Assigned(VAR_NtQueryInformationThread) then
+  begin
+    ReturnValue := VAR_NtQueryInformationThread(Thread,0{basic info},@ThreadInfo,SizeOf(TThreadInfo),nil);
+    If ReturnValue = 0 then
+      Result := ThreadInfo.ProcessID
+    else
+      raise ESTSCSystemError.CreateFmt('GetProcessIdOfThread: Cannot obtain thread information (%.8x).',[ReturnValue]);
+  end
+else raise ESTSCCallNotImplemented.Create('GetProcessIdOfThread: Function NtQueryInformationThread not resolved.');
+end;
+
+//------------------------------------------------------------------------------
+var
   VAR_ProcessorIDMap: record
     Available:  Boolean;
     ProcNums:   array[Byte{Local APIC ID is used as index}] of Integer;
   end;
 
-//------------------------------------------------------------------------------  
+//------------------------------------------------------------------------------
 
 Function GetCurrentProcessorNumberCPUID: DWORD; stdcall;
 var
@@ -1215,6 +1866,7 @@ end;
 
 //------------------------------------------------------------------------------
 var
+  VAR_GetProcessIdOfThread: Function(Thread: THandle): DWORD; stdcall = GetProcessIdOfThread;
   VAR_GetCurrentProcessorNumber: Function: DWORD; stdcall = GetCurrentProcessorNumberCPUID;
 
 {$ELSE}//-----------------------------------------------------------------------
@@ -1246,6 +1898,35 @@ begin
 Result := Integer(ThrErrorCode);
 end;
 
+//------------------------------------------------------------------------------
+
+Function EncodeSchedulingPriority(SchedulingPolicy: TSTSCSchedPolicy; Priority: Double): Integer;
+var
+  Min,Max:  Integer;
+begin
+// Priority must be normalized, ie. from interval [0,1]
+Min := STSC_GetSysPriorityMin(SchedulingPolicy);
+Max := STSC_GetSysPriorityMax(SchedulingPolicy);
+If Max <> Min then
+  Result := Trunc(Min + ((Max - Min) * Priority))
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodeSchedulingPriority(SchedulingPolicy: TSTSCSchedPolicy; SchedulingPriority: Integer): Double;
+var
+  Min,Max:  Integer;
+begin
+Min := STSC_GetSysPriorityMin(SchedulingPolicy);
+Max := STSC_GetSysPriorityMax(SchedulingPolicy);
+If (SchedulingPriority >= Min) and (SchedulingPriority <= Max) and (Max <> Min) then
+  Result := (SchedulingPriority - Min) / (Max - Min)
+else
+  Result := 0;
+end;
+
 {$ENDIF}
 
 {===============================================================================
@@ -1254,6 +1935,16 @@ end;
 {-------------------------------------------------------------------------------
     CPU affinity functions - processor mask manipulation
 -------------------------------------------------------------------------------}
+
+procedure STSC_InitProcessorMask(out ProcessorMask: TSTSCProcessorMask; Value: Boolean = False);
+begin
+If Value then
+  FillChar(Addr(ProcessorMask)^,SizeOf(TSTSCProcessorMask),$FF)
+else
+  FillChar(Addr(ProcessorMask)^,SizeOf(TSTSCProcessorMask),0);
+end;
+
+//------------------------------------------------------------------------------
 
 Function STSC_GetProcessorMaskBit(const ProcessorMask: TSTSCProcessorMask; Bit: Integer): Boolean;
 begin
@@ -1307,6 +1998,127 @@ else
   raise ESTSCInvalidValue.CreateFmt('STSC_ClrProcessorMaskBit: Invalid bit (%d) selected.',[Bit]);
 end;
 
+//------------------------------------------------------------------------------
+
+Function STSC_CplProcessorMaskBit(var ProcessorMask: TSTSCProcessorMask; Bit: Integer): Boolean;
+begin
+If (Bit >= 0) and (Bit < (SizeOf(TSTSCProcessorMask) * 8)) then
+  begin
+    Result := STSC_GetProcessorMaskBit(ProcessorMask,Bit);
+  {$IFDEF Windows}
+    ProcessorMask := ProcessorMask xor PtrUInt(PtrUInt(1) shl Bit)
+  {$ELSE}
+    {$IFDEF x64}
+    ProcessorMask[Bit shr 6] := ProcessorMask[Bit shr 6] xor PtrUInt(PtrUInt(1) shl (Bit and 63))
+    {$ELSE}
+    ProcessorMask[Bit shr 5] := ProcessorMask[Bit shr 5] xor PtrUInt(PtrUInt(1) shl (Bit and 31))
+    {$ENDIF}
+  {$ENDIF}
+  end
+else raise ESTSCInvalidValue.CreateFmt('STSC_CplProcessorMaskBit: Invalid bit (%d) selected.',[Bit]);
+end;
+
+{-------------------------------------------------------------------------------
+    CPU affinity functions - process affinity
+-------------------------------------------------------------------------------}
+
+Function STSC_GetProcessHandleAffinity(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}): TSTSCProcessorMask;
+{$IFDEF Windows}
+var
+  SystemAffinityMask: TSTSCProcessorMask;
+begin
+If not GetProcessAffinityMask(ProcessHandle,@Result,@SystemAffinityMask) then
+  raise ESTSCSystemError.CreateFmt('STSC_GetProcessHandleAffinity: Failed to get process affinity mask (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := STSC_GetProcessAffinity(ProcessHandle);
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function STSC_GetProcessAffinity(ProcessID: TSTSCProcessID): TSTSCProcessorMask;
+{$IFDEF Windows}
+var
+  ProcessHandle: THandle;
+begin
+ProcessHandle := OpenProcess(PROCESS_QUERY_INFORMATION,False,ProcessID);
+If ProcessHandle <> 0 then
+  try
+    Result := STSC_GetProcessHandleAffinity(ProcessHandle);
+  finally
+    CloseHandle(ProcessHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_GetProcessAffinity: Failed to open process (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+// sched_getaffinity called with process id (getpid) returns mask of main thread (process mask)
+If not CheckErr(sched_getaffinity(ProcessID,SizeOf(TSTSCProcessorMask),@Result)) then
+  raise ESTSCSystemError.CreateFmt('STSC_GetProcessAffinity: Failed to get process affinity mask (%d).',[GetLastError]);
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_GetProcessAffinity: TSTSCProcessorMask;
+begin
+{$IFDEF Windows}
+Result := STSC_GetProcessHandleAffinity(GetCurrentProcess);
+{$ELSE}
+Result := STSC_GetProcessAffinity(getpid);
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function STSC_SetProcessHandleAffinity(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask;
+begin
+{$IFDEF Windows}
+Result := STSC_GetProcessHandleAffinity(ProcessHandle);
+If not SetProcessAffinityMask(ProcessHandle,AffinityMask) then
+  raise ESTSCSystemError.CreateFmt('STSC_SetProcessHandleAffinity: Failed to set process affinity mask (%u).',[Integer(GetLastError)]);
+{$ELSE}
+Result := STSC_SetProcessAffinity(ProcessHandle,AffinityMask);
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function STSC_SetProcessAffinity(ProcessID: TSTSCProcessID; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask;
+{$IFDEF Windows}
+var
+  ProcessHandle: THandle;
+begin
+ProcessHandle := OpenProcess(PROCESS_QUERY_INFORMATION or PROCESS_SET_INFORMATION,False,ProcessID);
+If ProcessHandle <> 0 then
+  try
+    Result := STSC_SetProcessHandleAffinity(ProcessHandle,AffinityMask);
+  finally
+    CloseHandle(ProcessHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_SetProcessAffinity: Failed to open process (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := STSC_GetProcessAffinity(ProcessID);
+If not CheckErr(sched_setaffinity(ProcessID,SizeOf(TSTSCProcessorMask),@AffinityMask)) then
+  raise ESTSCSystemError.CreateFmt('STSC_SetProcessAffinity: Failed to get process affinity mask (%d).',[GetLastError]);
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_SetProcessAffinity(AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask;
+begin
+{$IFDEF Windows}
+Result := STSC_SetProcessHandleAffinity(GetCurrentProcess,AffinityMask);
+{$ELSE}
+Result := STSC_SetProcessAffinity(getpid,AffinityMask);
+{$ENDIF}
+end;
+
 {-------------------------------------------------------------------------------
     CPU affinity functions - logical processor availability
 -------------------------------------------------------------------------------}
@@ -1332,17 +2144,8 @@ end;
 //------------------------------------------------------------------------------
 
 Function STSC_GetAvailableProcessors: TSTSCProcessorMask;
-{$IFDEF Windows}
-var
-  SystemAffinityMask: TSTSCProcessorMask;
 begin
-If not GetProcessAffinityMask(GetCurrentProcess,@Result,@SystemAffinityMask) then
-{$ELSE}
-begin
-// sched_getaffinity called with process id (getpid) returns mask of main thread (process mask)
-If not CheckErr(sched_getaffinity(getpid,SizeOf(TSTSCProcessorMask),@Result)) then
-{$ENDIF}
-  raise ESTSCSystemError.CreateFmt('STSC_GetAvailableProcessors: Failed to get process affinity mask (%d).',[Integer(GetLastError)]);
+Result := STSC_GetProcessAffinity;
 end;
 
 //------------------------------------------------------------------------------
@@ -1350,7 +2153,7 @@ end;
 Function STSC_ProcessorAvailable(ProcessorID: Integer): Boolean;
 begin
 If (ProcessorID >= 0) and (ProcessorID < (SizeOf(TSTSCProcessorMask) * 8)) then
-  Result := STSC_GetProcessorMaskBit(STSC_GetAvailableProcessors,ProcessorID)
+  Result := STSC_GetProcessorMaskBit(STSC_GetProcessAffinity,ProcessorID)
 else
   Result := False;
 end;
@@ -1359,38 +2162,108 @@ end;
     CPU affinity functions - thread affinity
 -------------------------------------------------------------------------------}
 
-Function STSC_GetThreadAffinity: TSTSCProcessorMask;
-begin
+Function STSC_GetThreadHandleAffinity(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): TSTSCProcessorMask;
 {$IFDEF Windows}
-Result := SetThreadAffinityMask(GetCurrentThread,STSC_GetAvailableProcessors);
+begin
+// nope, there is no "GetThreadAffinityMask"
+Result := SetThreadAffinityMask(ThreadHandle,STSC_GetProcessAffinity(VAR_GetProcessIDOfThread(ThreadHandle)));
 If Result <> 0 then
   begin
     // restore the original mask
-    If SetThreadAffinityMask(GetCurrentThread,Result) = 0 then
-      raise ESTSCSystemError.CreateFmt('STSC_GetThreadAffinity: Failed to restore thread affinity mask (%u).',[GetLastError]);
+    If SetThreadAffinityMask(ThreadHandle,Result) = 0 then
+      raise ESTSCSystemError.CreateFmt('STSC_GetThreadHandleAffinity: Failed to restore thread affinity mask (%u).',[Integer(GetLastError)]);
   end
-else
+else raise ESTSCSystemError.CreateFmt('STSC_GetThreadHandleAffinity: Failed to get thread affinity mask (%u).',[Integer(GetLastError)]);
+end;
 {$ELSE}
-If not CheckErr(sched_getaffinity(0{calling thread},SizeOf(TSTSCProcessorMask),@Result)) then
+begin
+Result := STSC_GetThreadAffinity(ThreadHandle);
+end;
 {$ENDIF}
-  raise ESTSCSystemError.CreateFmt('STSC_GetThreadAffinity: Failed to get thread affinity mask (%d).',[Integer(GetLastError)]);
+
+//------------------------------------------------------------------------------
+
+Function STSC_GetThreadAffinity(ThreadID: TSTSCThreadID): TSTSCProcessorMask;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION or THREAD_SET_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_GetThreadHandleAffinity(ThreadHandle);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_GetThreadAffinity: Failed to open thread (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+If not CheckErr(sched_getaffinity(ThreadID,SizeOf(TSTSCProcessorMask),@Result)) then
+  raise ESTSCSystemError.CreateFmt('STSC_GetThreadAffinity: Failed to get thread affinity mask (%d).',[GetLastError]);
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_GetThreadAffinity: TSTSCProcessorMask;
+begin
+{$IFDEF Windows}
+Result := STSC_GetThreadHandleAffinity(GetCurrentThread);
+{$ELSE}
+Result := STSC_GetThreadAffinity(0{calling thread});
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function STSC_SetThreadHandleAffinity(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask; overload;
+begin
+{$IFDEF Windows}
+Result := SetThreadAffinityMask(ThreadHandle,AffinityMask);
+If Result = 0 then
+  raise ESTSCSystemError.CreateFmt('STSC_SetThreadHandleAffinity: Failed to set thread affinity mask (%u).',[Integer(GetLastError)]);
+{$ELSE}
+Result := STSC_SetThreadAffinity(ThreadHandle,AffinityMask);
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
+
+Function STSC_SetThreadAffinity(ThreadID: TSTSCThreadID; AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION or THREAD_SET_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_SetThreadHandleAffinity(ThreadHandle,AffinityMask);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_SetThreadAffinity: Failed to open thread (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := STSC_GetThreadAffinity(ThreadID);
+If not CheckErr(sched_setaffinity(ThreadID,SizeOf(TSTSCProcessorMask),@AffinityMask)) then
+  raise ESTSCSystemError.CreateFmt('STSC_SetThreadAffinity: Failed to set thread affinity mask (%d).',[GetLastError]);
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function STSC_SetThreadAffinity(AffinityMask: TSTSCProcessorMask): TSTSCProcessorMask;
 begin
 {$IFDEF Windows}
-Result := SetThreadAffinityMask(GetCurrentThread,AffinityMask);
-If Result = 0 then
+Result := STSC_SetThreadHandleAffinity(GetCurrentThread,AffinityMask);
 {$ELSE}
-Result := STSC_GetThreadAffinity;
-If not CheckErr(sched_setaffinity(0{calling thread},SizeOf(TSTSCProcessorMask),@AffinityMask)) then
+Result := STSC_SetThreadAffinity(0{calling thread},AffinityMask);
 {$ENDIF}
-  raise ESTSCSystemError.CreateFmt('STSC_SetThreadAffinity: Failed to set thread affinity mask (%d).',[Integer(GetLastError)]);
 end;
 
-//------------------------------------------------------------------------------
+//==============================================================================
 
 Function STSC_GetThreadProcessor: Integer;
 begin
@@ -1426,31 +2299,16 @@ end;
     Priority funtions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Priority funtions - process priority
+    Priority funtions - process priority class
 -------------------------------------------------------------------------------}
-{$IFDEF Windows}
-const
-{
-  Following constants are missing in old Delphi.
-}
-  BELOW_NORMAL_PRIORITY_CLASS = $00004000;
-  ABOVE_NORMAL_PRIORITY_CLASS = $00008000;
 
-  PROCESS_MODE_BACKGROUND_BEGIN = $00100000;
-  PROCESS_MODE_BACKGROUND_END   = $00200000;
-
-  THREAD_MODE_BACKGROUND_BEGIN = $00010000;
-  THREAD_MODE_BACKGROUND_END   = $00020000;
-{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-Function STSC_GetPriorityClass: TSCSCPriorityClass;
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetProcessHandlePriorityClass(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}): TSCSCPriorityClass;
 {$IFDEF Windows}
 var
   SysPriorityClass: DWORD;
 begin
-SysPriorityClass := GetPriorityClass(GetCurrentProcess);
+SysPriorityClass := GetPriorityClass(ProcessHandle);
 If SysPriorityClass <> 0 then
   case SysPriorityClass of
     IDLE_PRIORITY_CLASS:          Result := pcIdle;
@@ -1462,55 +2320,354 @@ If SysPriorityClass <> 0 then
    {NORMAL_PRIORITY_CLASS}
     Result := pcNormal;
   end
-else raise ESTSCSystemError.CreateFmt('STSC_GetPriorityClass: Failed to get process priority class (%u).',[GetLastError]);
+else raise ESTSCSystemError.CreateFmt('STSC_GetProcessHandlePriorityClass: Failed to get process priority class (%u).',[Integer(GetLastError)]);
 end;
 {$ELSE}
 begin
 Result := pcNormal;
 end;
 {$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-Function STSC_SetPriorityClass(PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass;
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetProcessPriorityClass(ProcessID: TSTSCProcessID): TSCSCPriorityClass;
+{$IFDEF Windows}
+var
+  ProcessHandle: THandle;
+begin
+ProcessHandle := OpenProcess(PROCESS_QUERY_INFORMATION,False,ProcessID);
+If ProcessHandle <> 0 then
+  try
+    Result := STSC_GetProcessHandlePriorityClass(ProcessHandle);
+  finally
+    CloseHandle(ProcessHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_GetProcessPriorityClass: Failed to open process (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := pcNormal;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_GetProcessPriorityClass: TSCSCPriorityClass;
+begin
+{$IFDEF Windows}
+Result := STSC_GetProcessHandlePriorityClass(GetCurrentProcess);
+{$ELSE}
+Result := pcNormal;
+{$ENDIF}
+end;
+
+//==============================================================================
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetProcessHandlePriorityClass(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}; PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass;
 {$IFDEF Windows}
 var
   SysPriorityClass: DWORD;
 begin
-Result := STSC_GetPriorityClass;
+Result := STSC_GetProcessHandlePriorityClass(ProcessHandle);
 case PriorityClass of
-  pcIdle:               SysPriorityClass := IDLE_PRIORITY_CLASS;
-  pcBelowNormal:        SysPriorityClass := BELOW_NORMAL_PRIORITY_CLASS;
-  pcNormal:             SysPriorityClass := NORMAL_PRIORITY_CLASS;
-  pcAboveNormal:        SysPriorityClass := ABOVE_NORMAL_PRIORITY_CLASS;
-  pcHigh:               SysPriorityClass := HIGH_PRIORITY_CLASS;
-  pcRealtime:           SysPriorityClass := REALTIME_PRIORITY_CLASS;
-  pcProcModeBcgrBegin:  SysPriorityClass := PROCESS_MODE_BACKGROUND_BEGIN;
-  pcProcModeBcgrEnd:    SysPriorityClass := PROCESS_MODE_BACKGROUND_END;
+  pcIdle:                 SysPriorityClass := IDLE_PRIORITY_CLASS;
+  pcBelowNormal:          SysPriorityClass := BELOW_NORMAL_PRIORITY_CLASS;
+  pcNormal:               SysPriorityClass := NORMAL_PRIORITY_CLASS;
+  pcAboveNormal:          SysPriorityClass := ABOVE_NORMAL_PRIORITY_CLASS;
+  pcHigh:                 SysPriorityClass := HIGH_PRIORITY_CLASS;
+  pcRealtime:             SysPriorityClass := REALTIME_PRIORITY_CLASS;
+  pcBackgroundModeBegin:  SysPriorityClass := PROCESS_MODE_BACKGROUND_BEGIN;
+  pcBackgroundModeEnd:    SysPriorityClass := PROCESS_MODE_BACKGROUND_END;
 else
-  raise ESTSCInvalidValue.CreateFmt('STSC_SetPriorityClass: Invalid priority class (%d).',[Ord(PriorityClass)]);
+  raise ESTSCInvalidValue.CreateFmt('STSC_SetProcessHandlePriorityClass: Invalid priority class (%d).',[Ord(PriorityClass)]);
 end;
-If not SetPriorityClass(GetCurrentProcess,SysPriorityClass) then
-  raise ESTSCSystemError.CreateFmt('STSC_SetPriorityClass: Failed to set process priority class (%u).',[GetLastError]);
+If not SetPriorityClass(ProcessHandle,SysPriorityClass) then
+  raise ESTSCSystemError.CreateFmt('STSC_SetProcessHandlePriorityClass: Failed to set process priority class (%u).',[Integer(GetLastError)]);
 end;
 {$ELSE}
 begin
-// following "code" is here to prevent FPC warning about unused parameters
-PriorityClass := pcNormal;
-Result := PriorityClass;
+Result := pcNormal;
 end;
 {$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetProcessPriorityClass(ProcessID: TSTSCProcessID; PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass;
+{$IFDEF Windows}
+var
+  ProcessHandle: THandle;
+begin
+ProcessHandle := OpenProcess(PROCESS_QUERY_INFORMATION or PROCESS_SET_INFORMATION,False,ProcessID);
+If ProcessHandle <> 0 then
+  try
+    Result := STSC_SetProcessHandlePriorityClass(ProcessHandle,PriorityClass);
+  finally
+    CloseHandle(ProcessHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_SetProcessPriorityClass: Failed to open process (%u).',[Integer(GetLastError)]);
+{$ELSE}
+begin
+Result := pcNormal;
+{$ENDIF}
+end;
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetProcessPriorityClass(PriorityClass: TSCSCPriorityClass): TSCSCPriorityClass;
+begin
+{$IFDEF Windows}
+Result := STSC_SetProcessHandlePriorityClass(GetCurrentProcess,PriorityClass);
+{$ELSE}
+Result := pcNormal;
+{$ENDIF}
+end;
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
 
 {-------------------------------------------------------------------------------
-    Priority funtions - thread priority
+    Priority funtions - process priority boost
 -------------------------------------------------------------------------------}
 
-Function STSC_GetThreadSchedulingPolicy: TSTSCSchedPolicy;
-{$IFNDEF Windows}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetProcessHandlePriorityBoost(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}): Boolean;
+{$IFDEF Windows}
+var
+  State:  BOOL;
+begin
+If GetProcessPriorityBoost(ProcessHandle,@State) then
+  Result := not State // state indicates whether the boost is DISABLED
+else
+  raise ESTSCSystemError.CreateFmt('STSC_GetProcessHandlePriorityBoost: Failed to get priority boost state (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetProcessPriorityBoost(ProcessID: TSTSCProcessID): Boolean;
+{$IFDEF Windows}
+var
+  ProcessHandle: THandle;
+begin
+ProcessHandle := OpenProcess(PROCESS_QUERY_INFORMATION,False,ProcessID);
+If ProcessHandle <> 0 then
+  try
+    Result := STSC_GetProcessHandlePriorityBoost(ProcessHandle);
+  finally
+    CloseHandle(ProcessHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_GetProcessPriorityBoost: Failed to open process (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_GetProcessPriorityBoost: Boolean;
+begin
+{$IFDEF Windows}
+Result := STSC_GetProcessHandlePriorityBoost(GetCurrentProcess);
+{$ELSE}
+Result := False;
+{$ENDIF}
+end;
+
+//==============================================================================
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetProcessHandlePriorityBoost(ProcessHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCProcessID{$ENDIF}; EnablePriorityBoost: Boolean): Boolean;
+{$IFDEF Windows}
+begin
+Result := STSC_GetProcessHandlePriorityBoost(ProcessHandle);
+If not SetProcessPriorityBoost(ProcessHandle,not EnablePriorityBoost) then
+  raise ESTSCSystemError.CreateFmt('STSC_SetProcessHandlePriorityBoost: Failed to set priority boost state (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetProcessPriorityBoost(ProcessID: TSTSCProcessID; EnablePriorityBoost: Boolean): Boolean;
+{$IFDEF Windows}
+var
+  ProcessHandle: THandle;
+begin
+ProcessHandle := OpenProcess(PROCESS_QUERY_INFORMATION or PROCESS_SET_INFORMATION,False,ProcessID);
+If ProcessHandle <> 0 then
+  try
+    Result := STSC_SetProcessHandlePriorityBoost(ProcessHandle,EnablePriorityBoost);
+  finally
+    CloseHandle(ProcessHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_SetProcessPriorityBoost: Failed to open process (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetProcessPriorityBoost(EnablePriorityBoost: Boolean): Boolean;
+begin
+{$IFDEF Windows}
+Result := STSC_SetProcessHandlePriorityBoost(GetCurrentProcess,EnablePriorityBoost);
+{$ELSE}
+Result := False;
+{$ENDIF}
+end;
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    Priority funtions - thread priority boost
+-------------------------------------------------------------------------------}
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetThreadHandlePriorityBoost(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): Boolean;
+{$IFDEF Windows}
+var
+  State:  BOOL;
+begin
+If GetThreadPriorityBoost(ThreadHandle,@State) then
+  Result := not State // state indicates whether the boost is DISABLED
+else
+  raise ESTSCSystemError.CreateFmt('STSC_GetThreadHandlePriorityBoost: Failed to get priority boost state (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetThreadPriorityBoost(ThreadID: TSTSCThreadID): Boolean;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_GetThreadHandlePriorityBoost(ThreadHandle);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_GetThreadPriorityBoost: Failed to open thread (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_GetThreadPriorityBoost: Boolean;
+begin
+{$IFDEF Windows}
+Result := STSC_GetThreadHandlePriorityBoost(GetCurrentThread);
+{$ELSE}
+Result := False;
+{$ENDIF}
+end;
+
+//==============================================================================
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetThreadHandlePriorityBoost(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; EnablePriorityBoost: Boolean): Boolean;
+{$IFDEF Windows}
+begin
+Result := STSC_GetThreadHandlePriorityBoost(ThreadHandle);
+If not SetThreadPriorityBoost(ThreadHandle,not EnablePriorityBoost) then
+  raise ESTSCSystemError.CreateFmt('STSC_SetThreadHandlePriorityBoost: Failed to set priority boost state (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetThreadPriorityBoost(ThreadID: TSTSCThreadID; EnablePriorityBoost: Boolean): Boolean;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION or THREAD_SET_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_SetThreadHandlePriorityBoost(ThreadHandle,EnablePriorityBoost);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_SetThreadPriorityBoost: Failed to open thread (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
+begin
+Result := False;
+end;
+{$ENDIF}
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetThreadPriorityBoost(EnablePriorityBoost: Boolean): Boolean;
+begin
+{$IFDEF Windows}
+Result := STSC_SetThreadHandlePriorityBoost(GetCurrentThread,EnablePriorityBoost);
+{$ELSE}
+Result := False;
+{$ENDIF}
+end;
+{$IFNDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    Priority funtions - thread scheduling policy
+-------------------------------------------------------------------------------}
+
+{$IFDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetThreadSchedulingPolicy(ThreadID: TSTSCThreadID): TSTSCSchedPolicy;
+{$IFDEF Windows}
+begin
+Result := spNormal;
+end;
+{$ELSE}
 var
   SchedPolicy:  cInt;
 begin
-SchedPolicy := sched_getscheduler(0);
+SchedPolicy := sched_getscheduler(ThreadID);
 case SchedPolicy of
   -1:
     raise ESTSCSystemError.CreateFmt('STSC_GetThreadSchedulingPolicy: Failed to obtain thread scheduling policy (%d).',[errno_ptr^]);
@@ -1524,21 +2681,37 @@ case SchedPolicy of
 else
   raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadSchedulingPolicy: Unknown scheduling policy (%d)',[SchedPolicy]);
 end;
-{$ELSE}
+end;
+{$ENDIF}
+{$IFDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_GetThreadSchedulingPolicy: TSTSCSchedPolicy;
 begin
-Result := spUnknown;
+{$IFDEF Windows}
+Result := spNormal;
+{$ELSE}
+Result := STSC_GetThreadSchedulingPolicy(0);
 {$ENDIF}
 end;
 
-//------------------------------------------------------------------------------
+//==============================================================================
 
-Function STSC_SetThreadSchedulingPolicy(SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy;
-{$IFNDEF Windows}
+{$IFDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetThreadSchedulingPolicy(ThreadID: TSTSCThreadID; SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy;
+{$IFDEF Windows}
+begin
+Result := spNormal;
+end;
+{$ELSE}
 var
   SchedPolicy:  cInt;
   Param:        sched_param;
+  EncodedPrio:  cInt;
+  PrioLimit:    TRLimit;
 begin
-Result := STSC_GetThreadSchedulingPolicy;
+Result := STSC_GetThreadSchedulingPolicy(ThreadID);
 If Result <> SchedulingPolicy then
   begin
     case SchedulingPolicy of
@@ -1554,43 +2727,142 @@ If Result <> SchedulingPolicy then
       raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadSchedulingPolicy: Unknown scheduling policy (%d)',[Ord(SchedulingPolicy)]);
     end;
     If SchedulingPolicy in [spFifo,spRR] then
-      Param.sched_priority := 50
-    else
-      Param.sched_priority := 0;
-    If not CheckErr(sched_setscheduler(0,SchedPolicy,@Param)) then
+      begin
+        EncodedPrio := EncodeSchedulingPriority(SchedulingPolicy,0.5);
+        If not CheckErr(getrlimit(RLIMIT_RTPRIO,@PrioLimit)) then
+          raise ESTSCSystemError.CreateFmt('STSC_SetThreadSchedulingPolicy: Failed to get realtime priority limit (%d).',[GetLastError]);
+        If PrioLimit.rlim_cur <> 0 then
+          begin
+            If cint(PrioLimit.rlim_cur) < EncodedPrio then
+              Param.sched_priority := Trunc(STSC_GetSysPriorityMin(SchedulingPolicy) +
+                (cint(PrioLimit.rlim_cur) - STSC_GetSysPriorityMin(SchedulingPolicy)) * 0.5)
+            else
+              Param.sched_priority := EncodedPrio
+          end
+        else Param.sched_priority := EncodedPrio;
+      end
+    else Param.sched_priority := 0;
+    If not CheckErr(sched_setscheduler(ThreadID,SchedPolicy,@Param)) then
       raise ESTSCSystemError.CreateFmt('STSC_SetThreadSchedulingPolicy: Failed to set thread scheduling policy (%d).',[GetLastError]);
   end;
-{$ELSE}
+end;
+{$ENDIF}
+{$IFDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_SetThreadSchedulingPolicy(SchedulingPolicy: TSTSCSchedPolicy): TSTSCSchedPolicy;
 begin
-SchedulingPolicy := spUnknown;
-Result := SchedulingPolicy;
+{$IFDEF Windows}
+Result := spNormal;
+{$ELSE}
+Result := STSC_SetThreadSchedulingPolicy(0,SchedulingPolicy);
 {$ENDIF}
 end;
+{$IFDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    Priority funtions - system thread priority
+-------------------------------------------------------------------------------}
+
+{$IFDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetSysPriorityMin(SchedulingPolicy: TSTSCSchedPolicy = spNormal): Integer;
+begin
+{$IFDEF Windows}
+Result := -15;
+{$ELSE}
+case SchedulingPolicy of
+  spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Result := +19;
+  spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    begin
+      If SchedulingPolicy = spFifo then
+        Result := Integer(sched_get_priority_min(SCHED_FIFO))
+      else
+        Result := Integer(sched_get_priority_min(SCHED_RR));
+      If Result = -1 then
+        raise ESTSCSystemError.CreateFmt('STSC_GetSysPriorityMin: Failed to get scheduling priority minimum (%d).',[errno_ptr^]);
+    end;
+else
+  Result := 0;
+end;
+{$ENDIF}
+end;
+{$IFDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFDEF Windows}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
+Function STSC_GetSysPriorityMax(SchedulingPolicy: TSTSCSchedPolicy = spNormal): Integer;
+begin
+{$IFDEF Windows}
+Result := +15;
+{$ELSE}
+case SchedulingPolicy of
+  spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Result := -20;
+  spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    begin
+      If SchedulingPolicy = spFifo then
+        Result := Integer(sched_get_priority_max(SCHED_FIFO))
+      else
+        Result := Integer(sched_get_priority_max(SCHED_RR));
+      If Result = -1 then
+        raise ESTSCSystemError.CreateFmt('STSC_GetSysPriorityMax: Failed to get scheduling priority maximum (%d).',[errno_ptr^]);
+    end;
+else
+  Result := 0;
+end;
+{$ENDIF}
+end;
+{$IFDEF Windows}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
 
 //==============================================================================
 
-Function STSC_GetSysThreadPriority: Integer;
-{$IFDEF Windows}
+Function STSC_GetSysThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): Integer;
 begin
-Result := GetThreadPriority(GetCurrentThread);
+{$IFDEF Windows}
+Result := GetThreadPriority(ThreadHandle);
 If Result = THREAD_PRIORITY_ERROR_RETURN then
-  raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to get thread priority (%u).',[GetLastError]);
+  raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadHandlePriority: Failed to get thread priority (%u).',[Integer(GetLastError)]);
+{$ELSE}
+Result := STSC_GetSysThreadPriority(ThreadHandle);
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function STSC_GetSysThreadPriority(ThreadID: TSTSCThreadID): Integer;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_GetSysThreadHandlePriority(ThreadHandle);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to open thread (%u).',[Integer(GetLastError)]);
+end;
 {$ELSE}
 var
   SchedPolicy:  TSTSCSchedPolicy;
   Param:        sched_param;
 begin
-SchedPolicy := STSC_GetThreadSchedulingPolicy;
+SchedPolicy := STSC_GetThreadSchedulingPolicy(ThreadID);
 case SchedPolicy of
   spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     begin
       errno_ptr^ := 0;
-      Result := Integer(getpriority(PRIO_PROCESS,0));
+      Result := Integer(getpriority(PRIO_PROCESS,ThreadID));
       If (Result = -1) and (errno_ptr^ <> 0) then
         raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to get nice value (%d).',[errno_ptr^]);
     end;
   spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    If CheckErr(sched_getparam(0,@Param)) then
+    If CheckErr(sched_getparam(ThreadID,@Param)) then
       Result := Integer(Param.sched_priority)
     else
       raise ESTSCSystemError.CreateFmt('STSC_GetSysThreadPriority: Failed to get scheduling priority (%d).',[GetLastError]);
@@ -1599,50 +2871,95 @@ case SchedPolicy of
 else
   raise ESTSCInvalidValue.CreateFmt('STSC_GetSysThreadPriority: Unknown scheduling policy (%d)',[Ord(SchedPolicy)]);
 end;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_GetSysThreadPriority: Integer;
+begin
+{$IFDEF Windows}
+Result := STSC_GetSysThreadHandlePriority(GetCurrentThread);
+{$ELSE}
+Result := STSC_GetSysThreadPriority(0);
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function STSC_SetSysThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; SysThreadPriority: Integer): Integer;
+begin
+{$IFDEF Windows}
+Result := STSC_GetSysThreadHandlePriority(ThreadHandle);
+If not SetThreadPriority(ThreadHandle,SysThreadPriority) then
+  raise ESTSCSystemError.CreateFmt('STSC_SetSysThreadHandlePriority: Failed to set thread priority (%u).',[Integer(GetLastError)]);
+{$ELSE}
+Result := STSC_SetSysThreadPriority(ThreadHandle,SysThreadPriority);
 {$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
-Function STSC_SetSysThreadPriority(SysThreadPriority: Integer): Integer;
-{$IFNDEF Windows}
+Function STSC_SetSysThreadPriority(ThreadID: TSTSCThreadID; SysThreadPriority: Integer): Integer;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION or THREAD_SET_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_SetSysThreadHandlePriority(ThreadHandle,SysThreadPriority);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_SetSysThreadPriority: Failed to open thread (%u).',[Integer(GetLastError)]);
+end;
+{$ELSE}
 var
   SchedPolicy:  TSTSCSchedPolicy;
   Param:        sched_param;
-{$ENDIF}
 begin
-Result := STSC_GetSysThreadPriority;
-{$IFDEF Windows}
-If not SetThreadPriority(GetCurrentThread,SysThreadPriority) then
-  raise ESTSCSystemError.CreateFmt('STSC_SetThreadPriority: Failed to set thread priority (%u).',[GetLastError]);
-{$ELSE}
-SchedPolicy := STSC_GetThreadSchedulingPolicy;
+Result := STSC_GetSysThreadPriority(ThreadID);
+SchedPolicy := STSC_GetThreadSchedulingPolicy(ThreadID);
 case SchedPolicy of
   spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    If not CheckErr(setpriority(PRIO_PROCESS,0,cInt(SysThreadPriority))) then
+    If not CheckErr(setpriority(PRIO_PROCESS,ThreadID,cInt(SysThreadPriority))) then
       raise ESTSCSystemError.CreateFmt('STSC_SetSysThreadPriority: Failed to set nice value (%d).',[GetLastError]);
   spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     begin
       Param.sched_priority := cInt(SysThreadPriority);
-      If not CheckErr(sched_setparam(0,@Param)) then
+      If not CheckErr(sched_setparam(ThreadID,@Param)) then
         raise ESTSCSystemError.CreateFmt('STSC_SetSysThreadPriority: Failed to set scheduling priority (%d).',[GetLastError]);
     end;
   spBatch,spIdle,spDeadline:  // - - - - - - - - - - - - - - - - - - - - - - - -
     ; // do nothing, these policies do not support priority
 else
-  raise ESTSCInvalidValue.CreateFmt('STSC_GetSysThreadPriority: Unknown scheduling policy (%d)',[Ord(SchedPolicy)]);
+  raise ESTSCInvalidValue.CreateFmt('STSC_SetSysThreadPriority: Unknown scheduling policy (%d)',[Ord(SchedPolicy)]);
 end;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_SetSysThreadPriority(SysThreadPriority: Integer): Integer;
+begin
+{$IFDEF Windows}
+Result := STSC_SetSysThreadHandlePriority(GetCurrentThread,SysThreadPriority);
+{$ELSE}
+Result := STSC_SetSysThreadPriority(0,SysThreadPriority);
 {$ENDIF}
 end;
 
-//------------------------------------------------------------------------------
+{-------------------------------------------------------------------------------
+    Priority funtions - thread priority
+-------------------------------------------------------------------------------}
 
-Function STSC_GetThreadPriority: TSTSCThreadPriority;
+Function STSC_GetThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}): TSTSCThreadPriority;
 {$IFDEF Windows}
 var
   SysThreadPriority:  Integer;
 begin
-SysThreadPriority := STSC_GetSysThreadPriority;
+SysThreadPriority := STSC_GetSysThreadHandlePriority(ThreadHandle);
 case SysThreadPriority of
   THREAD_PRIORITY_IDLE:           Result := tpIdle;
   THREAD_PRIORITY_LOWEST:         Result := tpLowest;
@@ -1652,9 +2969,9 @@ case SysThreadPriority of
   THREAD_PRIORITY_HIGHEST:        Result := tpHighest;
   THREAD_PRIORITY_TIME_CRITICAL:  Result := tpTimeCritical;
   THREAD_PRIORITY_ERROR_RETURN:
-    raise ESTSCSystemError.CreateFmt('STSC_GetThreadPriority: Failed to get thread priority (%u).',[GetLastError]);
+    raise ESTSCSystemError.CreateFmt('STSC_GetThreadHandlePriority: Failed to get thread priority (%u).',[Integer(GetLastError)]);
 else
-  If STSC_GetPriorityClass = pcRealtime then
+  If STSC_GetProcessPriorityClass(VAR_GetProcessIDOfThread(ThreadHandle)) = pcRealtime then
     case SysThreadPriority of
       -7: Result := tpLowestRT7;
       -6: Result := tpLowestRT6;
@@ -1666,18 +2983,41 @@ else
        5: Result := tpHighestRT5;
        6: Result := tpHighestRT6;
     else
-      raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Unknown system thread priority (%d).',[SysThreadPriority]);
+      raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadHandlePriority: Unknown system thread priority (%d).',[SysThreadPriority]);
     end
-  else raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Unknown system thread priority (%d).',[SysThreadPriority]);
+  else raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadHandlePriority: Invalid system thread priority (%d).',[SysThreadPriority]);
 end;
+end;
+{$ELSE}
+begin
+Result := STSC_GetThreadPriority(ThreadHandle);
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function STSC_GetThreadPriority(ThreadID: TSTSCThreadID): TSTSCThreadPriority;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_GetThreadHandlePriority(ThreadHandle);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_GetThreadPriority: Failed to open thread (%u).',[Integer(GetLastError)]);
 end;
 {$ELSE}
 var
   SchedPolicy:        TSTSCSchedPolicy;
   SysThreadPriority:  cInt;
+  PrioFraction:       Double;
 begin
-SchedPolicy := STSC_GetThreadSchedulingPolicy;
-SysThreadPriority := STSC_GetSysThreadPriority;
+SchedPolicy := STSC_GetThreadSchedulingPolicy(ThreadID);
+SysThreadPriority := STSC_GetSysThreadPriority(ThreadID);
 case SchedPolicy of
   spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     case SysThreadPriority of
@@ -1692,16 +3032,22 @@ case SchedPolicy of
       raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Invalid nice value (%d).',[SysThreadPriority]);
     end;
   spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    case SysThreadPriority of
-             1: Result := tpIdle;
-         2..25: Result := tpLowest;
-        26..49: Result := tpBelowNormal;
-            50: Result := tpNormal;
-        51..74: Result := tpAboveNormal;
-        75..98: Result := tpHighest;
-            99: Result := tpTimeCritical;
-    else
-      raise ESTSCInvalidValue.CreateFmt('STSC_GetThreadPriority: Invalid scheduling priority (%d).',[SysThreadPriority]);
+    begin
+      PrioFraction := DecodeSchedulingPriority(SchedPolicy,SysThreadPriority);
+      If PrioFraction <= 0.0 then
+        Result := tpIdle
+      else If (PrioFraction > 0.00) and (PrioFraction <= 0.25) then
+        Result := tpLowest
+      else If (PrioFraction > 0.25) and (PrioFraction <= 0.49) then
+        Result := tpBelowNormal
+      else If (PrioFraction > 0.49) and (PrioFraction < 0.51) then
+        Result := tpNormal
+      else If (PrioFraction >= 0.51) and (PrioFraction < 0.75) then
+        Result := tpAboveNormal
+      else If (PrioFraction >= 0.75) and (PrioFraction < 1.0) then
+        Result := tpHighest
+      else {If PrioFraction >= 1.0 then}
+        Result := tpTimeCritical;
     end;
   spBatch,spIdle,spDeadline:  // - - - - - - - - - - - - - - - - - - - - - - - -
     Result := tpNormal;
@@ -1711,26 +3057,37 @@ end;
 end;
 {$ENDIF}
 
-//------------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function STSC_SetThreadPriority(ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority;
+Function STSC_GetThreadPriority: TSTSCThreadPriority;
+begin
+{$IFDEF Windows}
+Result := STSC_GetThreadHandlePriority(GetCurrentThread);
+{$ELSE}
+Result := STSC_GetThreadPriority(0);
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function STSC_SetThreadHandlePriority(ThreadHandle: {$IFDEF Windows}THandle{$ELSE}TSTSCThreadID{$ENDIF}; ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority; overload;
 {$IFDEF Windows}
 var
   SysThreadPriority:  Integer;
 begin
-Result := STSC_GetThreadPriority;
+Result := STSC_GetThreadHandlePriority(ThreadHandle);
 case ThreadPriority of
-  tpIdle:               SysThreadPriority := THREAD_PRIORITY_IDLE;
-  tpLowest:             SysThreadPriority := THREAD_PRIORITY_LOWEST;
-  tpBelowNormal:        SysThreadPriority := THREAD_PRIORITY_BELOW_NORMAL;
-  tpNormal:             SysThreadPriority := THREAD_PRIORITY_NORMAL;
-  tpAboveNormal:        SysThreadPriority := THREAD_PRIORITY_ABOVE_NORMAL;
-  tpHighest:            SysThreadPriority := THREAD_PRIORITY_HIGHEST;
-  tpTimeCritical:       SysThreadPriority := THREAD_PRIORITY_TIME_CRITICAL;
-  tpThrdModeBcgrBegin:  SysThreadPriority := THREAD_MODE_BACKGROUND_BEGIN;
-  tpThrdModeBcgrEnd:    SysThreadPriority := THREAD_MODE_BACKGROUND_END;
+  tpIdle:                 SysThreadPriority := THREAD_PRIORITY_IDLE;
+  tpLowest:               SysThreadPriority := THREAD_PRIORITY_LOWEST;
+  tpBelowNormal:          SysThreadPriority := THREAD_PRIORITY_BELOW_NORMAL;
+  tpNormal:               SysThreadPriority := THREAD_PRIORITY_NORMAL;
+  tpAboveNormal:          SysThreadPriority := THREAD_PRIORITY_ABOVE_NORMAL;
+  tpHighest:              SysThreadPriority := THREAD_PRIORITY_HIGHEST;
+  tpTimeCritical:         SysThreadPriority := THREAD_PRIORITY_TIME_CRITICAL;
+  tpBackgroundModeBegin:  SysThreadPriority := THREAD_MODE_BACKGROUND_BEGIN;
+  tpBackgroundModeEnd:    SysThreadPriority := THREAD_MODE_BACKGROUND_END;
 else
-  If STSC_GetPriorityClass = pcRealtime then
+  If STSC_GetProcessPriorityClass(VAR_GetProcessIDOfThread(ThreadHandle)) = pcRealtime then
     case ThreadPriority of
       tpLowestRT7:  SysThreadPriority := -7;
       tpLowestRT6:  SysThreadPriority := -6;
@@ -1742,58 +3099,80 @@ else
       tpHighestRT5: SysThreadPriority := 5;
       tpHighestRT6: SysThreadPriority := 6;
     else
-      raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
+      raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadHandlePriority: Unknown thread priority (%d).',[Ord(ThreadPriority)]);
     end
-  else raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
+  else raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadHandlePriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
 end;
-STSC_SetSysThreadPriority(SysThreadPriority);
+STSC_SetSysThreadHandlePriority(ThreadHandle,SysThreadPriority);
+end;
+{$ELSE}
+begin
+Result := STSC_SetThreadPriority(ThreadHandle,ThreadPriority);
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function STSC_SetThreadPriority(ThreadID: TSTSCThreadID; ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority;
+{$IFDEF Windows}
+var
+  ThreadHandle: THandle;
+begin
+ThreadHandle := OpenThread(THREAD_QUERY_INFORMATION or THREAD_SET_INFORMATION,False,ThreadID);
+If ThreadHandle <> 0 then
+  try
+    Result := STSC_SetThreadHandlePriority(ThreadHandle,ThreadPriority);
+  finally
+    CloseHandle(ThreadHandle);
+  end
+else raise ESTSCSystemError.CreateFmt('STSC_SetThreadPriority: Failed to open thread (%u).',[Integer(GetLastError)]);
 end;
 {$ELSE}
 var
   SchedPolicy:  TSTSCSchedPolicy;
 begin
-Result := STSC_GetThreadPriority;
-SchedPolicy := STSC_GetThreadSchedulingPolicy;
+Result := STSC_GetThreadPriority(ThreadID);
+SchedPolicy := STSC_GetThreadSchedulingPolicy(ThreadID);
 case SchedPolicy of
   spNormal,spOther: // - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     case ThreadPriority of
-      tpIdle:         STSC_SetSysThreadPriority(19);
+      tpIdle:         STSC_SetSysThreadPriority(ThreadID,19);
       tpLowestRT7,
       tpLowestRT6,
       tpLowestRT5,
       tpLowestRT4,
       tpLowestRT3,
-      tpLowest:       STSC_SetSysThreadPriority(18);
-      tpBelowNormal:  STSC_SetSysThreadPriority(9);
-      tpNormal:       STSC_SetSysThreadPriority(0);
-      tpAboveNormal:  STSC_SetSysThreadPriority(-10);
+      tpLowest:       STSC_SetSysThreadPriority(ThreadID,18);
+      tpBelowNormal:  STSC_SetSysThreadPriority(ThreadID,9);
+      tpNormal:       STSC_SetSysThreadPriority(ThreadID,0);
+      tpAboveNormal:  STSC_SetSysThreadPriority(ThreadID,-10);
       tpHighestRT3,
       tpHighestRT4,
       tpHighestRT5,
       tpHighestRT6,
-      tpHighest:      STSC_SetSysThreadPriority(-19);
-      tpTimeCritical: STSC_SetSysThreadPriority(-20);
+      tpHighest:      STSC_SetSysThreadPriority(ThreadID,-19);
+      tpTimeCritical: STSC_SetSysThreadPriority(ThreadID,-20);
     else
       raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
     end;
   spFifo,spRR:  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     case ThreadPriority of
-      tpIdle:         STSC_SetSysThreadPriority(1);
+      tpIdle:         STSC_SetSysThreadPriority(ThreadID,EncodeSchedulingPriority(SchedPolicy,0.0));
       tpLowestRT7,
       tpLowestRT6,
       tpLowestRT5,
       tpLowestRT4,
       tpLowestRT3,
-      tpLowest:       STSC_SetSysThreadPriority(2);
-      tpBelowNormal:  STSC_SetSysThreadPriority(26);
-      tpNormal:       STSC_SetSysThreadPriority(50);
-      tpAboveNormal:  STSC_SetSysThreadPriority(74);
+      tpLowest:       STSC_SetSysThreadPriority(ThreadID,EncodeSchedulingPriority(SchedPolicy,0.05));
+      tpBelowNormal:  STSC_SetSysThreadPriority(ThreadID,EncodeSchedulingPriority(SchedPolicy,0.30));
+      tpNormal:       STSC_SetSysThreadPriority(ThreadID,EncodeSchedulingPriority(SchedPolicy,0.5));
+      tpAboveNormal:  STSC_SetSysThreadPriority(ThreadID,EncodeSchedulingPriority(SchedPolicy,0.70));
       tpHighestRT3,
       tpHighestRT4,
       tpHighestRT5,
       tpHighestRT6,
-      tpHighest:      STSC_SetSysThreadPriority(98);
-      tpTimeCritical: STSC_SetSysThreadPriority(99);
+      tpHighest:      STSC_SetSysThreadPriority(ThreadID,EncodeSchedulingPriority(SchedPolicy,0.95));
+      tpTimeCritical: STSC_SetSysThreadPriority(ThreadID,EncodeSchedulingPriority(SchedPolicy,1.0));
     else
       raise ESTSCInvalidValue.CreateFmt('STSC_SetThreadPriority: Invalid thread priority (%d).',[Ord(ThreadPriority)]);
     end;
@@ -1804,6 +3183,17 @@ else
 end;
 end;
 {$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function STSC_SetThreadPriority(ThreadPriority: TSTSCThreadPriority): TSTSCThreadPriority;
+begin
+{$IFDEF Windows}
+Result := STSC_SetThreadHandlePriority(GetCurrentThread,ThreadPriority);
+{$ELSE}
+Result := STSC_SetThreadPriority(0,ThreadPriority);
+{$ENDIF}
+end;
 
 
 {===============================================================================
@@ -1893,9 +3283,24 @@ finally
   Free;
 end;
 {$IFDEF Windows}
+// functions from ntdll.dll
+ModuleHandle := GetModuleHandle('ntdll.dll');
+If ModuleHandle <> 0 then
+  begin
+    FunctionAddress := GetProcAddress(ModuleHandle,'NtQueryInformationThread');
+    If Assigned(FunctionAddress) then
+      VAR_NtQueryInformationThread := FunctionAddress
+    else
+      VAR_NtQueryInformationThread := nil;
+  end
+else raise ESTSCSystemError.CreateFmt('UnitInitialization: System library ntdll.dll not loaded (%u).',[Integer(GetLastError)]);
+// functions from kernel32.dll
 ModuleHandle := GetModuleHandle('kernel32.dll');
 If ModuleHandle <> 0 then
   begin
+    FunctionAddress := GetProcAddress(ModuleHandle,'GetProcessIdOfThread');
+    If Assigned(FunctionAddress) then
+      VAR_GetProcessIdOfThread := FunctionAddress;
     FunctionAddress := GetProcAddress(ModuleHandle,'GetCurrentProcessorNumber');
     If Assigned(FunctionAddress) then
       begin
@@ -1904,7 +3309,7 @@ If ModuleHandle <> 0 then
       end
     else BuildProcessorIDMap;
   end
-else raise ESTSCSystemError.CreateFmt('UnitInitialization: System library kernel32.dll not loaded (%u).',[GetLastError]);
+else raise ESTSCSystemError.CreateFmt('UnitInitialization: System library kernel32.dll not loaded (%u).',[Integer(GetLastError)]);
 {$ELSE}
 Include(VAR_SupportedFeatures,tscSysProcID);
 {$ENDIF}

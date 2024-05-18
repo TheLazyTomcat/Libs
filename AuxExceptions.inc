@@ -15,7 +15,7 @@
 
   Version 1.2.2 (2024-04-20)
 
-  Last change 2024-04-20
+  Last change 2024-05-15
 
   ©2019-2024 František Milt
 
@@ -2207,7 +2207,7 @@ var
   TempTID:      TAEThreadID;
   ThreadCount:  Integer;
 begin
-DirStreamPtr := fpOpenDir(Format('/proc/%d/task/',[fProcessID]));
+DirStreamPtr := fpOpenDir(Format('/proc/%u/task/',[fProcessID]));
 If Assigned(DirStreamPtr) then
   try
     ThreadCount := 0;
