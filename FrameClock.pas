@@ -91,7 +91,7 @@
 
   Version 1.0.3 (2024-01-14)
 
-  Last change 2024-01-28
+  Last change 2024-05-27
 
   ©2020-2024 František Milt
 
@@ -394,7 +394,8 @@ type
 type
   TClockContext = type Pointer;
 
-  TClockUnit = (cuTick,cuSecond,cuMilli,cuMicro);
+  TClockUnit = (cuTick,cuSecond,cuMilli,cuMicro,cuTicks,cuSeconds,cuMillis,
+                cuMicros);
 
 procedure ClockStart(out Context: TClockContext);
 
@@ -1348,11 +1349,14 @@ begin
 try
   TFrameClock(Context).Tick;
   case ReturnUnit of
-    cuSecond: Result := TFrameClock(Context).CurrentFrame.iSec;
-    cuMilli:  Result := TFrameClock(Context).CurrentFrame.iMiS;
-    cuMicro:  Result := TFrameClock(Context).CurrentFrame.iUiS;
+    cuSecond,
+    cuSeconds:  Result := TFrameClock(Context).CurrentFrame.iSec;
+    cuMilli,
+    cuMillis:   Result := TFrameClock(Context).CurrentFrame.iMiS;
+    cuMicro,
+    cuMicros:   Result := TFrameClock(Context).CurrentFrame.iUiS;
   else
-   {mruTick}
+   {cuTick,cuTicks}
     Result := TFrameClock(Context).CurrentFrame.Ticks;
   end;
 except
@@ -1367,11 +1371,14 @@ begin
 try
   TFrameClock(Context).Tick;
   case ReturnUnit of
-    cuSecond: Result := TFrameClock(Context).CurrentFrame.Sec;
-    cuMilli:  Result := TFrameClock(Context).CurrentFrame.MiS;
-    cuMicro:  Result := TFrameClock(Context).CurrentFrame.UiS;
+    cuSecond,
+    cuSeconds:  Result := TFrameClock(Context).CurrentFrame.Sec;
+    cuMilli,
+    cuMillis:   Result := TFrameClock(Context).CurrentFrame.MiS;
+    cuMicro,
+    cuMicros:   Result := TFrameClock(Context).CurrentFrame.UiS;
   else
-   {mruTick}
+   {cuTick,cuTicks}
     Result := TFrameClock(Context).CurrentFrame.Ticks;
   end;
 except
