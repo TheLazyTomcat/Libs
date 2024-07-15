@@ -18,7 +18,7 @@
 
   Version 1.1.1 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-06-10
 
   ©2021-2024 František Milt
 
@@ -119,6 +119,10 @@ const
 type
   TFutexWord = cInt;
   PFutexWord = ^TFutexWord;
+
+  // used only for casting to unsigned counter in simple semaphore
+  TFutexUWord = cUInt;
+  PFutexUWord = ^TFutexUWord;
 
   TFutex = TFutexWord;
   PFutex = ^TFutex;
@@ -403,20 +407,17 @@ procedure SimpleMutexUnlock(var Futex: TFutexWord);
   If count is greater than zero, it is signaled (unlocked). If zero, it is
   non-signaled (locked).
 
-  SimpleSemaphoreWait decrements the count. If the count was zero or less
-  before the call, it will enter waiting and blocks until the semaphore counter
-  becomes positive again.
+  SimpleSemaphoreWait decrements (with unsigned saturation) the count. If the
+  count was zero before the call, it will enter waiting and blocks until the
+  semaphore counter becomes positive again trough a call to SimpleSemaphorePost.
 
-  SimpleSemaphorePost increments the count and wakes exactly one waiter, if any
-  is present.
+  SimpleSemaphorePost increments (with unsigned saturation) the count and wakes
+  exactly one waiter, if any is present.
 
   Simple semaphore does not need to be initialized explicitly - it is enough
-  to set it to a positive integer or zero, which can be done eg. through memory
-  initialization.
-  But never set it to a negative value - in that case first call to
-  SimpleSemaphoreWait will set it to zero and itself will block. Calling
-  SimpleSemaphorePost on such semaphore will only increment the counter,
-  nothing more.
+  to set it to any integer (note that the word is treated as unsigned, so
+  putting negative integer there is equivalet to setting it to very large
+  positive number) or zero, which can be done eg. through memory initialization.
 }
 {===============================================================================
     Simple semaphore - declaration
@@ -1150,6 +1151,15 @@ end;
                                 Simple semaphore
 --------------------------------------------------------------------------------
 ===============================================================================}
+
+Function SemPostItrLckOp(A,B: TFutexUWord): TFutexUWord; register;
+begin
+If A < B then
+  Result := A + 1
+else
+  Result := B;
+end;
+
 {===============================================================================
     Simple semaphore - implementation
 ===============================================================================}
@@ -1174,10 +1184,8 @@ repeat
 
   If it was above zero, then just return since the semaphore was signaled.
 }
-  OldCount := InterlockedDecrementIfPositive(Futex);
-  If OldCount < 0 then
-    InterlockedStore(Futex,0)
-  else If OldCount = 0 then
+  OldCount := InterlockedDecrementIfPositive(TFutexUWord(Futex));
+  If OldCount = 0 then
     FutexWait(Futex,0);
 until OldCount > 0;
 end;
@@ -1185,12 +1193,18 @@ end;
 //------------------------------------------------------------------------------
 
 procedure SimpleSemaphorePost(var Futex: TFutexWord);
+const
+  SEM_MAX = TFutexUWord($FFFFFFFF);
 begin
 {
-  Always call FutexWake, since the increment will always increase the counter
-  to a positive number.
+  Atomically increments the futex word, but only when it is below SEM_MAX,
+  if at or above this value then nothing is done (the word is not incremented
+  to prevent overflow to zero)
+
+  Call FutexWake in any case, since the counter will always be a positive
+  number.
 }
-InterlockedIncrement(Futex);
+InterlockedExchangeOp(TFutexUWord(Futex),SEM_MAX,@SemPostItrLckOp);
 FutexWake(Futex,1);
 end;
 
