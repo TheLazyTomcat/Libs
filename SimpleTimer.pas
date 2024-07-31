@@ -27,9 +27,9 @@
     In non-main thread, you are responsible to call this method - so the
     behavior is technically the same as in Windows OS.
 
-  Version 1.2.2 (2024-05-03)
+  Version 1.2.3 (2024-08-01)
 
-  Last change 2024-05-03
+  Last change 2024-08-01
 
   ©2015-2024 František Milt
 
@@ -51,10 +51,13 @@
     AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+  * UtilitySignal - github.com/TheLazyTomcat/Lib.UtilitySignal
   * UtilityWindow - github.com/TheLazyTomcat/Lib.UtilityWindow
 
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol SimpleTimer_UseAuxExceptions for details).
+
+  Library UtilitySignal is required only when compiling for Linux OS.
 
   Library UtilityWindow is required only when compiling for Windows OS.
 
@@ -115,8 +118,7 @@ type
   ESTException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESTTimerSetupError    = class(ESTException);
-{$IFDEF Linux}
-  ESTSignalSetupError   = class(ESTException);
+{$IFNDEF Windows}
   ESTTimerCreationError = class(ESTException);
   ESTTimerDeletionError = class(ESTException);
 {$ENDIF}
@@ -136,7 +138,7 @@ type
     fOwnsWindow:      Boolean;
     fWindow:          TUtilityWindow;
   {$ELSE}
-    fTimerExpired:    Boolean;  // only for internal use
+    fTimerExpired:    Integer;  // only for internal use
     fInMainThread:    Boolean;  // -//-
     fTimerCreated:    Boolean;
   {$ENDIF}
@@ -159,8 +161,6 @@ type
     procedure MessagesHandler(var Msg: TMessage; var Handled: Boolean; Sent: Boolean); virtual;
   {$ELSE}
     procedure TimerExpired; virtual;
-  {$ENDIF}
-  {$IFDEF Linux}
     procedure OnAppIdleHandler(Sender: TObject; var Done: Boolean); virtual;
   {$ENDIF}
     procedure DoOnTimer; virtual;
@@ -187,12 +187,12 @@ type
 
 implementation
 
-{$IFDEF Linux}
+{$IFNDEF Windows}
 uses
-  Classes, BaseUnix, Linux{$IFDEF LCL}, Forms{$ENDIF};
+  Classes, BaseUnix, Linux{$IFDEF LCL}, Forms{$ENDIF},
+  UtilitySignal;
 
 {$LINKLIB RT}
-{$LINKLIB C}
 {$ENDIF}
 
 {$IFDEF FPC_DisableWarns}
@@ -221,7 +221,7 @@ const
   SI_TIMER = -2;
 
 type
-  timer_t  = cint;
+  timer_t  = PtrUInt; // in glic it is defined as void * (so pointer)
   ptimer_t = ^timer_t;
 
   sigval_t = record
@@ -230,44 +230,50 @@ type
       1:  (sigval_ptr: Pointer) // Pointer value
   end;
 
-  sigevent = record
+  sigevent_t = record
     sigev_value:              sigval_t;                             // Data passed with notification
     sigev_signo:              cint;                                 // Notification signal
     sigev_notify:             cint;                                 // Notification method
     sigev_notify_function:    procedure(sigval: sigval_t); cdecl;   // Function used for thread notification (SIGEV_THREAD)
     sigev_notify_attributes:  Pointer;                              // Attributes for notification thread (SIGEV_THREAD)
   end;
-  psigevent = ^sigevent;
+  psigevent_t = ^sigevent_t;
 
-  itimerspec = record
-    it_interval:  timespec; // Timer interval
-    it_value:     timespec; // Initial expiration
+  timespec_t = record
+    tv_sec:   time_t;
+    tv_nsec:  clong;
   end;
-  pitimerspec = ^itimerspec;
 
-Function timer_create(clockid: clockid_t; sevp: psigevent; timerid: ptimer_t): cint; cdecl; external;
+  itimerspec_t = record
+    it_interval:  timespec_t; // Timer interval
+    it_value:     timespec_t; // Initial expiration
+  end;
+  pitimerspec_t = ^itimerspec_t;
+
+Function timer_create(clockid: clockid_t; sevp: psigevent_t; timerid: ptimer_t): cint; cdecl; external;
 Function timer_delete(timerid: timer_t): cint; cdecl; external;
 
-Function timer_settime(timerid: timer_t; flags: cint; new_value,old_value: pitimerspec): cint; cdecl; external;
-
-//------------------------------------------------------------------------------
+Function timer_settime(timerid: timer_t; flags: cint; new_value,old_value: pitimerspec_t): cint; cdecl; external;
 
 Function errno_ptr: pcint; cdecl; external name '__errno_location';
-
-Function __libc_current_sigrtmin: cint; cdecl; external;
-Function __libc_current_sigrtmax: cint; cdecl; external;
 
 {-------------------------------------------------------------------------------
     TSimpleTimer - signal handler
 -------------------------------------------------------------------------------}
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure SignalHandler(signo: cint; siginfo: psiginfo; context: psigcontext); cdecl;
+procedure SignalHandler(const Info: TUSSignalInfo; var BreakProcessing: Boolean);
 begin
-If (siginfo^.si_code = SI_TIMER) and Assigned(siginfo^._sifields._rt._sigval) then
-  (TObject(siginfo^._sifields._rt._sigval) as TSimpleTimer).TimerExpired;
+If Assigned(Info.Value.PtrValue) then
+  (TObject(Info.Value.PtrValue) as TSimpleTimer).TimerExpired;
+BreakProcessing := False;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure SetupSignalHandler;
+begin
+UtilitySignal.RegisterHandler(SI_TIMER,SignalHandler);
+end;
 
 {$ENDIF}
 
@@ -319,48 +325,16 @@ fTimerID := TimerID;
 {$ELSE}
 procedure TSimpleTimer.Initialize;
 var
-  SignalNumber:     cint;
-  SignalAction:     sigactionrec;
-  OldSignalAction:  sigactionrec;
-  i:                cint;
-  SignalEvent:      sigevent;
-  NewTimerID:       timer_t;
+  SignalEvent:  sigevent_t;
+  NewTimerID:   timer_t;
 begin
-fTimerExpired := False;
+InterlockedExchange(fTimerExpired,0);
 fInMainThread := MainThreadID = GetCurrentThreadID;
-// setup signal handler
-FillChar(Addr(SignalAction)^,SizeOf(sigactionrec),0);
-SignalAction.sa_handler := SignalHandler;
-SignalAction.sa_flags := SA_SIGINFO;
-If fpsigemptyset(SignalAction.sa_mask) <> 0 then
-  raise ESTSignalSetupError.CreateFmt('TSimpleTimer.Initialize: Emptying signal set failed (%d).',[errno]);
-// get free signal (or one already used for this library)
-SignalNumber := Pred(__libc_current_sigrtmin);
-// following is not particularly thread-safe, but meh...
-For i := __libc_current_sigrtmin to __libc_current_sigrtmax do
-  begin
-    If fpsigaction(i,@SignalAction,@OldSignalAction) = 0 then
-      begin
-        If not Assigned(OldSignalAction.sa_handler) or (@OldSignalAction.sa_handler = @SignalHandler) then
-          begin
-            SignalNumber := i;
-            Break{For i};
-          end
-        else
-          begin
-            // restore original signal handler
-            If fpsigaction(i,@OldSignalAction,nil) <> 0 then
-              raise ESTSignalSetupError.CreateFmt('TSimpleTimer.Initialize: Failed to restore signal action #%d (%d).',[i,errno]);
-          end;
-      end
-    else raise ESTSignalSetupError.CreateFmt('TSimpleTimer.Initialize: Failed to setup signal action #%d (%d).',[i,errno]);
-  end;
-If SignalNumber < __libc_current_sigrtmin then
-  raise ESTSignalSetupError.Create('TSimpleTimer.Initialize: No unused signal found.');
+fTimerCreated := False; // just to be sure
 // setup and create timer
-FillChar(Addr(SignalEvent)^,SizeOf(sigevent),0);
+FillChar(Addr(SignalEvent)^,SizeOf(sigevent_t),0);
 SignalEvent.sigev_value.sigval_ptr := Pointer(Self);
-SignalEvent.sigev_signo := SignalNumber;
+SignalEvent.sigev_signo := cint(UtilitySignal.SignalNumber);
 SignalEvent.sigev_notify := SIGEV_SIGNAL;
 If timer_create(CLOCK_MONOTONIC,@SignalEvent,@NewTimerID) = 0 then
   begin
@@ -369,8 +343,12 @@ If timer_create(CLOCK_MONOTONIC,@SignalEvent,@NewTimerID) = 0 then
   end
 else raise ESTTimerCreationError.CreateFmt('TSimpleTimer.Initialize: Failed to create timer (%d).',[errno_ptr^]);
 {$ENDIF}
+// set properties to default values
 fInterval := 1000;
 fEnabled := False;
+fTag := 0;
+fOnTimerEvent := nil;
+fOnTimerCallback := nil;
 end;
 
 //------------------------------------------------------------------------------
@@ -404,19 +382,18 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleTimer.SetupTimer;
-{$IFDEF Linux}
-var
-  TimerTime:  itimerspec;
-{$ENDIF}
-begin
 {$IFDEF Windows}
+begin
 KillTimer(fWindow.WindowHandle,fTimerID);
 If (fInterval > 0) and fEnabled then
   If SetTimer(fWindow.WindowHandle,fTimerID,fInterval,nil) = 0 then
     raise ESTTimerSetupError.CreateFmt('TSimpleTimer.SetupTimer: Failed to setup timer (0x%.8x).',[GetLastError]);
 {$ELSE}
+var
+  TimerTime:  itimerspec_t;
+begin
 // disarm timer
-FillChar(Addr(TimerTime)^,SizeOf(itimerspec),0);
+FillChar(Addr(TimerTime)^,SizeOf(itimerspec_t),0);
 If timer_settime(timer_t(fTimerID),0,@TimerTime,nil) <> 0 then
   raise ESTTimerSetupError.CreateFmt('TSimpleTimer.SetupTimer: Failed to disarm timer (%d).',[errno_ptr^]);
 {$IFDEF LCL}
@@ -461,19 +438,15 @@ end;
 
 procedure TSimpleTimer.TimerExpired;
 begin
-fTimerExpired := True;
+InterlockedExchange(fTimerExpired,1);
 end;
-
-{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF Linux}
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TSimpleTimer.OnAppIdleHandler(Sender: TObject; var Done: Boolean);
 begin
 ProcessMassages;
-Done := True;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 {$ENDIF}
@@ -517,12 +490,21 @@ begin
 {$IFDEF Windows}
 fWindow.ProcessMessages(False);
 {$ELSE}
-If fTimerExpired then
-  begin
-    DoOnTimer;
-    fTimerExpired := False;
-  end;
+If InterlockedExchange(fTimerExpired,0) <> 0 then
+  DoOnTimer;
 {$ENDIF}
 end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                        Unit initialization/finalization
+--------------------------------------------------------------------------------
+===============================================================================}
+
+{$IFNDEF Windows}
+initialization
+  SetupSignalHandler;
+{$ENDIF}
 
 end.
