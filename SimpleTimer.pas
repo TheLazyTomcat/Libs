@@ -27,9 +27,9 @@
     In non-main thread, you are responsible to call this method - so the
     behavior is technically the same as in Windows OS.
 
-  Version 1.2.3 (2024-08-01)
+  Version 1.2.4 (2024-08-19)
 
-  Last change 2024-08-01
+  Last change 2024-08-19
 
   ©2015-2024 František Milt
 
@@ -65,6 +65,7 @@
 
   Indirect dependencies:
     AuxMath        - github.com/TheLazyTomcat/Lib.AuxMath
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
@@ -171,7 +172,7 @@ type
     constructor Create;
   {$ENDIF}
     destructor Destroy; override;
-    procedure ProcessMassages; virtual;
+    procedure ProcessMessages; virtual;
   {$IFDEF Windows}
     property OwnsWindow: Boolean read fOwnsWindow;
     property Window: TUtilityWindow read fWindow;
@@ -270,9 +271,16 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure SetupSignalHandler;
+procedure RegisterSignalHandler;
 begin
 UtilitySignal.RegisterHandler(SI_TIMER,SignalHandler);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure UnregisterSignalHandler;
+begin
+UtilitySignal.UnregisterHandler(SI_TIMER,SignalHandler);
 end;
 
 {$ENDIF}
@@ -446,7 +454,7 @@ end;
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TSimpleTimer.OnAppIdleHandler(Sender: TObject; var Done: Boolean);
 begin
-ProcessMassages;
+ProcessMessages;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 {$ENDIF}
@@ -485,7 +493,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleTimer.ProcessMassages;
+procedure TSimpleTimer.ProcessMessages;
 begin
 {$IFDEF Windows}
 fWindow.ProcessMessages(False);
@@ -504,7 +512,10 @@ end;
 
 {$IFNDEF Windows}
 initialization
-  SetupSignalHandler;
+  RegisterSignalHandler;
+
+finalization
+  UnregisterSignalHandler;
 {$ENDIF}
 
 end.

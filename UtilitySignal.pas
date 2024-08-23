@@ -35,10 +35,10 @@
       shared across the entire process.
 
     The installed action routine processes the incoming signal and, using
-    internal objects, passes processing to registered handlers. Which handlers
-    will be called is selected according to a code received with the signal -
-    only handlers (all of them) registered for the particular code will be
-    called.
+    internal dispatcher object, passes processing to registered handlers. Which
+    handlers will be called is selected according to a code received with the
+    signal - only handlers (all of them) registered for the particular code
+    will be called.
 
       Every handler has parameter BreakProcessing that is set to false upon
       entry. If handler sets this parameter to true before exitting, then no
@@ -46,15 +46,16 @@
       processed signal.
 
       WARNING - which thread will be processing any received signal is complety
-                undefined and is selected arbitrarily. You have to account for
+                undefined and is selected arbitrarily (usually, it will the
+                main thread, but do not count on that). You have to account for
                 this fact when writing the handlers!
 
     Make sure you understand how signals work before using this library, so
     reading the linux manual (signal(7)) is strongly recommended.
 
-  Version 1.0 (2024-07-31)
+  Version 1.0.1 (2024-08-19)
 
-  Last change 2024-07-31
+  Last change 2024-08-19
 
   ©2024 František Milt
 
@@ -75,6 +76,7 @@
   Dependencies:
     AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
 
   Library AuxExceptions is required only when rebasing local exception classes
@@ -119,6 +121,25 @@ unit UtilitySignal;
 {$ENDIF}
 {$H+}
 
+//------------------------------------------------------------------------------
+{
+  SilentDispatcherFailure
+
+  When defined, any failure of acquiring internal signal dispatcher is silently
+  ignored (the call will exit without performing its intended function). When
+  not defined, then an exception of class EUSDispacherNotReeady is raised in
+  such situation.
+
+  Defined by default.
+
+  To disable/undefine this symbol in a project without changing this library,
+  define project-wide symbol UtilitySignal_SilentDispatcherFailure_OFF.
+}
+{$DEFINE SilentDispatcherFailure}
+{$IFDEF UtilitySignal_SilentDispatcherFailure_OFF}
+  {$UNDEF SilentDispatcherFailure}
+{$ENDIF}
+
 interface
 
 uses
@@ -131,9 +152,10 @@ uses
 type
   EUSException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
-  EUSIndexOutOfBounds = class(EUSException);
-  EUSInvalidValue     = class(EUSException);
-  EUSSetupError       = class(EUSException);
+  EUSIndexOutOfBounds  = class(EUSException);
+  EUSInvalidValue      = class(EUSException);
+  EUSSetupError        = class(EUSException);
+  EUSDispacherNotReady = class(EUSException);
 
 {===============================================================================
     Public types
@@ -251,7 +273,7 @@ Function SendSignal(Value: Pointer): Boolean; overload;
 implementation
 
 uses
-  AuxClasses, MulticastEvent;
+  AuxClasses, MulticastEvent, InterlockedOps;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -265,8 +287,8 @@ const
   SI_QUEUE = -1;
 
 type
-  sa_sighandler_t = procedure(signo: cint); cdecl;
-  sa_sigaction_t =  procedure(signo: cint; siginfo: psiginfo; context: Pointer); cdecl;
+  sighandlerfce_t = procedure(signo: cint); cdecl;
+  sigactionfce_t =  procedure(signo: cint; siginfo: psiginfo; context: Pointer); cdecl;
 
   sigset_t = array[0..Pred(1024 div (8 * SizeOf(culong)))] of culong;
   psigset_t = ^sigset_t;
@@ -274,8 +296,8 @@ type
   sigaction_t = record
     handler: record
       case Integer of
-        0: (sa_handler:   sa_sighandler_t);
-        1: (sa_sigaction: sa_sigaction_t);
+        0: (sa_handler:   sighandlerfce_t);
+        1: (sa_sigaction: sigactionfce_t);
     end;
     sa_mask:      sigset_t;
     sa_flags:     cint;
@@ -749,8 +771,108 @@ end;
     Procedural interface - internal global variables
 ===============================================================================}
 var
-  GVAR_Dispatcher:   TUSDispatcher = nil;
-  GVAR_SignalNumber: cint = 0;
+{
+  GVAR_DispThrProt counter is used for thread protection of GVAR_Dispatcher
+  variable, specifically to protect the object destruction (so it cannot be
+  destroyed while some other thread is using it).
+
+  On unit initialization, its value is set to High(Integer) - a maximum value
+  it can hold (about two billions).
+
+  On unit finalization, its current value, whatever it is, is negated. If,
+  after this negation, its value becomes -High(Integer) (negative of maximum),
+  then it is assumed nobody is currently using the dispatcher and it can be
+  destroyed.
+
+  When any thread wants to use the dispatcher, it has to first acquire it. This
+  operation conditionally decrements the counter when it holds value above 1.
+
+    If the condition is met and the decrement took place, then the user
+    thread can safely access the dispatcher. Also, the dispatcher must be
+    released after use (see further).
+
+    If the counter was below or equel to 1, then the thread cannot acquire the
+    dispatcher and must not use it. Release must not be called. Depending on
+    defined symbols, this can lead to an exception being raised.
+
+  When thread successfully acquired the dispatcher and now is done using it, it
+  must release it.
+
+    If the counter is zero, then nothing is done as this should not happen.
+    If the counter is above 0, then it is incremented. If it is below zero,
+    then it gets decremented.
+
+    In any case, if value of the counter is below or equal to -High(Integer)
+    after the release (meaning this unit was finalized and no other thread has
+    the dispatcher acquired), then the calling thread must free the dispatcher.
+    Note that, if the counter is negative but above -High(Integer), it means
+    this unit was finalized but some other thread still uses the dispatcher.
+    Last thread releasing it will destroy it.
+
+  NOTE - In case of problems where some thread exits before incrementing the
+         counter, the dispatcher will not be destroyed when the program exits.
+         Some leaks might be reported when debugging, but in reality no memory
+         is leaked because the process ended anyway (just not entirely cleanly).
+         Therefore this eventuality is ignored.
+}
+  GVAR_DispThrProt:   Integer = 0;
+  GVAR_Dispatcher:    TUSDispatcher = nil;
+  GVAR_SignalNumber:  cint = 0;
+
+{===============================================================================
+    Procedural interface - internal routines
+===============================================================================}
+
+procedure DispatcherThreatProtectionInit;
+begin
+InterlockedStore(GVAR_DispThrProt,High(Integer));
+end;
+
+//------------------------------------------------------------------------------
+
+Function DispatcherThreatProtectionFinal: Boolean;
+begin
+// true = can free the dispatcher
+Result := InterlockedNeg(GVAR_DispThrProt) <= -High(Integer);
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function AcquireInterlockedOp(A: Integer; var IntrRes: Integer): Integer; register;
+begin
+// IntrRes contains value of A on entry and is not changed
+If A > 1 then
+  Result := A - 1
+else
+  Result := A;
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+Function DispatcherThreatProtectionAcquire: Boolean;
+begin
+// true = dispatcher is assigned and can be used (also do release)
+Result := InterlockedOperation(GVAR_DispThrProt,AcquireInterlockedOp) > 1;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ReleaseInterlockedOp(A: Integer; var IntrRes: Integer): Integer; register;
+begin
+If A > 0 then
+  Result := A + 1
+else If A < 0 then
+  Result := A - 1
+else
+  Result := 0;
+IntrRes := Result;
+end;
+
+Function DispatcherThreatProtectionRelease: Boolean;
+begin
+// false = dispatcher must be freed now
+Result := InterlockedOperation(GVAR_DispThrProt,ReleaseInterlockedOp) > -High(Integer);
+end;
 
 {===============================================================================
     Procedural interface - implementation
@@ -772,64 +894,128 @@ end;
 
 procedure RegisterHandler(Code: Integer; Handler: TUSHandlerCallback);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.RegisterHandler(Code,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.RegisterHandler(Code,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('RegisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure RegisterHandler(Code: Integer; Handler: TUSHandlerEvent);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.RegisterHandler(Code,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.RegisterHandler(Code,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('RegisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure RegisterHandler(Handler: TUSHandlerCallback);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.RegisterHandler(SI_QUEUE,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.RegisterHandler(SI_QUEUE,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('RegisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure RegisterHandler(Handler: TUSHandlerEvent);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.RegisterHandler(SI_QUEUE,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.RegisterHandler(SI_QUEUE,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('RegisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 procedure UnregisterHandler(Code: Integer; Handler: TUSHandlerCallback);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.UnregisterHandler(Code,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.UnregisterHandler(Code,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('UnregisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure UnregisterHandler(Code: Integer; Handler: TUSHandlerEvent);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.UnregisterHandler(Code,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.UnregisterHandler(Code,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('UnregisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure UnregisterHandler(Handler: TUSHandlerCallback);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.UnregisterHandler(SI_QUEUE,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.UnregisterHandler(SI_QUEUE,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('UnregisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure UnregisterHandler(Handler: TUSHandlerEvent);
 begin
-If Assigned(GVAR_Dispatcher) then
-  GVAR_Dispatcher.UnregisterHandler(SI_QUEUE,Handler);
+If DispatcherThreatProtectionAcquire then
+  try
+    GVAR_Dispatcher.UnregisterHandler(SI_QUEUE,Handler);
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
+  end
+{$IFNDEF SilentDispatcherFailure}
+else raise EUSDispacherNotReady.Create('UnregisterHandler: Dispatcher not ready.');
+{$ENDIF}
 end;
 
 //==============================================================================
@@ -960,24 +1146,31 @@ var
   SignalInfo: TUSSignalInfo;
 begin
 // this function can by executed in the context of pretty much any random existing thread
-If (signo = GVAR_SignalNumber) and Assigned(GVAR_Dispatcher) then
-  begin
-    SignalInfo.Signal := Integer(signo);
-    SignalInfo.Code := siginfo^.si_code;
-    SignalInfo.Value.PtrValue := siginfo^._sifields._rt._sigval;
-    GVAR_Dispatcher.Dispatch(SignalInfo);
+If DispatcherThreatProtectionAcquire then
+  try
+    If signo = GVAR_SignalNumber then
+      begin
+        SignalInfo.Signal := Integer(signo);
+        SignalInfo.Code := siginfo^.si_code;
+        SignalInfo.Value.PtrValue := siginfo^._sifields._rt._sigval;
+        GVAR_Dispatcher.Dispatch(SignalInfo);
+      end;
+  finally
+    If not DispatcherThreatProtectionRelease then
+      FreeAndNil(GVAR_Dispatcher);
   end;
+// do not raise exceptions here even if SilentDispatcherFailure is not defined
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-procedure SetupSignalHandler;
+procedure InstallSignalAction;
 var
   SignalAction: sigaction_t;
 begin
-GVAR_SignalNumber := allocate_rtsig(1);
 // get unused signal number
+GVAR_SignalNumber := allocate_rtsig(1);
 If GVAR_SignalNumber < 0 then
   raise EUSSetupError.CreateFmt('SetupSignalHandler: Failed to allocate unused signal number (%d).',[errno_ptr^]);
 // look if the selected signal is really unused (does not have handler assigned)
@@ -999,16 +1192,38 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure UninstallSignalAction;
+var
+  SignalAction: sigaction_t;
+begin
+// clear signal handler
+FillChar(Addr(SignalAction)^,SizeOf(sigaction_t),0);
+SignalAction.handler.sa_sigaction := nil;
+If sigemptyset(Addr(SignalAction.sa_mask)) <> 0 then
+  raise EUSSetupError.CreateFmt('UninstallSignalAction: Emptying signal set failed (%d).',[errno_ptr^]);
+If sigaction(GVAR_SignalNumber,@SignalAction,nil) <> 0 then
+  raise EUSSetupError.CreateFmt('UninstallSignalAction: Failed to setup action for signal #%d (%d).',[GVAR_SignalNumber,errno_ptr^]);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure DispatcherInit;
 begin
+{
+  This is called at the module initialization, so no other thread that could
+  use this unit can be running.
+}
 GVAR_Dispatcher := TUSDispatcher.Create;
+DispatcherThreatProtectionInit;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure DispatcherFinal;
 begin
-FreeandNil(GVAR_Dispatcher);
+If DispatcherThreatProtectionFinal then
+  // nobody was using the dispatcher and it is now marked as unusable, free it
+  FreeAndNil(GVAR_Dispatcher);
 end;
 
 
@@ -1019,14 +1234,10 @@ end;
 ===============================================================================}
 initialization
   DispatcherInit;
-  SetupSignalHandler;
+  InstallSignalAction;
 
 finalization
-{
-  Note that signal handler is not removed because we expect it to work the
-  entire lifetime of current process, so there is no point in removing it now
-  since the process is ending anyway.
-}
+  UninstallSignalAction;
   DispatcherFinal;
 
 end.

@@ -23,7 +23,7 @@
 
   Version 1.1.3 (2024-04-28)
 
-  Last change 2024-04-28
+  Last change 2024-08-20
 
   ©2015-2024 František Milt
 
@@ -809,7 +809,7 @@ try
   If Exists then
     Result := Size
   else
-    raise EWFIFileError.CreateFmt('SameFile: File "%s" does not exist.',[FileName]);
+    raise EWFIFileError.CreateFmt('GetFileSize: File "%s" does not exist.',[FileName]);
 finally
   Free;
 end;

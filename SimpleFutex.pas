@@ -10,15 +10,23 @@
   Simple futex
 
     Main aim of this library is to provide wrappers for futexes (synchronization
-    primitives in linux) and some very simple complete synchronization objects
-    based on them - currently simple mutex and semaphore are implemented.
+    primitives in Linux) and some very simple complete synchronization objects
+    based on them - currently simple mutex, simple semaphore and simple robust
+    mutex are implemented.
 
       NOTE - since proper implementation of futexes is not particularly easy,
              there are probably errors. If you find any, please let me know.
 
-  Version 1.1.1 (2024-05-03)
+      WARNING - simple robust mutex might not be provided by this unit if
+                dependecy library InterlockedOps does not provide functions
+                accepting 64bit arguments (see there for details).
+                Public constant SF_SRM_AVAILABLE can be used to probe whether
+                SRM is or isn't provided (as it is a true constant, it can be
+                used in conditional compilation).
 
-  Last change 2024-06-10
+  Version 1.2 (2024-08-23)
+
+  Last change 2024-08-23
 
   ©2021-2024 František Milt
 
@@ -87,11 +95,53 @@ unit SimpleFutex;
   {$DEFINE OverflowChecks}
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+{
+  RobustMutexThreadTimeCheck
+
+  Changes how the simple robust mutex (SRM) checks whether thread that locked
+  the SRM still lives - see description of SRM for more details and explanation
+  of effects this symbol has.
+
+  Has meaning only if simple robust mutexes are provided.
+
+    WARNING - libraries compiled with and without this symbol defined are
+              mutually completely incompatible (the SRMs, that is).
+
+  Not defined by default.
+
+  To enable/define this symbol in a project without changing this library,
+  define project-wide symbol SimpleFutex_RobustMutexThreadTimeCheck_ON.
+}
+{$UNDEF RobustMutexThreadTimeCheck}
+{$IFDEF SimpleFutex_RobustMutexThreadTimeCheck_ON}
+  {$DEFINE RobustMutexThreadTimeCheck}
+{$ENDIF}
+
 interface
 
 uses
   SysUtils, UnixType,
-  AuxTypes, AuxClasses{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
+  AuxTypes, AuxClasses, InterlockedOps
+  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
+
+{$IF ILO_64BIT_VARS}  // constant from InterlockedOps
+  {$DEFINE SF_SimpleRobustMutex}
+{$ELSE}
+  {$UNDEF SF_SimpleRobustMutex}
+{$IFEND}
+
+{$IFDEF RobustMutexThreadTimeCheck}
+  {$DEFINE SF_SRM_TimeCheck}
+{$ELSE}
+  {$UNDEF SF_SRM_TimeCheck}
+{$ENDIF}
+
+{===============================================================================
+    Informative public constants
+===============================================================================}
+const
+  SF_SRM_AVAILABLE = {$IFDEF SF_SimpleRobustMutex}True{$ELSE}False{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
@@ -102,6 +152,8 @@ type
   ESFTimeError    = class(ESFException);
   ESFFutexError   = class(ESFException);
   ESFInvalidValue = class(ESFException);
+  ESFSignalError  = class(ESFException);
+  ESFParsingError = class(ESFException);
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -365,14 +417,15 @@ Function FutexWaitRequeuePI(var Futex: TFutexWord; Value: TFutexWord; var Futex2
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  Simple mutex behaves like a basic mutex or critical section - only one thread
-  can lock it and no other thread can lock it again until it is unlocked.
+  Simple mutex (SM) behaves like a basic mutex or critical section - only one
+  thread can lock it and no other thread can lock it again until it is unlocked.
 
   If the SM is locked, the SimpleMutexLock function will block until the SM is
   unlocked by other thread.
 
-  Calling SimpleMutexUnlock on unlocked SM is permissible, but highly
-  discouraged.
+  A call to SimpleMutexLock must be paired with SimpleMutexUnlock.
+
+  Calling SimpleMutexUnlock on an unlocked SM is allowed.
 
     WARNING - Simple mutex is not recursive. Calling SimpleMutexLock on a
               locked mutex in the same thread will block indefinitely, creating
@@ -411,22 +464,270 @@ procedure SimpleMutexUnlock(var Futex: TFutexWord);
   count was zero before the call, it will enter waiting and blocks until the
   semaphore counter becomes positive again trough a call to SimpleSemaphorePost.
 
-  SimpleSemaphorePost increments (with unsigned saturation) the count and wakes
-  exactly one waiter, if any is present.
+  SimpleSemaphorePost increments (with unsigned saturation) the count and tries
+  to wake as many waiters as is the current count.
 
   Simple semaphore does not need to be initialized explicitly - it is enough
-  to set it to any integer (note that the word is treated as unsigned, so
-  putting negative integer there is equivalet to setting it to very large
-  positive number) or zero, which can be done eg. through memory initialization.
+  to set it to any integer or zero, which can be done eg. through memory
+  initialization.
 }
 {===============================================================================
     Simple semaphore - declaration
 ===============================================================================}
 
-procedure SimpleSemaphoreInit(out Futex: TFutexWord; InitialCount: Integer);
+procedure SimpleSemaphoreInit(out Futex: TFutexWord; InitialCount: UInt32);
 
 procedure SimpleSemaphoreWait(var Futex: TFutexWord);
 procedure SimpleSemaphorePost(var Futex: TFutexWord);
+
+{$IFDEF SF_SimpleRobustMutex}
+{===============================================================================
+--------------------------------------------------------------------------------
+                               Simple robust mutex
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Simple robust mutex (SRM) behaves like simple mutex declared above - only one
+  thread can lock it and no other thread can lock it again until it is unlocked.
+  But unlike simple mutex, this object is quasi-robust (full robustness would
+  be provided by the OS, here it is not - see further). That means it can be
+  locked again if thread that locked it previously exits without unlocking it.
+
+  If the SRM is locked, the SimpleRobustMutexLock function will block until the
+  SRM is unlocked by other thread or the thread that locked it previously exits
+  (by any means - it can end, crash, exit, be terminated, whatever causes it to
+  cease to exist). If the SimpleRobustMutexLock returns, the mutex is guaranteed
+  to be locked for use by the calling thread.
+
+  A call to SimpleRobustMutexLock must be paired with SimpleRobustMutexUnlock.
+
+  Calling SimpleRobustMutexUnlock on an already unlocked SRM is allowed and
+  does not pose any problem.
+
+  SimpleRobustMutexInit initializes the mutex to an unlocked state.
+
+    WARNING - SRM is not recursive. Calling SimpleRobustMutexLock on a locked
+              mutex in the same thread will block indefinitely, creating a
+              deadlock.
+
+    NOTE - Simple robust mutex does not neeed to be explicitly initialized if
+           it is set to all zero by other means (eg. memory initialization),
+           but, in such a case, calling memory fencing instruction is highly
+           recommended (you can use eg. function ReadWriteBarrier from library
+           InterlockedOps - function SimpleRobustMutexInit calls this function
+           automatically).
+
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  And now few words on the robustness...
+
+  As mentioned previously, this object is not fully robust - full robustness
+  would necessitate a cooperation with operating system, and unfortunatelly
+  there is no way I am aware of to achieve this.
+  Note that I know about robust futex lists provided by Linux (functions
+  get_robust_list and set_robust_list and things around it), but the way they
+  are implemented precludes them from being used by multiple libraries. And
+  since glibc already uses them for posix mutexes, we cannot use them here.
+
+  So, to emulate the robustness, current implementation is following:
+
+    Initialy, the internal state of the SRM is set to all zero, which indicates
+    that the mutex is unlocked.
+
+    When any thread calls a locking function (that is, any overload of function
+    SimpleRobustMutexLock), and the SRM is unlocked by that point, the calling
+    thread stores some information about itself into the state, marking it as
+    locked, and returns immediately.
+
+    If SRM is already locked when another thread tries to lock it, then this
+    thread enters a waiting - note that unlike in simple mutex, this waiting is
+    semi-active.
+    The waiting thread is entering passive waiting on futex, but is periodically
+    awakened to check whether thread that previously locked the mutex still
+    exists within the system. Length of this periode can be changed by setting
+    CheckInterval parameter (in milliseconds). Method used to discern whether
+    the thread still lives depends on symbol RobustMutexThreadTimeCheck and
+    value of parameter CheckMethod (see further).
+    This semi-active waiting is necessary because when a lock-holding thread
+    dies, other threads that could be in infinite passive waiting would NOT be
+    awakened, creating a deadlock.
+    When waiter finds that lock-holding thread does not exist, it relocks the
+    mutex for itself and normally returns.
+
+    Methods used to check existence of lock-holding thread are following (note
+    that libraries compiled with and without the RobustMutexThreadTimeCheck
+    symbol defined are mutually incompatible):
+
+    > Symbol RobustMutexThreadTimeCheck defined
+
+        Parameter CheckMethod is ignored.
+
+        The SRM state contains locking thread's ID and its time of creation
+        (lower 32bits - see notes in implementation for details), as stored
+        in file "/proc/[tid]/stat".
+
+        First, it is checked whether the file "/proc/[tid]/stat" actually
+        exists. If it doesn't, it is assumed the thread does not live anymore.
+        When it does exist, it is opened and the creation time is parsed from
+        it. This obtained time is then checked against a value stored in the
+        SRM state. If they match, then the lock-holding thread still lives and
+        waiter enters passive period before checking again. If they do not
+        match, then it is assumed the file belongs to other thread than the one
+        that locked the mutex (it just have the same TID) and the original
+        locker is dead.
+
+        If the stat file cannot be opened (raises an exception), but it still
+        exists, then this situation is counted towards a consecutive failure
+        count.
+        Parameter MaxConsecFailCount limits how many times this can happen in a
+        row before the exception is re-raised and the locking function crashes
+        with it. Whenever the file is successfully accessed, this count is
+        reset to zero.
+        This is here to protect against situation where the stat file is only
+        temporarily inaccessible.
+
+        This check is slightly more reliable than the following ones, but it
+        does depend on stat file being accessible, and also is slightly slower
+        than other methods.
+
+    > Symbol RobustMutexThreadTimeCheck not defined
+
+        WARNING - all methods in this group assume that IDs are not frequently
+                  or even readily reused for new threads, and that situation
+                  where thread of specific ID is running within a process of
+                  specific ID is extremely rare and unlikely to happen
+                  multiple-times on short timescales.
+
+        Here, the SRM state stores locking thread's ID and ID of process this
+        thread is running within.
+
+        Parameter CheckMethod is used to select one of the following methods:
+
+        > tcmDefault, tcmSignal
+
+            Existence of a thread is checked by trying to send a signal to that
+            thread using system call kill(tid,0) (this in fact does not send
+            anything, it just checks recipient existence).
+            If this call succeeds, then it is assumed the thread of given ID
+            (tid) exists. If the call fails with error ESRCH, it is assumed the
+            thread does not exist. In case of failure with other error, an
+            exception of class ESFSignalError is raised.
+
+            But checking that the thread exists is not enough to be sure it is
+            the thread that made the lock. Therefore, the abovementioned
+            algorith is first used to check whether the locking thread (thread
+            ID) exists, then whether its parent process exists (process ID)
+            and, if both do exist, whether the given process is really a parent
+            process of that thread.
+
+            Only if all this holds true, then the locking thread is asumed to
+            be still alive, othervise it is presumed dead.
+
+        > tcmProc
+
+            This method is simple - a check is made whether directory
+            "/proc/[pid]/task/[tid]" (tid = ID if locking thread, pid = ID of
+            the locking thread's parent process) exists or not. When it does,
+            the thread exists, when it doesn't, the locking thread is presumed
+            dead.
+
+            This method of course rely on accessibility of mentioned directory.
+}
+{===============================================================================
+    Simple robust mutex - declaration
+===============================================================================}
+type
+  TSimpleRobustMutexState = record
+    case Integer of
+      0: (FullWidth:    UInt64);
+      1: (ThreadID:     pid_t;
+          ProcessID:    pid_t);
+      2: (FutexWord:    TFutexWord;
+          ThreadCTime:  UInt32);  // creation time of the locking thread
+  end;
+  PSimpleRobustMutexState = ^TSimpleRobustMutexState;
+
+{$IF SizeOf(TSimpleRobustMutexState) <> 8} // just a slight paranoia
+  {$MESSAGE FATAL 'Invalid size of simple robust mutex record.'}
+{$IFEND}
+
+//------------------------------------------------------------------------------
+type
+  // tcmDefault is equivalent to tcmSignal
+  TThreadCheckMethod = (tcmDefault,tcmSignal,tcmProc);
+
+{
+  TSimpleRobustMutexData
+
+  This structure is used to pass data in and out of SimpleRobustMutexLock call.
+
+  WARNING - this structure can be changed in the future, and therefore using
+            it and its overload of SimpleRobustMutexLock is not recommended.
+
+    CheckInterval (in)      - Number of milliseconds to wait between checks
+                              whether the thread that previously locked the
+                              mutex we are trying to acquire still lives.
+
+    CheckMethod (in,out)    - Method that should be used to check whether the
+                              locking thread still lives.
+                              When symbol RobustMutexThreadTimeCheck is defined,
+                              then it will be always changed to tcmDefault upon
+                              return from the locking call, irrespective of its
+                              previous value. If this symbol is not defined,
+                              then it will not change during the call.
+
+    CheckCount (out)        - Indicates how many times the call checked whether
+                              the locking thread still lives. It will be zero
+                              if the SRM was unlocked and immediately acquired.
+
+    FailCount (out)         - Contains total number of failures to obtain
+                              locking thread creation time.
+                              Used only when RobustMutexThreadTimeCheck is
+                              defined, otherwise it will always be zero upon
+                              return.
+
+    MaxConsecFailCount (in) - Maximum number of consecutive failures to read
+                              lock-holding thread creation time before an
+                              exception is raised.
+                              Used only when RobustMutexThreadTimeCheck is
+                              defined, otherwise it is ignored.
+
+    ConsecFailCount (out)   - Number of consecutive failures to obtain thread
+                              creation time in the last failure sequence.
+                              This field is used only internally. It is reset
+                              everytime a successful read is done, therefore it
+                              will usually contain zero.
+                              Used only when RobustMutexThreadTimeCheck is
+                              defined.
+
+  If some details in field descriptions are not clear, then refer higher to
+  description of SRM itself, part where robustness is talked about.
+}
+  TSimpleRobustMutexData = record
+    CheckInterval:      UInt32;
+    CheckMethod:        TThreadCheckMethod;
+    CheckCount:         Integer;
+    FailCount:          Integer;
+    MaxConsecFailCount: Integer;
+    ConsecFailCount:    Integer;
+  end;
+
+//------------------------------------------------------------------------------
+
+procedure SimpleRobustMutexInit(out RobustMutex: TSimpleRobustMutexState);
+
+{
+  The first overload of SimpleRobustMutexLock (the one with Data parameter)
+  is intended for debugging. You can use it if you wish, but it is generally
+  not recommended as the type TSimpleRobustMutexData can change in the future.
+}
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; var Data: TSimpleRobustMutexData); overload;
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; CheckInterval: UInt32 = 100; CheckMethod: TThreadCheckMethod = tcmDefault); overload;
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; CheckMethod: TThreadCheckMethod); overload;
+
+procedure SimpleRobustMutexUnlock(var RobustMutex: TSimpleRobustMutexState);
+
+{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -440,36 +741,54 @@ procedure SimpleSemaphorePost(var Futex: TFutexWord);
   Instance can either be created as standalone or as shared.
 
     Standalone instance is created by constructor that does not expect an
-    external Futex variable. The futex is completely internal and is managed
+    external state variable. The state is completely internal and is managed
     automatically. To properly use it, create one instance and use this one
     object in all synchronizing threads.
 
-    Shared instace expects pre-existing futex variable to be passed to the
-    constructor. This futex is then used for locking. To use this mode,
-    allocate a futex variable and create new instance from this one futex for
-    each synchronizing thread. Note that you are responsible for futex
-    management (initialization, finalization).
+    Shared instace expects pre-existing state variable (be it futex word for
+    simple mutex and simple semaphore, or TSimpleRobustMutexState variable
+    for simple robust mutex) to be passed to the constructor. This state is
+    then used for locking. To use this mode, allocate a state variable and
+    create new instance from this one state for each synchronizing thread.
+    Note that you are responsible for state management (initialization,
+    finalization) - you can use methods Init and Final to do so if you do not
+    want to use procedural interface (note that these methods will always
+    initialize and finalize the state whether it is in a shared instance or
+    standalone instance).
 }
+type
+{$IFDEF SF_SimpleRobustMutex}
+  TSimpleSynchronizerState = array[0..Pred(SizeOf(TSimpleRobustMutexState))] of Byte;
+{$ELSE}
+  TSimpleSynchronizerState = array[0..Pred(SizeOf(TFutexWord))] of Byte;
+{$ENDIF}
+  PSimpleSynchronizerState = ^TSimpleSynchronizerState;
+
 {===============================================================================
     TSimpleSynchronizer - class declaration
 ===============================================================================}
 type
   TSimpleSynchronizer = class(TCustomObject)
   protected
-    fLocalFutex:  TFutexWord;
-    fFutexPtr:    PFutexWord;
-    fOwnsFutex:   Boolean;
-    procedure Initialize(var Futex: TFutexWord); virtual;
+    fLocalState:  TSimpleSynchronizerState;
+    fStatePtr:    PSimpleSynchronizerState;
+    fOwnsState:   Boolean;
+    procedure Initialize(StatePtr: PSimpleSynchronizerState); virtual;
     procedure Finalize; virtual;
   public
     constructor Create(var Futex: TFutexWord); overload; virtual;
+  {$IFDEF SF_SimpleRobustMutex}
+    constructor Create(var SimpleRobustMutexState: TSimpleRobustMutexState); overload; virtual;
+  {$ENDIF}
     constructor Create; overload; virtual;
     destructor Destroy; override;
+    procedure Init; virtual;
+    procedure Final; virtual;
   end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                                  TSimpleMMutex
+                                  TSimpleMutex
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
@@ -478,8 +797,9 @@ type
 type
   TSimpleMutex = class(TSimpleSynchronizer)
   protected
-    procedure Initialize(var Futex: TFutexWord); override;
+    procedure Initialize(StatePtr: PSimpleSynchronizerState); override;
   public
+    procedure Init; override;
     procedure Enter; virtual;
     procedure Leave; virtual;
   end;
@@ -495,19 +815,47 @@ type
 type
   TSimpleSemaphore = class(TSimpleSynchronizer)
   protected
-    fInitialCount:  Integer;
-    procedure Initialize(var Futex: TFutexWord); override;
+    fInitialCount:  UInt32;
+    procedure Initialize(StatePtr: PSimpleSynchronizerState); override;
   public
-    constructor CreateAndInitCount(InitialCount: Integer); overload; virtual;
+    constructor CreateAndInitCount(InitialCount: UInt32); overload; virtual;
+    procedure Init; override; // initialzes to a value of property InitialCount
     procedure Acquire; virtual;
     procedure Release; virtual;
+  {
+    Note that if this object is created using constructors without InitialCount
+    argument (ie. initial count is not explicitly given during construction),
+    then property InitialCount is set to a value present in the semaphore's
+    state during the construction, which might not be a value you expect.
+  }
+    property InitialCount: UInt32 read fInitialCount write fInitialCount;
   end;
+
+{$IFDEF SF_SimpleRobustMutex}
+{===============================================================================
+--------------------------------------------------------------------------------
+                               TSimpleRobustMutex
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRobustMutex - class declaration
+===============================================================================}
+type
+  TSimpleRobustMutex = class(TSimpleSynchronizer)
+  protected
+    procedure Initialize(StatePtr: PSimpleSynchronizerState); override;
+  public
+    procedure Init; override;
+    procedure Enter; virtual;
+    procedure Leave; virtual;
+  end;
+{$ENDIF}
 
 implementation
 
 uses
-  BaseUnix, Linux, Errors,
-  InterlockedOps;
+  BaseUnix, Linux, Errors{$IFDEF SF_SimpleRobustMutex}, Syscall{$ENDIF},
+  Classes, Math;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -560,7 +908,6 @@ const
 {===============================================================================
     Futex wrappers - internals
 ===============================================================================}
-
 const
   MSECS_PER_SEC  = 1000;
   NSECS_PER_SEC  = 1000000000;
@@ -1057,26 +1404,24 @@ If ResVal <> 0 then
 else Result := fwrWoken;
 end;
 
-{===============================================================================
---------------------------------------------------------------------------------
-                                  Simple Mutex
---------------------------------------------------------------------------------
-===============================================================================}
-{===============================================================================
-    Simple Mutex - constants
-===============================================================================}
-const
-  SF_STATE_UNLOCKED = 0;
-  SF_STATE_LOCKED   = 1;
-  SF_STATE_WAITERS  = -1;
 
 {===============================================================================
-    Simple Mutex - implementation
+--------------------------------------------------------------------------------
+                                  Simple mutex
+--------------------------------------------------------------------------------
+===============================================================================}
+const
+  SF_SM_UNLOCKED = 0;
+  SF_SM_LOCKED   = -1;
+
+{===============================================================================
+    Simple mutex - implementation
 ===============================================================================}
 
 procedure SimpleMutexInit(out Futex: TFutexWord);
 begin
-Futex := SF_STATE_UNLOCKED;
+Futex := SF_SM_UNLOCKED;
+ReadWriteBarrier;
 end;
 
 //------------------------------------------------------------------------------
@@ -1086,40 +1431,36 @@ var
   OrigState:  TFutexWord;
 begin
 {
-  Check if mutex is unlocked.
+  Conditionally set value of mutex (futex word) to locked if it was previously
+  unlocked and store its previous value.
 
-  If it is NOT, set state to locked.
-
-  If it was locked or locked with waiters (ie. not unlocked), do nothing and
-  leave the current state.
+  In theory, unconditional exchange can be used here, but meh...
 }
-OrigState := InterlockedCompareExchange(Futex,SF_STATE_LOCKED,SF_STATE_UNLOCKED);
+OrigState := InterlockedCompareExchange(Futex,SF_SM_LOCKED,SF_SM_UNLOCKED);
 {
-  If the original state was unlocked, just return because we now have lock with
-  no waiter (state was set to locked).
+  If previous value of mutex was unlocked, then it means it is now locked for
+  us and we can just return.
+
+  If it was not unlocked, then it means some other thread has it locked for
+  itself...
 }
-If OrigState <> SF_STATE_UNLOCKED then
+while OrigState <> SF_SM_UNLOCKED do
   begin
   {
-    Mutex was locked or locked with waiters...
+    ...therefore we enter waiting.
 
-    Check if there were waiters (OrigValue would be less than 0). If not, set
-    state to locked with waiters because we will enter waiting.
+    Note that if the mutex has bad value (not SF_STATE_LOCKED), then the
+    FutexWait returns immediatelly. Such situation would lead to rapid calls
+    to FutexWait if next exchange was conditional - for that reason we use
+    unconditional exchange next.
   }
-    If OrigState > SF_STATE_UNLOCKED then
-      OrigState := InterlockedExchange(Futex,SF_STATE_WAITERS);
+    FutexWait(Futex,SF_SM_LOCKED);
   {
-    Wait in a loop until state of the mutex becomes unlocked.
-
-    Note that if we acquire lock here, the state of the mutex will stay locked
-    with waiter, even when there might be none - this is not a problem.
+    At this point, if value of mutex was unlocked, then we lock it for us and
+    exit. If it was locked, then nothing is changed (at most bad lock value is
+    replaced with a correct one) and the while cycle repeats.
   }
-    while OrigState <> SF_STATE_UNLOCKED do
-      begin
-        FutexWait(Futex,SF_STATE_WAITERS);
-        // we don't know why the wait ended, so...
-        OrigState := InterlockedExchange(Futex,SF_STATE_WAITERS);
-      end;
+    OrigState := InterlockedExchange(Futex,SF_SM_LOCKED);
   end;
 end;
 
@@ -1128,23 +1469,17 @@ end;
 procedure SimpleMutexUnlock(var Futex: TFutexWord);
 begin
 {
-  Decrement the futex and check its current state.
+  We only set the mutex to unlocked, nothing more is done (simple mutex is not
+  recursive or ony of such complications).
 
-  If it is other than unlocked, it means there were waiters (if we discount
-  the possibility that it was already unlocked, which is an erroneous state at
-  this point, but in that case no harm will be done). In any case set it to
-  unlocked.
+  If the mutex was locked, then always try to wake one waiter, even if there
+  can be none (keep it simple). If it was unlocked (this function was called
+  erroneously), then do nothing.
 }
-If InterlockedDecrement(Futex) <> SF_STATE_UNLOCKED then
-  InterlockedStore(Futex,SF_STATE_UNLOCKED);
-{
-  Wake only one waiter, waking all is pointless because only one thread will
-  be able to acquire the lock and others would just re-enter waiting.
-
-  Always call FutexWake, in case some waiters were requeued to Futex.
-}
-FutexWake(Futex,1);
+If InterlockedExchange(Futex,SF_SM_UNLOCKED) <> SF_SM_UNLOCKED then
+  FutexWake(Futex,1);
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1152,31 +1487,30 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 
-Function SemPostItrLckOp(A,B: TFutexUWord): TFutexUWord; register;
+Function SemPostItrLckOp(A: TFutexUWord; var ItrLckResult: TFutexUWord): TFutexUWord; register;
 begin
-If A < B then
+If A < TFutexUWord($FFFFFFFF) then
   Result := A + 1
 else
-  Result := B;
+  Result := TFutexUWord($FFFFFFFF);
+ItrLckResult := Result;
 end;
 
 {===============================================================================
     Simple semaphore - implementation
 ===============================================================================}
 
-procedure SimpleSemaphoreInit(out Futex: TFutexWord; InitialCount: Integer);
+procedure SimpleSemaphoreInit(out Futex: TFutexWord; InitialCount: UInt32);
 begin
-If InitialCount >= 0 then
-  Futex := InitialCount
-else
-  raise ESFInvalidValue.CreateFmt('SimpleSemaphoreInit: Invalid initial count (%d).',[InitialCount]);
+Futex := InitialCount;
+ReadWriteBarrier;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure SimpleSemaphoreWait(var Futex: TFutexWord);
 var
-  OldCount: TFutexWord;
+  OldCount: TFutexUWord;
 begin
 repeat
 {
@@ -1185,7 +1519,7 @@ repeat
   If it was above zero, then just return since the semaphore was signaled.
 }
   OldCount := InterlockedDecrementIfPositive(TFutexUWord(Futex));
-  If OldCount = 0 then
+  If OldCount <= 0 then
     FutexWait(Futex,0);
 until OldCount > 0;
 end;
@@ -1193,21 +1527,280 @@ end;
 //------------------------------------------------------------------------------
 
 procedure SimpleSemaphorePost(var Futex: TFutexWord);
-const
-  SEM_MAX = TFutexUWord($FFFFFFFF);
+var
+  NewValue: TFutexUWord;
 begin
 {
-  Atomically increments the futex word, but only when it is below SEM_MAX,
-  if at or above this value then nothing is done (the word is not incremented
-  to prevent overflow to zero)
-
-  Call FutexWake in any case, since the counter will always be a positive
-  number.
+  Atomically increments the futex word, but only when it is below a maximum
+  value it can hold, if at this value then nothing is done (the word is not
+  incremented to prevent overflow to zero).
 }
-InterlockedExchangeOp(TFutexUWord(Futex),SEM_MAX,@SemPostItrLckOp);
-FutexWake(Futex,1);
+NewValue := InterlockedOperation(TFutexUWord(Futex),@SemPostItrLckOp);
+// wake as many waiters as the semaphore can serve
+while NewValue > 0 do
+  begin
+    FutexWake(Futex,Integer(NewValue and $7FFFFFFF));
+    NewValue := NewValue - (NewValue and $7FFFFFFF);
+  end;
 end;
 
+
+{$IFDEF SF_SimpleRobustMutex}
+{===============================================================================
+--------------------------------------------------------------------------------
+                               Simple robust mutex
+--------------------------------------------------------------------------------
+===============================================================================}
+const
+  SF_SRM_UNLOCKED = 0;
+
+{===============================================================================
+    Simple robust mutex - externals
+===============================================================================}
+
+Function errno_ptr: pcInt; cdecl; external name '__errno_location';
+
+Function kill(pid: pid_t; sig: cint): cint; cdecl; external;
+
+Function getpgid(pid: pid_t): pid_t; cdecl; external;
+
+Function getpid: pid_t; cdecl; external;
+
+//------------------------------------------------------------------------------
+
+Function gettid: pid_t;
+begin
+Result := do_syscall(syscall_nr_gettid);
+end;
+
+{===============================================================================
+    Simple robust mutex - internals
+===============================================================================}
+{$IFDEF SF_SRM_TimeCheck}
+threadvar
+  TVAR_ThreadCreationTime:      UInt32;
+  TVAR_HaveThreadCreationTime:  Boolean;
+
+//------------------------------------------------------------------------------
+
+Function GetThreadCreationTime(ThreadID: pid_t): UInt32;
+const
+  READ_SIZE = 1024;
+var
+  BufferString:   AnsiString;
+  SlidingBuffer:  PAnsiChar;
+  BytesRead:      Integer;
+  TokenCount:     Integer;
+  i:              TStrOff;
+  TokenStart:     TStrOff;
+  TokenLength:    TStrSize;
+begin
+{
+  Load the file - we must use following contrived reading because the stat file
+  is opened with zero size.
+}
+with TFileStream.Create(Format('/proc/%d/stat',[ThreadID]),fmOpenRead or fmShareDenyWrite) do
+try
+  SetLength(BufferString,READ_SIZE);
+  repeat
+    SlidingBuffer := PAnsiChar(Addr(BufferString[Succ(Length(BufferString) - READ_SIZE)]));
+    BytesRead := Read(SlidingBuffer^,READ_SIZE);
+    If BytesRead >= READ_SIZE then
+      SetLength(BufferString,Length(BufferString) + READ_SIZE)
+    else
+      SetLength(BufferString,Length(BufferString) - READ_SIZE + BytesRead);
+  until BytesRead < READ_SIZE;
+finally
+  Free;
+end;
+// parse-out the start time (22nd field)
+Result := 0;
+If Length(BufferString) > 0 then
+  begin
+  {
+    Fields in the string are separated with spaces (#32), we are interested
+    only in the field 22, which contains time of creation of the given thread.
+
+    Note that we are taking only lower 32 bits of the number, higher places are
+    ignored - since the time is usually stored with resolution of 10ms, the
+    lower places we are taking will only overflow in more than one year, which
+    should be long enough time for our purpose.
+  }
+    TokenCount := 0;
+    TokenStart := 1;
+    TokenLength := 0;
+    For i := 1 to Length(BufferString) do
+      If Ord(BufferString[i]) = 32 then
+        begin
+          Inc(TokenCount);
+          If TokenCount = 22 then
+            begin
+              If TokenLength <= 0 then
+                raise ESFParsingError.Create('GetThreadCreationTime: Empty token.');
+              Result := UInt32(StrToQWord(Copy(BufferString,TokenStart,TokenLength)));
+              Exit; // we have what we need
+            end;
+          TokenStart := Succ(i);
+          TokenLength := 0;
+        end
+      else Inc(TokenLength);
+    // if here, it means the time was not parsed out
+    raise ESFParsingError.Create('GetThreadCreationTime: Thread creation time not found.');
+  end
+else raise ESFParsingError.Create('GetThreadCreationTime: No data for parsing.');
+end;
+
+{$ELSE}//-----------------------------------------------------------------------
+
+Function TrySignalThread(ThreadID: pid_t): Boolean;
+var
+  ErrorNumber:  cint;
+begin
+Result := kill(ThreadID,0) = 0;
+If not Result then
+  begin
+    ErrorNumber := errno_ptr^;
+    If ErrorNumber <> ESysESRCH then
+      raise ESFSignalError.CreateFmt('TrySignalThread: Failed to probe process (%d).',[ErrorNumber]);
+  end;
+end;
+
+{$ENDIF}
+//------------------------------------------------------------------------------
+
+Function LockingThreadLives(MutexValue: TSimpleRobustMutexState; var Data: TSimpleRobustMutexData): Boolean;
+begin
+Inc(Data.CheckCount);
+{$IFDEF SF_SRM_TimeCheck}
+try
+  If FileExists(Format('/proc/%d/stat',[MutexValue.ThreadID])) then
+    begin
+      Result := GetThreadCreationTime(MutexValue.ThreadID) = MutexValue.ThreadCTime;
+      Data.ConsecFailCount := 0;
+    end
+  else Result := False;
+except
+  If FileExists(Format('/proc/%d/stat',[MutexValue.ThreadID])) then
+    begin
+      If Data.ConsecFailCount < Data.MaxConsecFailCount then
+        begin
+          Inc(Data.ConsecFailCount);
+          Inc(Data.FailCount);
+        end
+      else raise; // re-raise the exception
+    end
+  else Result := False;
+end;
+{$ELSE}
+case Data.CheckMethod of
+  tcmProc:  Result := DirectoryExists(Format('/proc/%d/task/%d',[MutexValue.ProcessID,MutexValue.ThreadID]));
+else
+ {tcmDefault,tcmSignal}
+  If TrySignalThread(MutexValue.ProcessID) and TrySignalThread(MutexValue.ThreadID) then
+    Result := getpgid(MutexValue.ThreadID) = MutexValue.ProcessID
+  else
+    Result := False;
+end;
+{$ENDIF}
+end;
+
+{===============================================================================
+    Simple robust mutex - implementation
+===============================================================================}
+
+procedure SimpleRobustMutexInit(out RobustMutex: TSimpleRobustMutexState);
+begin
+RobustMutex.FullWidth := 0;
+ReadWriteBarrier;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; var Data: TSimpleRobustMutexData);
+var
+  NewValue:     TSimpleRobustMutexState;
+  OldValue:     TSimpleRobustMutexState;
+{$IFDEF SF_SRM_TimeCheck}
+  FailCounter:  Integer;
+{$ENDIF}
+begin
+// prepare variables
+{$IFDEF SF_SRM_TimeCheck}
+Data.CheckMethod := tcmDefault;
+{$ENDIF}
+Data.CheckCount := 0;
+Data.FailCount := 0;
+Data.ConsecFailCount := 0;
+NewValue.ThreadID := gettid;
+{$IFDEF SF_SRM_TimeCheck}
+If not TVAR_HaveThreadCreationTime then
+  begin
+    // make sure we get the time
+    FailCounter := 100;
+    while True do
+      try
+        TVAR_ThreadCreationTime := GetThreadCreationTime(NewValue.ThreadID);
+        Break{while}
+      except
+        If FailCounter > 0 then
+          begin
+            Dec(FailCounter); // eat the errors
+            Sleep(10);
+          end
+        else raise;
+      end;
+    TVAR_HaveThreadCreationTime := True;
+  end;
+NewValue.ThreadCTime := TVAR_ThreadCreationTime;
+{$ELSE}
+NewValue.ProcessID := getpid;
+{$ENDIF}
+// and now the locking...
+OldValue.FullWidth := InterlockedCompareExchange(RobustMutex.FullWidth,NewValue.FullWidth,SF_SRM_UNLOCKED);
+while OldValue.FullWidth <> SF_SRM_UNLOCKED do
+  begin
+    If not LockingThreadLives(OldValue,Data) then
+      If InterlockedCompareExchange(RobustMutex.FullWidth,NewValue.FullWidth,OldValue.FullWidth) = OldValue.FullWidth then
+        Break{while};
+    FutexWait(RobustMutex.FutexWord,OldValue.FutexWord,Data.CheckInterval);
+    OldValue.FullWidth := InterlockedCompareExchange(RobustMutex.FullWidth,NewValue.FullWidth,SF_SRM_UNLOCKED);
+  end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; CheckInterval: UInt32 = 100; CheckMethod: TThreadCheckMethod = tcmDefault);
+var
+  TempData:  TSimpleRobustMutexData;
+begin
+TempData.CheckInterval := CheckInterval;
+TempData.CheckMethod := CheckMethod;
+If CheckInterval <> 0 then
+  // give it at least one second of time...
+  TempData.MaxConsecFailCount := Ceil(1000 / CheckInterval)
+else
+  // someone wants to play dirty...
+  TempData.MaxConsecFailCount := 10;
+SimpleRobustMutexLock(RobustMutex,TempData);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; CheckMethod: TThreadCheckMethod);
+begin
+SimpleRobustMutexLock(RobustMutex,250,CheckMethod);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SimpleRobustMutexUnlock(var RobustMutex: TSimpleRobustMutexState);
+begin
+If InterlockedExchange(RobustMutex.FullWidth,SF_SRM_UNLOCKED) <> SF_SRM_UNLOCKED then
+  FutexWake(RobustMutex.FutexWord,1);
+end;
+
+
+{$ENDIF}
 {===============================================================================
 --------------------------------------------------------------------------------
                                TSimpleSynchronizer
@@ -1220,11 +1813,11 @@ end;
     TSimpleSynchronizer - protected methods
 -------------------------------------------------------------------------------}
 
-procedure TSimpleSynchronizer.Initialize(var Futex: TFutexWord);
+procedure TSimpleSynchronizer.Initialize(StatePtr: PSimpleSynchronizerState);
 begin
-fLocalFutex := 0;
-fFutexPtr := @Futex;
-fOwnsFutex := fFutexPtr = Addr(fLocalFutex);
+FillChar(fLocalState,SizeOf(TSimpleSynchronizerState),0);
+fStatePtr := StatePtr;
+fOwnsState := fStatePtr = Addr(fLocalState);
 end;
 
 //------------------------------------------------------------------------------
@@ -1241,15 +1834,25 @@ end;
 constructor TSimpleSynchronizer.Create(var Futex: TFutexWord);
 begin
 inherited Create;
-Initialize(Futex);
+Initialize(PSimpleSynchronizerState(@Futex));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+{$IFDEF SF_SimpleRobustMutex}
+constructor TSimpleSynchronizer.Create(var SimpleRobustMutexState: TSimpleRobustMutexState);
+begin
+inherited Create;
+Initialize(PSimpleSynchronizerState(@SimpleRobustMutexState));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+{$ENDIF}
+
 constructor TSimpleSynchronizer.Create;
 begin
 inherited Create;
-Initialize(fLocalFutex);
+Initialize(@fLocalState);
 end;
 
 //------------------------------------------------------------------------------
@@ -1259,6 +1862,21 @@ begin
 Finalize;
 inherited;
 end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleSynchronizer.Init;
+begin
+// do nothing here, implement in descendants when necessary
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleSynchronizer.Final;
+begin
+// do nothing here, implement in descendants when necessary
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1272,28 +1890,36 @@ end;
     TSimpleMutex - protected methods
 -------------------------------------------------------------------------------}
 
-procedure TSimpleMutex.Initialize(var Futex: TFutexWord);
+procedure TSimpleMutex.Initialize(StatePtr: PSimpleSynchronizerState);
 begin
 inherited;
-If fOwnsFutex then
-  SimpleMutexInit(fFutexPtr^);
+If fOwnsState then
+  SimpleMutexInit(PFutexWord(fStatePtr)^);
 end;
 
 {-------------------------------------------------------------------------------
     TSimpleMutex - public methods
 -------------------------------------------------------------------------------}
 
+procedure TSimpleMutex.Init;
+begin
+SimpleMutexInit(PFutexWord(fStatePtr)^);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TSimpleMutex.Enter;
 begin
-SimpleMutexLock(fFutexPtr^);
+SimpleMutexLock(PFutexWord(fStatePtr)^);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleMutex.Leave;
 begin
-SimpleMutexUnlock(fFutexPtr^);
+SimpleMutexUnlock(PFutexWord(fStatePtr)^);
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1307,36 +1933,91 @@ end;
     TSimpleSemaphore - protected methods
 -------------------------------------------------------------------------------}
 
-procedure TSimpleSemaphore.Initialize(var Futex: TFutexWord);
+procedure TSimpleSemaphore.Initialize(StatePtr: PSimpleSynchronizerState);
 begin
-inherited;
-If fOwnsFutex then
-  SimpleSemaphoreInit(fFutexPtr^,0);
+inherited Initialize(StatePtr);
+If fOwnsState then
+  SimpleSemaphoreInit(PFutexWord(fStatePtr)^,0);
+fInitialCount := UInt32(InterlockedLoad(PFutexWord(fStatePtr)^));
 end;
 
 {-------------------------------------------------------------------------------
     TSimpleSemaphore - public methods
 -------------------------------------------------------------------------------}
 
-constructor TSimpleSemaphore.CreateAndInitCount(InitialCount: Integer);
+constructor TSimpleSemaphore.CreateAndInitCount(InitialCount: UInt32);
 begin
 inherited Create;
-SimpleSemaphoreInit(fFutexPtr^,InitialCount);
+SimpleSemaphoreInit(PFutexWord(fStatePtr)^,InitialCount);
+fInitialCount := InitialCount;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleSemaphore.Init;
+begin
+SimpleSemaphoreInit(PFutexWord(fStatePtr)^,fInitialCount);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleSemaphore.Acquire;
 begin
-SimpleSemaphoreWait(fFutexPtr^);
+SimpleSemaphoreWait(PFutexWord(fStatePtr)^);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleSemaphore.Release;
 begin
-SimpleSemaphorePost(fFutexPtr^);
+SimpleSemaphorePost(PFutexWord(fStatePtr)^);
 end;
+
+
+{$IFDEF SF_SimpleRobustMutex}
+{===============================================================================
+--------------------------------------------------------------------------------
+                               TSimpleRobustMutex
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRobustMutex - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TSimpleRobustMutex - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRobustMutex.Initialize(StatePtr: PSimpleSynchronizerState);
+begin
+inherited Initialize(StatePtr);
+If fOwnsState then
+  SimpleRobustMutexInit(PSimpleRobustMutexState(fStatePtr)^);
+end;
+
+{-------------------------------------------------------------------------------
+    TSimpleRobustMutex - public methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRobustMutex.Init;
+begin
+SimpleRobustMutexInit(PSimpleRobustMutexState(fStatePtr)^);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRobustMutex.Enter;
+begin
+SimpleRobustMutexLock(PSimpleRobustMutexState(fStatePtr)^);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRobustMutex.Leave;
+begin
+SimpleRobustMutexUnlock(PSimpleRobustMutexState(fStatePtr)^);
+end;
+
+{$ENDIF}
 
 end.
 
