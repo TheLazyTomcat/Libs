@@ -36,7 +36,7 @@
   Dependencies:
   * AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
 
-    AuxTypes is only required when compiled in Delphi.
+  AuxTypes is only required when compiled in Delphi.
 
 ===============================================================================}
 unit WinTaskbarProgress;

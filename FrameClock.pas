@@ -112,7 +112,7 @@
   Dependencies:
     AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
-    AuxMath       - github.com/TheLazyTomcat/Lib.AuxMath
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
 
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol FrameClock_UseAuxExceptions for details).
@@ -120,7 +120,6 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect     - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils

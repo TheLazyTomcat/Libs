@@ -26,7 +26,7 @@
 
   Version 1.2 (2024-08-23)
 
-  Last change 2024-08-23
+  Last change 2024-09-09
 
   ©2021-2024 František Milt
 
@@ -47,7 +47,7 @@
   Dependencies:
     AuxClasses     - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
-    AuxMath        - github.com/TheLazyTomcat/Lib.AuxMath
+    AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
 
   Library AuxExceptions is required only when rebasing local exception classes
@@ -56,7 +56,6 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect     - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils

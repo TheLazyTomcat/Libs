@@ -27,7 +27,7 @@
 
   Version 1.0.1 (2022-10-25)
 
-  Last change 2022-10-25
+  Last change 2024-09-09
 
   ©2022 František Milt
 
@@ -52,7 +52,6 @@
 
   Indirect dependencies:
     AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
-    AuxMath            - github.com/TheLazyTomcat/Lib.AuxMath
     InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex

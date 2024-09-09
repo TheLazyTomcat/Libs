@@ -39,7 +39,7 @@
 
   Version 1.2.1 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-09-09
 
   ©2016-2024 František Milt
 
@@ -72,7 +72,6 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    AuxMath            - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase

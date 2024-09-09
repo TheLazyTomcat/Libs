@@ -25,7 +25,7 @@
 
   Version 2.0 (2021-04-05)
 
-  Last change 2024-05-02
+  Last change 2024-09-09
 
   ©2016-2024 František Milt
 
@@ -49,6 +49,8 @@
   * SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
   SimpleCPUID is required only when PurePascal symbol is not defined.
+
+  Library SimpleCPUID might also be required as an indirect dependency.
 
   Indirect dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses

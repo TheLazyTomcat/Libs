@@ -33,7 +33,7 @@
 
   Version 1.1.1 (2024-05-15)
 
-  Last change 2024-05-15
+  Last change 2024-09-09
 
   ©2022-2024 František Milt
 
@@ -63,7 +63,6 @@
 
   Indirect dependencies:
     AuxExceptions       - github.com/TheLazyTomcat/Lib.AuxExceptions
-    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     BitOps              - github.com/TheLazyTomcat/Lib.BitOps

@@ -32,7 +32,7 @@
 
   Version 1.1 (2024-05-15)
 
-  Last change 2024-05-15
+  Last change 2024-09-09
 
   ©2022-2024 František Milt
 
@@ -57,6 +57,7 @@
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     BitVector          - github.com/TheLazyTomcat/Lib.BitVector
     InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    NamedSharedItems   - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
     SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
 
@@ -66,9 +67,10 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
+    SHA1                - github.com/TheLazyTomcat/Lib.SHA1
     SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect

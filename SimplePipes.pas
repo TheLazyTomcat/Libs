@@ -50,7 +50,7 @@
 
   Version 1.1.2 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-09-09
 
   ©2022-2024 František Milt
 
@@ -85,7 +85,6 @@
   dependencies.
 
   Indirect dependencies:
-    AuxMath            - github.com/TheLazyTomcat/Lib.AuxMath
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     BitOps             - github.com/TheLazyTomcat/Lib.BitOps
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase

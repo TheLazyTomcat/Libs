@@ -29,7 +29,7 @@
 
   Version 1.2.4 (2024-08-19)
 
-  Last change 2024-08-19
+  Last change 2024-08-23
 
   ©2015-2024 František Milt
 
@@ -64,7 +64,6 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    AuxMath        - github.com/TheLazyTomcat/Lib.AuxMath
     InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID

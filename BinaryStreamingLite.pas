@@ -54,17 +54,17 @@
       github.com/TheLazyTomcat/Lib.BinaryStreamingLite
 
   Dependencies:
-   *AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions  
-    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes       
-    StrRect       - github.com/TheLazyTomcat/Lib.StrRect   
+  * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
 
-  Library AuxExceptions is required only when rebasing local exception
-  classes (see symbol BinaryStreamingLite_UseAuxExceptions for details).
+  Library AuxExceptions is required only when rebasing local exception classes
+  (see symbol BinaryStreamingLite_UseAuxExceptions for details).
 
   Indirect dependencies:
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
     UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
-    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo    
+    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit BinaryStreamingLite;

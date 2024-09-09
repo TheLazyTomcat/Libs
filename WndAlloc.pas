@@ -58,7 +58,7 @@
 
   Version 1.2.2 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-08-23
 
   ©2015-2024 František Milt
 
@@ -78,7 +78,7 @@
 
   Dependencies:
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
-    AuxMath       - github.com/TheLazyTomcat/Lib.AuxMath
+    AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
   * SimpleCPUID   - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect       - github.com/TheLazyTomcat/Lib.StrRect
 
@@ -91,7 +91,6 @@
   dependencies.
 
   Indirect dependencies:
-    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
     UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
     WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
