@@ -44,7 +44,7 @@
 
   Version 2.0.3 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-10-04
 
   ©2017-2024 František Milt
 
@@ -484,6 +484,32 @@ type
     Function IndexOf(Stage: TPTStageID; out SuperStage: TPTStageID): Integer; overload; virtual;
     Function IndexOf(Stage: TPTStageID): Integer; overload; virtual;
     Function IndexOfIn(SuperStage,Stage: TPTStageID): Integer; virtual;
+  {
+    Find
+
+      Tries to find stage with given ID within its respective superstage.
+      If it is found, then output parameter SuperStage (in the first overload)
+      will contain ID of superstage for which the searched stage is a substage
+      (this ID can be set to PT_STAGEID_MASTER, indicating the stage is a root
+      stage), Index will contain its position within the superstage and result
+      will be True.
+      When not found, then result is set to False and values of SuperStage and
+      Index are undefined.
+
+    FindIn
+
+      Tries to find stage with given ID within given superstage.
+      If found, then parameter Index will be set to its index with the given
+      superstage and result will be True.
+      If the stage is not a substage of selected superstage or when the
+      SuperStage does not point to a valid stage, then result is set to False
+      and value of Index is undefined.
+
+      SuperStage can be set to PT_STAGEID_MASTER to get index of root stage.
+  }
+    Function Find(Stage: TPTStageID; out SuperStage: TPTStageID; out Index: Integer): Boolean; overload; virtual;
+    Function Find(Stage: TPTStageID; out Index: Integer): Boolean; overload; virtual;
+    Function FindIn(SuperStage,Stage: TPTStageID; out Index: Integer): Boolean; virtual;
   {
     Add
 
@@ -1345,8 +1371,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf(Node);
-If CheckIndex(Index) then
+If Find(Node,Index) then
   begin
     Result := fSubStages[Index];
     For i := Index to Pred(HighIndex) do
@@ -1367,8 +1392,7 @@ var
   Index:  Integer;
   i:      Integer;
 begin
-Index := IndexOf(SubStage);
-If CheckIndex(Index) then
+If Find(SubStage,Index) then
   begin
     Result := fSubStages[Index];
     For i := Index to Pred(HighIndex) do
@@ -1386,8 +1410,7 @@ end;
 
 Function TProgressStageNode.Remove(Node: TProgressStageNode): Integer;
 begin
-Result := IndexOf(Node);
-If CheckIndex(Result) then
+If Find(Node,Result) then
   Delete(Result);
 end;
 
@@ -1395,8 +1418,7 @@ end;
 
 Function TProgressStageNode.Remove(SubStage: TPTStageID): Integer;
 begin
-Result := IndexOf(SubStage);
-If CheckIndex(Result) then
+If Find(SubStage,Result) then
   Delete(Result);
 end;
 
@@ -2052,6 +2074,49 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TProgressTracker.Find(Stage: TPTStageID; out SuperStage: TPTStageID; out Index: Integer): Boolean;
+begin
+Result := False;
+SuperStage := PT_STAGEID_INVALID;
+Index := -1;
+If StageIDAssigned(Stage) then
+  If Assigned(fStages[Integer(Stage)].SuperStageNode) then
+    begin
+      SuperStage := fStages[Integer(Stage)].SuperStageNode.ID;
+      If StageIDAssigned(SuperStage) then
+        begin
+          Index := fStages[Integer(Stage)].SuperStageNode.IndexOf(Stage);
+          Result := fStages[Integer(Stage)].SuperStageNode.CheckIndex(Index);
+        end;
+    end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TProgressTracker.Find(Stage: TPTStageID; out Index: Integer): Boolean;
+var
+  SuperStage: TPTStageID;
+begin
+Result := Find(Stage,SuperStage,Index);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TProgressTracker.FindIn(SuperStage,Stage: TPTStageID; out Index: Integer): Boolean;
+var
+  SuperStageNode: TProgressStageNode;
+begin
+If StageIDAssigned(SuperStage) then
+  begin
+    SuperStageNode := ObtainStageNode(SuperStage,True);
+    Index := SuperStageNode.IndexOf(Stage);
+    Result := SuperStageNode.CheckIndex(Index);
+  end
+else Result := False;
+end;
+
+//------------------------------------------------------------------------------
+
 Function TProgressTracker.Add(AbsoluteLength: Double; ID: TPTStageID = PT_STAGEID_INVALID): TPTStageID;
 begin
 Result := InternalAdd(fMasterNode,AbsoluteLength,ID);
@@ -2111,11 +2176,9 @@ var
 begin
 If Stage1 <> Stage2 then
   begin
-    Idx1 := IndexOf(Stage1,SuperStage1);
-    Idx2 := IndexOf(Stage2,SuperStage2);
-    If Idx1 < 0 then
+    If not Find(Stage1,SuperStage1,Idx1) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.Exchange: Invalid stage ID #1 (%d).',[Integer(Stage1)]);
-    If Idx2 < 0 then
+    If not Find(Stage2,SuperStage2,Idx2) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.Exchange: Invalid stage ID #2 (%d).',[Integer(Stage2)]);
     If SuperStage1 <> SuperStage2 then
       raise EPTSuperStageDiffer.CreateFmt('TProgressTracker.Exchange: Superstages differ (%d,%d)',[Integer(SuperStage1),Integer(SuperStage2)]);
@@ -2133,11 +2196,9 @@ begin
 If Stage1 <> Stage2 then
   begin
     SuperStageNode := ObtainStageNode(SuperStage,True);
-    Idx1 := SuperStageNode.IndexOf(Stage1);
-    Idx2 := SuperStageNode.IndexOf(Stage2);
-    If Idx1 < 0 then
+    If not SuperStageNode.Find(Stage1,Idx1) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.ExchangeIn: Invalid stage ID #1 (%d).',[Integer(Stage1)]);
-    If Idx2 < 0 then
+    If not SuperStageNode.Find(Stage2,Idx2) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.ExchangeIn: Invalid stage ID #2 (%d).',[Integer(Stage2)]);
     SuperStageNode.Exchange(Idx1,Idx2);
   end;
@@ -2170,11 +2231,9 @@ var
 begin
 If SrcStage <> DstStage then
   begin
-    SrcIdx := IndexOf(SrcStage,SrcSuperStage);
-    DstIdx := IndexOf(DstStage,DstSuperStage);
-    If SrcIdx < 0 then
+    If not Find(SrcStage,SrcSuperStage,SrcIdx) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.Move: Invalid source stage ID (%d).',[Integer(SrcStage)]);
-    If DstIdx < 0 then
+    If not Find(DstStage,DstSuperStage,DstIdx) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.Move: Invalid destination stage ID (%d).',[Integer(DstStage)]);
     If SrcSuperStage <> DstSuperStage then
       raise EPTSuperStageDiffer.CreateFmt('TProgressTracker.Move: Superstages differ (%d,%d)',[Integer(SrcSuperStage),Integer(DstSuperStage)]);
@@ -2192,11 +2251,9 @@ begin
 If SrcStage <> DstStage then
   begin
     SuperStageNode := ObtainStageNode(SuperStage,True);
-    SrcIdx := SuperStageNode.IndexOf(SrcStage);
-    DstIdx := SuperStageNode.IndexOf(DstStage);
-    If SrcIdx < 0 then
+    If not SuperStageNode.Find(SrcStage,SrcIdx) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.MoveIn: Invalid source stage ID (%d).',[Integer(SrcStage)]);
-    If DstIdx < 0 then
+    If not SuperStageNode.Find(DstStage,DstIdx) then
       raise EPTInvalidStageID.CreateFmt('TProgressTracker.MoveIn: Invalid destination stage ID (%d).',[Integer(DstStage)]);
     SuperStageNode.Move(SrcIdx,DstIdx);
   end;
@@ -2225,8 +2282,7 @@ Function TProgressTracker.Remove(Stage: TPTStageID; out SuperStage: TPTStageID):
 var
   SuperStageNode: TProgressStageNode;
 begin
-Result := IndexOf(Stage,SuperStage);
-If Result >= 0 then // no need to check SuperStage, it was checked in IndexOf
+If Find(Stage,SuperStage,Result) then
   begin
     SuperStageNode := ObtainStageNode(SuperStage,True);
     If SuperStageNode.CheckIndex(Result) then
@@ -2249,8 +2305,7 @@ Function TProgressTracker.RemoveIn(SuperStage,Stage: TPTStageID): Integer;
 var
   SuperStageNode: TProgressStageNode;
 begin
-Result := IndexOfIn(SuperStage,Stage);
-If Result >= 0 then
+If FindIn(SuperStage,Stage,Result) then
   begin
     SuperStageNode := ObtainStageNode(SuperStage,True);
     If SuperStageNode.CheckIndex(Result) then
@@ -2265,8 +2320,7 @@ var
   Index:      Integer;
   SuperStage: TPTStageID;
 begin
-Index := IndexOf(Stage,SuperStage);
-If Index >= 0 then
+If Find(Stage,SuperStage,Index) then
   InternalDelete(ObtainStageNode(SuperStage,True),Index)
 else
   raise EPTInvalidStageID.CreateFmt('TProgressTracker.Delete: Invalid stage ID (%d).',[Integer(Stage)]);

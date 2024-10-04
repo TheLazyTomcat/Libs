@@ -23,7 +23,7 @@
 
   Version 1.1.3 (2024-04-28)
 
-  Last change 2024-08-20
+  Last change 2024-10-04
 
   ©2015-2024 František Milt
 
@@ -600,6 +600,8 @@ type
   {$IFDEF Windows}
     Function IndexOfVersionInfoStringTable(Translation: DWORD): Integer; virtual;
     Function IndexOfVersionInfoString(Table: Integer; const Key: String): Integer; virtual;
+    Function FindVersionInfoStringTable(Translation: DWORD; out Index: Integer): Boolean; virtual;
+    Function FindVersionInfoString(Table: Integer; const Key: String; out Index: Integer): Boolean; virtual;
   {$ENDIF}
     // internals
     property LoadingStrategy: TWFILoadingStrategy read fLoadingStrategy write fLoadingStrategy;
@@ -2125,6 +2127,22 @@ with GetVersionInfoStringTable(Table) do
         Result := i;
         Exit;
       end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TWinFileInfo.FindVersionInfoStringTable(Translation: DWORD; out Index: Integer): Boolean;
+begin
+Index := IndexOfVersionInfoStringTable(Translation);
+Result := Index >= 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TWinFileInfo.FindVersionInfoString(Table: Integer; const Key: String; out Index: Integer): Boolean;
+begin
+Index := IndexOfVersionInfoString(Table,Key);
+Result := Index >= 0;
 end;
 
 {$ENDIF}

@@ -10,7 +10,7 @@
   Simple Command Line Parser
 
     Provides a class (TSimpleCmdLineParser) that can parse and split a command
-    line string into individial commands, each possibly with arguments, and
+    line string into individual commands, each possibly with arguments, and
     other textual parameters.
 
     You can either give the command line string explicitly as a textual
@@ -162,7 +162,7 @@
 
   Version 2.0.2 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-10-04
 
   ©2017-2024 František Milt
 
@@ -184,15 +184,12 @@
     AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
-  * StrRect       - github.com/TheLazyTomcat/Lib.StrRect
+    StrRect       - github.com/TheLazyTomcat/Lib.StrRect
 
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol SimpleCmdLineParser_UseAuxExceptions for details).
 
-  Library StrRect is required only when compiling for Windows OS.
-
-  Libraries AuxExceptions and StrRect might also be required as an indirect
-  dependencies.
+  Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
@@ -301,6 +298,7 @@ type
     Function First: TSCLPParameter; virtual;
     Function Last: TSCLPParameter; virtual;
     Function IndexOf(const Str: String; CaseSensitive: Boolean): Integer; virtual;
+    Function Find(const Str: String; CaseSensitive: Boolean; out Index: Integer): Boolean; virtual;
   {
     CommandPresentShort
 
@@ -389,39 +387,15 @@ type
 
 implementation
 
-
 uses
   {$IFDEF Windows}Windows,{$ENDIF} Math,
-  AuxTypes{$IFDEF Windows}, StrRect{$ENDIF};
+  AuxTypes, StrRect;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
 {$ENDIF}
   
-{===============================================================================
-    Auxiliary functions
-===============================================================================}
-
-{$If not Declared(CharInSet)}
-
-Function CharInSet(C: AnsiChar; const CharSet: TSysCharSet): Boolean; overload;
-begin
-Result := C in CharSet;
-end;
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-Function CharInSet(C: WideChar; const CharSet: TSysCharSet): Boolean; overload;
-begin
-If Ord(C) <= 255 then
-  Result := AnsiChar(C) in CharSet
-else
-  Result := False;
-end;
-
-{$IFEND}
-
 {===============================================================================
 --------------------------------------------------------------------------------
                                    TSCLPLexer
@@ -1354,12 +1328,19 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TSimpleCmdLineParser.Find(const Str: String; CaseSensitive: Boolean; out Index: Integer): Boolean;
+begin
+Index := IndexOf(Str,CaseSensitive);
+Result := CheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TSimpleCmdLineParser.CommandPresentShort(ShortForm: Char): Boolean;
 var
   Index:  Integer;
 begin
-Index := IndexOf(ShortForm,True);
-If CheckIndex(Index) then
+If Find(ShortForm,True,Index) then
   Result := fParameters[Index].ParamType = ptCommandShort
 else
   Result := False;
@@ -1371,8 +1352,7 @@ Function TSimpleCmdLineParser.CommandPresentLong(const LongForm: String): Boolea
 var
   Index:  Integer;
 begin
-Index := IndexOf(LongForm,False);
-If CheckIndex(Index) then
+If Find(LongForm,False,Index) then
   Result := fParameters[Index].ParamType = ptCommandLong
 else
   Result := False;

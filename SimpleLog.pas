@@ -20,7 +20,7 @@
 
   Version 1.4.1 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-10-04
 
   ©2012-2024 František Milt
 
@@ -234,6 +234,7 @@ type
     Function ExternalLogLowIndex: Integer; virtual;
     Function ExternalLogHighIndex: Integer; virtual;
     Function ExternalLogIndexOf(LogObject: TStrings): Integer; virtual;
+    Function ExternalLogFind(LogObject: TStrings; out Index: Integer): Boolean; virtual;
     Function ExternalLogAdd(LogObject: TStrings; Active: Boolean = True; Owned: Boolean = False): Integer; virtual;
     procedure ExternalLogInsert(Index: Integer; LogObject: TStrings; Active: Boolean = True; Owned: Boolean = False); virtual;
     Function ExternalLogExtract(LogObject: TStrings): TStrings; virtual;
@@ -1098,6 +1099,14 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TSimpleLog.ExternalLogFind(LogObject: TStrings; out Index: Integer): Boolean;
+begin
+Index := ExternalLogIndexOf(LogObject);
+Result := CheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TSimpleLog.ExternalLogAdd(LogObject: TStrings; Active: Boolean = True; Owned: Boolean = False): Integer;
 begin
 Grow;
@@ -1136,8 +1145,7 @@ Function TSimpleLog.ExternalLogExtract(LogObject: TStrings): TStrings;
 var
   Index,i:  Integer;
 begin
-Index := ExternalLogIndexOf(LogObject);
-If CheckIndex(Index) then
+If ExternalLogFind(LogObject,Index) then
   begin
     Result := fExternalLogs[Index].LogObject;
     For i := Index to Pred(HighIndex) do
@@ -1152,8 +1160,7 @@ end;
 
 Function TSimpleLog.ExternalLogRemove(LogObject: TStrings): Integer;
 begin
-Result := ExternalLogIndexOf(LogObject);
-If CheckIndex(Result) then
+If ExternalLogFind(LogObject,Result) then
   ExternalLogDelete(Result);
 end;
 

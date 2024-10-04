@@ -91,7 +91,7 @@
 
   Version 1.0.3 (2024-01-14)
 
-  Last change 2024-05-27
+  Last change 2024-10-03
 
   ©2020-2024 František Milt
 
@@ -341,6 +341,9 @@ type
     Function TimeStampIndexOf(const Name: String): Integer; overload; virtual;
     Function TimeStampIndexOf(Value: TFCTicks): Integer; overload; virtual;
     Function TimeStampIndexOf(const Name: String; Value: TFCTicks): Integer; overload; virtual;
+    Function TimeStampFind(const Name: String; out Index: Integer): Boolean; overload; virtual;
+    Function TimeStampFind(Value: TFCTicks; out Index: Integer): Boolean; overload; virtual;
+    Function TimeStampFind(const Name: String; Value: TFCTicks; out Index: Integer): Boolean; overload; virtual;
     Function TimeStampAdd(const Name: String; Value: TFCTicks; UserData: PtrInt = 0): Integer; virtual;
     Function TimeStampAddCurrent(const Name: String; UserData: PtrInt = 0): Integer; virtual; // adds current point as a new timestamp
     procedure TimeStampInsert(Index: Integer; const Name: String; Value: TFCTicks; UserData: PtrInt = 0); virtual;
@@ -358,6 +361,9 @@ type
     Function AccumulatorIndexOf(const Name: String): Integer; overload; virtual;
     Function AccumulatorIndexOf(Value: TFCTicks): Integer; overload; virtual;
     Function AccumulatorIndexOf(const Name: String; Value: TFCTicks): Integer; overload; virtual;
+    Function AccumulatorFind(const Name: String; out Index: Integer): Boolean; overload; virtual;
+    Function AccumulatorFind(Value: TFCTicks; out Index: Integer): Boolean; overload; virtual;
+    Function AccumulatorFind(const Name: String; Value: TFCTicks; out Index: Integer): Boolean; overload; virtual;
     Function AccumulatorAdd(const Name: String; InitialValue: TFCTicks = 0; UserData: PtrInt = 0): Integer; virtual;
     procedure AccumulatorInsert(Index: Integer; const Name: String; InitialValue: TFCTicks = 0; UserData: PtrInt = 0); virtual;
     Function AccumulatorRemove(const Name: String): Integer; overload; virtual;
@@ -966,6 +972,30 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TFrameClockEx.TimeStampFind(const Name: String; out Index: Integer): Boolean;
+begin
+Index := TimeStampIndexOf(Name);
+Result := TimeStampCheckIndex(Index);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TFrameClockEx.TimeStampFind(Value: TFCTicks; out Index: Integer): Boolean;
+begin
+Index := TimeStampIndexOf(Value);
+Result := TimeStampCheckIndex(Index);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TFrameClockEx.TimeStampFind(const Name: String; Value: TFCTicks; out Index: Integer): Boolean;
+begin
+Index := TimeStampIndexOf(Name,Value);
+Result := TimeStampCheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TFrameClockEx.TimeStampAdd(const Name: String; Value: TFCTicks; UserData: PtrInt = 0): Integer;
 begin
 Grow(FCE_LIST_IDX_TIMESTAMPS);
@@ -1011,8 +1041,7 @@ end;
 
 Function TFrameClockEx.TimeStampRemove(const Name: String): Integer;
 begin
-Result := TimeStampIndexOf(Name);
-If TimeStampCheckIndex(Result) then
+If TimeStampFind(Name,Result) then
   TimeStampDelete(Result);
 end;
 
@@ -1020,8 +1049,7 @@ end;
 
 Function TFrameClockEx.TimeStampRemove(Value: TFCTicks): Integer;
 begin
-Result := TimeStampIndexOf(Value);
-If TimeStampCheckIndex(Result) then
+If TimeStampFind(Value,Result) then
   TimeStampDelete(Result);
 end;
 
@@ -1029,8 +1057,7 @@ end;
 
 Function TFrameClockEx.TimeStampRemove(const Name: String; Value: TFCTicks): Integer;
 begin
-Result := TimeStampIndexOf(Name,Value);
-If TimeStampCheckIndex(Result) then
+If TimeStampFind(Name,Value,Result) then
   TimeStampDelete(Result);
 end;
 
@@ -1074,8 +1101,7 @@ Function TFrameClockEx.TimeStampDistance(const Name: String): TFCTime;
 var
   Index:  Integer;
 begin
-Index := TimeStampIndexOf(Name);
-If TimeStampCheckIndex(Index) then
+If TimeStampFind(Name,Index) then
   Result := TimeStampDistance(Index)
 else
   FillChar(Addr(Result)^,SizeOf(TFCTime),0);
@@ -1153,6 +1179,30 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TFrameClockEx.AccumulatorFind(const Name: String; out Index: Integer): Boolean;
+begin
+Index := AccumulatorIndexOf(Name);
+Result := AccumulatorCheckIndex(Index);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TFrameClockEx.AccumulatorFind(Value: TFCTicks; out Index: Integer): Boolean;
+begin
+Index := AccumulatorIndexOf(Value);
+Result := AccumulatorCheckIndex(Index);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TFrameClockEx.AccumulatorFind(const Name: String; Value: TFCTicks; out Index: Integer): Boolean;
+begin
+Index := AccumulatorIndexOf(Name,Value);
+Result := AccumulatorCheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TFrameClockEx.AccumulatorAdd(const Name: String; InitialValue: TFCTicks = 0; UserData: PtrInt = 0): Integer;
 begin
 Grow(FCE_LIST_IDX_ACCUMULATORS);
@@ -1191,8 +1241,7 @@ end;
 
 Function TFrameClockEx.AccumulatorRemove(const Name: String): Integer;
 begin
-Result := AccumulatorIndexOf(Name);
-If AccumulatorCheckIndex(Result) then
+If AccumulatorFind(Name,Result) then
   AccumulatorDelete(Result);
 end;
 
@@ -1200,8 +1249,7 @@ end;
 
 Function TFrameClockEx.AccumulatorRemove(Value: TFCTicks): Integer;
 begin
-Result := AccumulatorIndexOf(Value);
-If AccumulatorCheckIndex(Result) then
+If AccumulatorFind(Value,Result) then
   AccumulatorDelete(Result);
 end;
 
@@ -1209,8 +1257,7 @@ end;
 
 Function TFrameClockEx.AccumulatorRemove(const Name: String; Value: TFCTicks): Integer;
 begin
-Result := AccumulatorIndexOf(Name,Value);
-If AccumulatorCheckIndex(Result) then
+If AccumulatorFind(Name,Value,Result) then
   AccumulatorDelete(Result);
 end;
 
@@ -1274,8 +1321,7 @@ Function TFrameClockEx.AccumulatorAccumulate(const Name: String; Delta: TFCTicks
 var
   Index:  Integer;
 begin
-Index := AccumulatorIndexOf(Name);
-If AccumulatorCheckIndex(Index) then
+If AccumulatorFind(Name,Index) then
   Result := AccumulatorAccumulate(Index,Delta)
 else
   FillChar(Addr(Result)^,SizeOf(TFCTime),0);
@@ -1323,8 +1369,7 @@ Function TFrameClockEx.AccumulatorDistance(const Name: String): TFCTime;
 var
   Index:  Integer;
 begin
-Index := AccumulatorIndexOf(Name);
-If AccumulatorCheckIndex(Index) then
+If AccumulatorFind(Name,Index) then
   Result := AccumulatorDistance(Index)
 else
   FillChar(Addr(Result)^,SizeOf(TFCTime),0);

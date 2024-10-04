@@ -24,7 +24,7 @@
 
   Version 1.2.4 (2024-05-02)
 
-  Last change 2024-05-02
+  Last change 2024-10-04
 
   ©2016-2024 František Milt
 
@@ -94,6 +94,7 @@
     Function First: @Type@; reintroduce;
     Function Last: @Type@; reintroduce;
     Function IndexOf(Item: @Type@): Integer; reintroduce;
+    Function Find(Item: @Type@; out Index: Integer): Boolean; reintroduce;
     Function Add(Item: @Type@): Integer; reintroduce;
     procedure Insert(Index: Integer; Item: @Type@); reintroduce;
     Function Remove(Item: @Type@): Integer; reintroduce;
@@ -235,6 +236,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function @ClassName@.Find(Item: @Type@; out Index: Integer): Boolean;
+begin
+Result := inherited Find(@Item,Index);
+end;
+
+//------------------------------------------------------------------------------
+
 Function @ClassName@.Add(Item: @Type@): Integer;
 begin
 Result := inherited Add(@Item);
@@ -370,6 +378,7 @@ type
     Function Last: Pointer; virtual;
     // list methods
     Function IndexOf(Item: Pointer): Integer; virtual;
+    Function Find(Item: Pointer; out Index: Integer): Boolean; virtual;
     Function Add(Item: Pointer): Integer; virtual;
     procedure Insert(Index: Integer; Item: Pointer); virtual;
     procedure Move(SrcIndex,DstIndex: Integer); virtual;
@@ -442,6 +451,7 @@ type
     Function First: Integer; reintroduce;
     Function Last: Integer; reintroduce;
     Function IndexOf(Item: Integer): Integer; reintroduce;
+    Function Find(Item: Integer; out Index: Integer): Boolean; reintroduce;
     Function Add(Item: Integer): Integer; reintroduce;
     procedure Insert(Index: Integer; Item: Integer); reintroduce;
     Function Remove(Item: Integer): Integer; reintroduce;
@@ -833,6 +843,14 @@ For i := LowIndex to HighIndex do
       Result := i;
       Exit;
     end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMemVector.Find(Item: Pointer; out Index: Integer): Boolean;
+begin
+Index := IndexOf(Item);
+Result := CheckIndex(Index);
 end;
  
 //------------------------------------------------------------------------------
@@ -1372,6 +1390,13 @@ end;
 Function TIntegerVector.IndexOf(Item: Integer): Integer;
 begin
 Result := inherited IndexOf(@Item);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TIntegerVector.Find(Item: Integer; out Index: Integer): Boolean;
+begin
+Result := inherited Find(@Item,Index);
 end;
 
 //------------------------------------------------------------------------------

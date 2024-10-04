@@ -43,7 +43,7 @@
 
   Version 2.0.4 (2024-05-03)
 
-  Last change 2024-09-09
+  Last change 2024-10-04
 
   ©2016-2024 František Milt
 
@@ -250,6 +250,7 @@ type
     Function First: TMsgrMessage; reintroduce;
     Function Last: TMsgrMessage; reintroduce;
     Function IndexOf(Item: TMsgrMessage): Integer; reintroduce;
+    Function Find(Item: TMsgrMessage; out Index: Integer): Boolean; reintroduce;
     Function Add(Item: TMsgrMessage): Integer; reintroduce;
     procedure Insert(Index: Integer; Item: TMsgrMessage); reintroduce;
     Function Remove(Item: TMsgrMessage): Integer; reintroduce;
@@ -945,6 +946,13 @@ end;
 Function TMsgrMessageVector.IndexOf(Item: TMsgrMessage): Integer;
 begin
 Result := inherited IndexOf(@Item);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMsgrMessageVector.Find(Item: TMsgrMessage; out Index: Integer): Boolean;
+begin
+Result := inherited Find(@Item,Index);
 end;
 
 //------------------------------------------------------------------------------

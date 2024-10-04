@@ -22,7 +22,7 @@
 
   Version 1.5.1 (2024-05-03)
 
-  Last change 2024-08-23
+  Last change 2024-10-04
 
   ©2015-2024 František Milt
 
@@ -136,6 +136,8 @@ type
   public
     Function IndexOf(const Handler: TMessageCallback): Integer; reintroduce; overload;
     Function IndexOf(const Handler: TMessageEvent): Integer; reintroduce; overload;
+    Function Find(const Handler: TMessageCallback; out Index: Integer): Boolean; reintroduce; overload;
+    Function Find(const Handler: TMessageEvent; out Index: Integer): Boolean; reintroduce; overload;
     Function Add(Handler: TMessageCallback; AllowDuplicity: Boolean = False): Integer; reintroduce; overload;
     Function Add(Handler: TMessageEvent; AllowDuplicity: Boolean = False): Integer; reintroduce; overload;
     Function Remove(const Handler: TMessageCallback): Integer; reintroduce; overload;
@@ -251,6 +253,20 @@ end;
 Function TMulticastMessageEvent.IndexOf(const Handler: TMessageEvent): Integer;
 begin
 Result := inherited IndexOf(TEvent(Handler));
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMulticastMessageEvent.Find(const Handler: TMessageCallback; out Index: Integer): Boolean;
+begin
+Result := inherited Find(TCallback(Handler),Index);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TMulticastMessageEvent.Find(const Handler: TMessageEvent; out Index: Integer): Boolean;
+begin
+Result := inherited Find(TEvent(Handler),Index);
 end;
 
 //------------------------------------------------------------------------------

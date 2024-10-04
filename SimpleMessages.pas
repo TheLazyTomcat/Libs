@@ -43,7 +43,7 @@
 
   Version 1.0 alpha 3 (requires extensive testing) (2024-05-03)
 
-  Last change 2024-09-09
+  Last change 2024-10-04
 
   ©2022-2024 František Milt
 
@@ -309,6 +309,7 @@ type
     Function First: TSMShMemMessage; reintroduce;
     Function Last: TSMShMemMessage; reintroduce;
     Function IndexOf(Item: TSMShMemMessage): Integer; reintroduce;
+    Function Find(Item: TSMShMemMessage; out Index: Integer): Boolean; reintroduce;
     Function Add(Item: TSMShMemMessage): Integer; reintroduce;
     procedure Insert(Index: Integer; Item: TSMShMemMessage); reintroduce;
     Function Remove(Item: TSMShMemMessage): Integer; reintroduce;
@@ -591,6 +592,13 @@ end;
 Function TSMMessageVector.IndexOf(Item: TSMShMemMessage): Integer;
 begin
 Result := inherited IndexOf(@Item);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSMMessageVector.Find(Item: TSMShMemMessage; out Index: Integer): Boolean;
+begin
+Result := inherited Find(@Item,Index);
 end;
 
 //------------------------------------------------------------------------------

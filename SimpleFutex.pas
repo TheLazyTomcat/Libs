@@ -11,11 +11,16 @@
 
     Main aim of this library is to provide wrappers for futexes (synchronization
     primitives in Linux) and some very simple complete synchronization objects
-    based on them - currently simple mutex, simple semaphore and simple robust
-    mutex are implemented.
+    based on them - currently simple mutex, simple semaphore, simple robust
+    mutex and simple recursive mutex (which in itself is an extension of simple
+    robust mutex) are implemented.
 
       NOTE - since proper implementation of futexes is not particularly easy,
              there are probably errors. If you find any, please let me know.
+
+      NOTE - because simple recursive mutex is only an extension of simple
+             robust mutex, most information provided for SRM are also valid
+             for SCM.
 
       WARNING - simple robust mutex might not be provided by this unit if
                 dependecy library InterlockedOps does not provide functions
@@ -24,9 +29,9 @@
                 SRM is or isn't provided (as it is a true constant, it can be
                 used in conditional compilation).
 
-  Version 1.2 (2024-08-23)
+  Version 1.3 (2024-09-21)
 
-  Last change 2024-09-09
+  Last change 2024-09-21
 
   ©2021-2024 František Milt
 
@@ -117,6 +122,30 @@ unit SimpleFutex;
   {$DEFINE RobustMutexThreadTimeCheck}
 {$ENDIF}
 
+{
+  RobustMutexBufferThreadID
+
+  When this symbol is defined (default), then thread ID and process ID (which
+  are used internally by the mutex) are obtained only once - they are buffered
+  (stored in a thread-local variable) and, when needed again, copied from the
+  buffer. When not defined, these IDs are obtained using system calls everytime
+  they are needed.
+
+  Generally, the use of buffering is preferred, but sometimes it might be
+  necessary to disable it, this symbol is here for that purpose.
+
+  Has meaning only if simple robust mutexes are provided.
+
+  Defined by default.
+
+  To disable/undefine this symbol in a project without changing this library,
+  define project-wide symbol SimpleFutex_RobustMutexBufferThreadID_OFF.
+}
+{$DEFINE RobustMutexBufferThreadID}
+{$IFDEF SimpleFutex_RobustMutexBufferThreadID_OFF}
+  {$UNDEF RobustMutexBufferThreadID}
+{$ENDIF}
+
 interface
 
 uses
@@ -153,6 +182,7 @@ type
   ESFInvalidValue = class(ESFException);
   ESFSignalError  = class(ESFException);
   ESFParsingError = class(ESFException);
+  ESFInvalidState = class(ESFException);
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -435,7 +465,7 @@ Function FutexWaitRequeuePI(var Futex: TFutexWord; Value: TFutexWord; var Futex2
               unlocked by any thread - SM is not a classical mutex with thread
               ownership).
 
-    NOTE - Simple mutex does not neeed to be explicitly initialized if it is
+    NOTE - Simple mutex does not need to be explicitly initialized if it is
            set to all zero by other means (eg. memory initialization).
 }
 {===============================================================================
@@ -656,9 +686,10 @@ type
   TThreadCheckMethod = (tcmDefault,tcmSignal,tcmProc);
 
 {
-  TSimpleRobustMutexData
+  TSimpleRobustMutexInfo
 
-  This structure is used to pass data in and out of SimpleRobustMutexLock call.
+  This structure is used to pass settings and other information in and out of
+  SimpleRobustMutexLock call.
 
   WARNING - this structure can be changed in the future, and therefore using
             it and its overload of SimpleRobustMutexLock is not recommended.
@@ -702,7 +733,7 @@ type
   If some details in field descriptions are not clear, then refer higher to
   description of SRM itself, part where robustness is talked about.
 }
-  TSimpleRobustMutexData = record
+  TSimpleRobustMutexInfo = record
     CheckInterval:      UInt32;
     CheckMethod:        TThreadCheckMethod;
     CheckCount:         Integer;
@@ -716,15 +747,66 @@ type
 procedure SimpleRobustMutexInit(out RobustMutex: TSimpleRobustMutexState);
 
 {
-  The first overload of SimpleRobustMutexLock (the one with Data parameter)
+  The first overload of SimpleRobustMutexLock (the one with Info parameter)
   is intended for debugging. You can use it if you wish, but it is generally
-  not recommended as the type TSimpleRobustMutexData can change in the future.
+  not recommended as the type TSimpleRobustMutexInfo can change in the future.
 }
-procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; var Data: TSimpleRobustMutexData); overload;
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; var Info: TSimpleRobustMutexInfo); overload;
 procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; CheckInterval: UInt32 = 100; CheckMethod: TThreadCheckMethod = tcmDefault); overload;
 procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; CheckMethod: TThreadCheckMethod); overload;
 
 procedure SimpleRobustMutexUnlock(var RobustMutex: TSimpleRobustMutexState);
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                             Simple recursive mutex
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Simple recursive mutex (SCM) is implemented only as an extension of simple
+  robust mutex (SRM), therefore most information provided for SRM are also
+  valid here.
+
+    WARNING - SCM and SRM have different internal state, so do not attempt to
+              use state of one in calls to the other.
+
+  SCM differs from SRM in the following details:
+
+    - As name suggests, it is recursive, meaning it can be locked multiple
+      times by the same thread.
+
+        WARNING - each locking call must be paired by a call to unlock. Mutex
+                  stays locked until the same number of unlocks as locks is
+                  called.
+
+    - SCM observes thread ownership, so unlocking operation can only be
+      performed by a thread that is holding the lock.
+
+        WARNING - calling unlock from other thread will raise an exception of
+                  class ESFInvalidState.
+
+        NOTE - calling unlock on already unlocked mutex does nothing (exception
+               is not raised).
+}
+{===============================================================================
+    Simple recursive mutex - declaration
+===============================================================================}
+type
+  TSimpleRecursiveMutexState = record
+    Mutex:    TSimpleRobustMutexState;
+    Counter:  Integer;
+  end;
+  PSimpleRecursiveMutexState = ^TSimpleRecursiveMutexState;
+
+//------------------------------------------------------------------------------
+
+procedure SimpleRecursiveMutexInit(out RecursiveMutex: TSimpleRecursiveMutexState);
+
+procedure SimpleRecursiveMutexLock(var RecursiveMutex: TSimpleRecursiveMutexState; var Info: TSimpleRobustMutexInfo); overload;
+procedure SimpleRecursiveMutexLock(var RecursiveMutex: TSimpleRecursiveMutexState; CheckInterval: UInt32 = 100; CheckMethod: TThreadCheckMethod = tcmDefault); overload;
+procedure SimpleRecursiveMutexLock(var RecursiveMutex: TSimpleRecursiveMutexState; CheckMethod: TThreadCheckMethod); overload;
+
+procedure SimpleRecursiveMutexUnlock(var RecursiveMutex: TSimpleRecursiveMutexState);
 
 {$ENDIF}
 
@@ -757,7 +839,7 @@ procedure SimpleRobustMutexUnlock(var RobustMutex: TSimpleRobustMutexState);
 }
 type
 {$IFDEF SF_SimpleRobustMutex}
-  TSimpleSynchronizerState = array[0..Pred(SizeOf(TSimpleRobustMutexState))] of Byte;
+  TSimpleSynchronizerState = array[0..Pred(SizeOf(TSimpleRecursiveMutexState))] of Byte;
 {$ELSE}
   TSimpleSynchronizerState = array[0..Pred(SizeOf(TFutexWord))] of Byte;
 {$ENDIF}
@@ -775,10 +857,8 @@ type
     procedure Initialize(StatePtr: PSimpleSynchronizerState); virtual;
     procedure Finalize; virtual;
   public
+    constructor Create(StatePtr: PSimpleSynchronizerState); overload; virtual;
     constructor Create(var Futex: TFutexWord); overload; virtual;
-  {$IFDEF SF_SimpleRobustMutex}
-    constructor Create(var SimpleRobustMutexState: TSimpleRobustMutexState); overload; virtual;
-  {$ENDIF}
     constructor Create; overload; virtual;
     destructor Destroy; override;
     procedure Init; virtual;
@@ -844,6 +924,26 @@ type
   protected
     procedure Initialize(StatePtr: PSimpleSynchronizerState); override;
   public
+    constructor Create(var SimpleRobustMutexState: TSimpleRobustMutexState); overload; virtual;
+    procedure Init; override;
+    procedure Enter; virtual;
+    procedure Leave; virtual;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              TSimpleRecursiveMutex
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRecursiveMutex - class declaration
+===============================================================================}
+type
+  TSimpleRecursiveMutex = class(TSimpleSynchronizer)
+  protected
+    procedure Initialize(StatePtr: PSimpleSynchronizerState); override;
+  public
+    constructor Create(var SimpleRecursiveMutexState: TSimpleRecursiveMutexState); overload; virtual;
     procedure Init; override;
     procedure Enter; virtual;
     procedure Leave; virtual;
@@ -853,8 +953,8 @@ type
 implementation
 
 uses
-  BaseUnix, Linux, Errors{$IFDEF SF_SimpleRobustMutex}, Syscall{$ENDIF},
-  Classes, Math;
+  BaseUnix, Linux, Errors{$IFDEF SF_SimpleRobustMutex}, Syscall, Math{$ENDIF},
+  Classes;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -1576,13 +1676,8 @@ end;
     Simple robust mutex - internals
 ===============================================================================}
 {$IFDEF SF_SRM_TimeCheck}
-threadvar
-  TVAR_ThreadCreationTime:      UInt32;
-  TVAR_HaveThreadCreationTime:  Boolean;
 
-//------------------------------------------------------------------------------
-
-Function GetThreadCreationTime(ThreadID: pid_t): UInt32;
+Function SRM_GetThreadCreationTime(ThreadID: pid_t): UInt32;
 const
   READ_SIZE = 1024;
 var
@@ -1651,7 +1746,7 @@ end;
 
 {$ELSE}//-----------------------------------------------------------------------
 
-Function TrySignalThread(ThreadID: pid_t): Boolean;
+Function SRM_TrySignalThread(ThreadID: pid_t): Boolean;
 var
   ErrorNumber:  cint;
 begin
@@ -1667,40 +1762,117 @@ end;
 {$ENDIF}
 //------------------------------------------------------------------------------
 
-Function LockingThreadLives(MutexValue: TSimpleRobustMutexState; var Data: TSimpleRobustMutexData): Boolean;
+Function SRM_LockingThreadLives(MutexValue: TSimpleRobustMutexState; var Info: TSimpleRobustMutexInfo): Boolean;
 begin
-Inc(Data.CheckCount);
+Inc(Info.CheckCount);
 {$IFDEF SF_SRM_TimeCheck}
 try
   If FileExists(Format('/proc/%d/stat',[MutexValue.ThreadID])) then
     begin
-      Result := GetThreadCreationTime(MutexValue.ThreadID) = MutexValue.ThreadCTime;
-      Data.ConsecFailCount := 0;
+      Result := SRM_GetThreadCreationTime(MutexValue.ThreadID) = MutexValue.ThreadCTime;
+      Info.ConsecFailCount := 0;
     end
   else Result := False;
 except
   If FileExists(Format('/proc/%d/stat',[MutexValue.ThreadID])) then
     begin
-      If Data.ConsecFailCount < Data.MaxConsecFailCount then
+      If Info.ConsecFailCount < Info.MaxConsecFailCount then
         begin
-          Inc(Data.ConsecFailCount);
-          Inc(Data.FailCount);
+          Inc(Info.ConsecFailCount);
+          Inc(Info.FailCount);
         end
       else raise; // re-raise the exception
     end
   else Result := False;
 end;
 {$ELSE}
-case Data.CheckMethod of
+case Info.CheckMethod of
   tcmProc:  Result := DirectoryExists(Format('/proc/%d/task/%d',[MutexValue.ProcessID,MutexValue.ThreadID]));
 else
  {tcmDefault,tcmSignal}
-  If TrySignalThread(MutexValue.ProcessID) and TrySignalThread(MutexValue.ThreadID) then
+  If SRM_TrySignalThread(MutexValue.ProcessID) and SRM_TrySignalThread(MutexValue.ThreadID) then
     Result := getpgid(MutexValue.ThreadID) = MutexValue.ProcessID
   else
     Result := False;
 end;
 {$ENDIF}
+end;
+
+//==============================================================================
+{$IF Defined(SF_SRM_TimeCheck) or Defined(RobustMutexBufferThreadID)}
+threadvar
+  TVAR_BufferedThreadState:     TSimpleRobustMutexState;
+  TVAR_HasBufferedThreadState:  Boolean;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+procedure SRM_PrepareInfo(var Info: TSimpleRobustMutexInfo);
+begin
+{$IFDEF SF_SRM_TimeCheck}
+Info.CheckMethod := tcmDefault;
+{$ENDIF}
+Info.CheckCount := 0;
+Info.FailCount := 0;
+Info.ConsecFailCount := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SRM_PrepareThreadState(out State: TSimpleRobustMutexState);
+{$IFDEF SF_SRM_TimeCheck}
+var
+  FailCounter:  Integer;
+{$ENDIF}
+begin
+{$IFDEF SF_SRM_TimeCheck}
+If not TVAR_HasBufferedThreadState then
+  begin
+    State.ThreadID := gettid;
+    // store TID even if buffering is not enabled (it just will not be used)
+    TVAR_BufferedThreadState.ThreadID := State.ThreadID;
+    // make sure we get the time
+    FailCounter := 100;
+    while True do
+      try
+        TVAR_BufferedThreadState.ThreadCTime := SRM_GetThreadCreationTime(TVAR_BufferedThreadState.ThreadID);
+        Break{while}
+      except
+        If FailCounter > 0 then
+          begin
+            Dec(FailCounter); // eat the errors
+            Sleep(10);
+          end
+        else raise;
+      end;
+    State.ThreadCTime := TVAR_BufferedThreadState.ThreadCTime;
+    TVAR_HasBufferedThreadState := True;
+  end
+else
+  begin
+  {$IFDEF RobustMutexBufferThreadID}
+    State.FullWidth := TVAR_BufferedThreadState.FullWidth;
+  {$ELSE}
+    State.ThreadID := gettid;
+    State.ThreadCTime := TVAR_BufferedThreadState.ThreadCTime;
+  {$ENDIF}
+  end;
+{$ELSE}
+{$IFDEF RobustMutexBufferThreadID}
+If not TVAR_HasBufferedThreadState then
+  begin
+    TVAR_BufferedThreadState.ThreadID := gettid;
+    TVAR_BufferedThreadState.ProcessID := getpid;
+    TVAR_HasBufferedThreadState := True;
+  end;
+State.FullWidth := TVAR_BufferedThreadState.FullWidth;
+{$ELSE}
+State.ThreadID := gettid;
+State.ProcessID := getpid;
+{$ENDIF}
+{$ENDIF}
+If State.FullWidth = 0 then
+  raise ESFInvalidValue.Create('SRM_PrepareThreadState: Invalid stread state.');
 end;
 
 {===============================================================================
@@ -1715,53 +1887,22 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; var Data: TSimpleRobustMutexData);
+procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; var Info: TSimpleRobustMutexInfo);
 var
-  NewValue:     TSimpleRobustMutexState;
-  OldValue:     TSimpleRobustMutexState;
-{$IFDEF SF_SRM_TimeCheck}
-  FailCounter:  Integer;
-{$ENDIF}
+  NewValue: TSimpleRobustMutexState;
+  OldValue: TSimpleRobustMutexState;
 begin
 // prepare variables
-{$IFDEF SF_SRM_TimeCheck}
-Data.CheckMethod := tcmDefault;
-{$ENDIF}
-Data.CheckCount := 0;
-Data.FailCount := 0;
-Data.ConsecFailCount := 0;
-NewValue.ThreadID := gettid;
-{$IFDEF SF_SRM_TimeCheck}
-If not TVAR_HaveThreadCreationTime then
-  begin
-    // make sure we get the time
-    FailCounter := 100;
-    while True do
-      try
-        TVAR_ThreadCreationTime := GetThreadCreationTime(NewValue.ThreadID);
-        Break{while}
-      except
-        If FailCounter > 0 then
-          begin
-            Dec(FailCounter); // eat the errors
-            Sleep(10);
-          end
-        else raise;
-      end;
-    TVAR_HaveThreadCreationTime := True;
-  end;
-NewValue.ThreadCTime := TVAR_ThreadCreationTime;
-{$ELSE}
-NewValue.ProcessID := getpid;
-{$ENDIF}
+SRM_PrepareInfo(Info);
+SRM_PrepareThreadState(NewValue);
 // and now the locking...
 OldValue.FullWidth := InterlockedCompareExchange(RobustMutex.FullWidth,NewValue.FullWidth,SF_SRM_UNLOCKED);
 while OldValue.FullWidth <> SF_SRM_UNLOCKED do
   begin
-    If not LockingThreadLives(OldValue,Data) then
+    If not SRM_LockingThreadLives(OldValue,Info) then
       If InterlockedCompareExchange(RobustMutex.FullWidth,NewValue.FullWidth,OldValue.FullWidth) = OldValue.FullWidth then
         Break{while};
-    FutexWait(RobustMutex.FutexWord,OldValue.FutexWord,Data.CheckInterval);
+    FutexWait(RobustMutex.FutexWord,OldValue.FutexWord,Info.CheckInterval);
     OldValue.FullWidth := InterlockedCompareExchange(RobustMutex.FullWidth,NewValue.FullWidth,SF_SRM_UNLOCKED);
   end;
 end;
@@ -1770,17 +1911,17 @@ end;
 
 procedure SimpleRobustMutexLock(var RobustMutex: TSimpleRobustMutexState; CheckInterval: UInt32 = 100; CheckMethod: TThreadCheckMethod = tcmDefault);
 var
-  TempData:  TSimpleRobustMutexData;
+  TempInfo:  TSimpleRobustMutexInfo;
 begin
-TempData.CheckInterval := CheckInterval;
-TempData.CheckMethod := CheckMethod;
+TempInfo.CheckInterval := CheckInterval;
+TempInfo.CheckMethod := CheckMethod;
 If CheckInterval <> 0 then
   // give it at least one second of time...
-  TempData.MaxConsecFailCount := Ceil(1000 / CheckInterval)
+  TempInfo.MaxConsecFailCount := Ceil(1000 / CheckInterval)
 else
   // someone wants to play dirty...
-  TempData.MaxConsecFailCount := 10;
-SimpleRobustMutexLock(RobustMutex,TempData);
+  TempInfo.MaxConsecFailCount := 10;
+SimpleRobustMutexLock(RobustMutex,TempInfo);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1798,6 +1939,123 @@ If InterlockedExchange(RobustMutex.FullWidth,SF_SRM_UNLOCKED) <> SF_SRM_UNLOCKED
   FutexWake(RobustMutex.FutexWord,1);
 end;
 
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                             Simple recursive mutex
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Simple recursive mutex - implementation
+===============================================================================}
+
+procedure SimpleRecursiveMutexInit(out RecursiveMutex: TSimpleRecursiveMutexState);
+begin
+RecursiveMutex.Mutex.FullWidth := 0;
+RecursiveMutex.Counter := 0;
+ReadWriteBarrier;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SimpleRecursiveMutexLock(var RecursiveMutex: TSimpleRecursiveMutexState; var Info: TSimpleRobustMutexInfo);
+var
+  NewValue: TSimpleRobustMutexState;
+  OldValue: TSimpleRobustMutexState;
+begin
+// prepare variables
+SRM_PrepareInfo(Info);
+SRM_PrepareThreadState(NewValue);
+// try to lock the mutex...
+OldValue.FullWidth := InterlockedCompareExchange(RecursiveMutex.Mutex.FullWidth,NewValue.FullWidth,SF_SRM_UNLOCKED);
+while OldValue.FullWidth <> SF_SRM_UNLOCKED do
+  begin
+    If OldValue.FullWidth = NewValue.FullWidth then
+      begin
+      {
+        The mutex is already locked by the calling thread, so only increment
+        the counter and return. Only sanity check is performed here, increment
+        is done just before the function returns.
+      }
+        If RecursiveMutex.Counter >= High(Integer) then
+          raise ESFInvalidState.Create('SimpleRecursiveMutexLock: Mutex locked too many times.');
+        Break{while};
+      end;
+    // locked by some other thread...
+    If not SRM_LockingThreadLives(OldValue,Info) then
+      If InterlockedCompareExchange(RecursiveMutex.Mutex.FullWidth,NewValue.FullWidth,OldValue.FullWidth) = OldValue.FullWidth then
+        begin
+        {
+          Mutex is now locked for the calling thread, and because previous
+          owner died, we must reset the counter.
+        }
+          RecursiveMutex.Counter := 0;
+          Break{while};
+        end;
+    // locking thread lives, enter period of passive waiting
+    FutexWait(RecursiveMutex.Mutex.FutexWord,OldValue.FutexWord,Info.CheckInterval);
+    OldValue.FullWidth := InterlockedCompareExchange(RecursiveMutex.Mutex.FullWidth,NewValue.FullWidth,SF_SRM_UNLOCKED);
+    // if the mutex was unlocked, it means it is now locked for us, reset the counter
+    If OldValue.FullWidth = SF_SRM_UNLOCKED then
+      RecursiveMutex.Counter := 0;
+  end;
+{
+  If here, it means the mutex is locked for this thread, therefore we can
+  increment the count in a non-atomic fashion (note that sanity checks should
+  be already done by this point).
+}
+Inc(RecursiveMutex.Counter);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SimpleRecursiveMutexLock(var RecursiveMutex: TSimpleRecursiveMutexState; CheckInterval: UInt32 = 100; CheckMethod: TThreadCheckMethod = tcmDefault);
+var
+  TempInfo:  TSimpleRobustMutexInfo;
+begin
+TempInfo.CheckInterval := CheckInterval;
+TempInfo.CheckMethod := CheckMethod;
+If CheckInterval <> 0 then
+  // give it at least one second of time...
+  TempInfo.MaxConsecFailCount := Ceil(1000 / CheckInterval)
+else
+  // someone wants to play dirty...
+  TempInfo.MaxConsecFailCount := 10;
+SimpleRecursiveMutexLock(RecursiveMutex,TempInfo);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SimpleRecursiveMutexLock(var RecursiveMutex: TSimpleRecursiveMutexState; CheckMethod: TThreadCheckMethod);
+begin
+SimpleRecursiveMutexLock(RecursiveMutex,250,CheckMethod);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SimpleRecursiveMutexUnlock(var RecursiveMutex: TSimpleRecursiveMutexState);
+var
+  ThreadValue:  TSimpleRobustMutexState;
+  OldValue:     TSimpleRobustMutexState;
+begin
+SRM_PrepareThreadState(ThreadValue);
+// first check whether the calling thread actually has the lock
+OldValue.FullWidth := InterlockedLoad(RecursiveMutex.Mutex.FullWidth);
+If OldValue.FullWidth = ThreadValue.FullWidth then
+  begin
+    // we have the lock - decrement counter and if it reaches zero, unlock mutex
+    Dec(RecursiveMutex.Counter);
+    If RecursiveMutex.Counter <= 0 then
+      begin
+        RecursiveMutex.Counter := 0;
+        InterlockedStore(RecursiveMutex.Mutex.FullWidth,SF_SRM_UNLOCKED);
+      end;
+    // wake waiter
+    FutexWake(RecursiveMutex.Mutex.FutexWord,1);
+  end
+else If OldValue.FullWidth <> SF_SRM_UNLOCKED then
+  raise ESFInvalidState.Create('SimpleRecursiveMutexUnlock: Mutex locked by other thread.');
+end;
 
 {$ENDIF}
 {===============================================================================
@@ -1830,28 +2088,24 @@ end;
     TSimpleSynchronizer - public methods
 -------------------------------------------------------------------------------}
 
+constructor TSimpleSynchronizer.Create(StatePtr: PSimpleSynchronizerState);
+begin
+inherited Create;
+Initialize(StatePtr);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 constructor TSimpleSynchronizer.Create(var Futex: TFutexWord);
 begin
-inherited Create;
-Initialize(PSimpleSynchronizerState(@Futex));
+Create(PSimpleSynchronizerState(@Futex));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-{$IFDEF SF_SimpleRobustMutex}
-constructor TSimpleSynchronizer.Create(var SimpleRobustMutexState: TSimpleRobustMutexState);
-begin
-inherited Create;
-Initialize(PSimpleSynchronizerState(@SimpleRobustMutexState));
-end;
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-{$ENDIF}
 
 constructor TSimpleSynchronizer.Create;
 begin
-inherited Create;
-Initialize(@fLocalState);
+Create(@fLocalState);
 end;
 
 //------------------------------------------------------------------------------
@@ -1997,6 +2251,13 @@ end;
     TSimpleRobustMutex - public methods
 -------------------------------------------------------------------------------}
 
+constructor TSimpleRobustMutex.Create(var SimpleRobustMutexState: TSimpleRobustMutexState);
+begin
+Create(PSimpleSynchronizerState(@SimpleRobustMutexState));
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TSimpleRobustMutex.Init;
 begin
 SimpleRobustMutexInit(PSimpleRobustMutexState(fStatePtr)^);
@@ -2014,6 +2275,56 @@ end;
 procedure TSimpleRobustMutex.Leave;
 begin
 SimpleRobustMutexUnlock(PSimpleRobustMutexState(fStatePtr)^);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              TSimpleRecursiveMutex
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRecursiveMutex - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TSimpleRecursiveMutex - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRecursiveMutex.Initialize(StatePtr: PSimpleSynchronizerState);
+begin
+inherited Initialize(StatePtr);
+If fOwnsState then
+  SimpleRecursiveMutexInit(PSimpleRecursiveMutexState(fStatePtr)^);
+end;
+
+{-------------------------------------------------------------------------------
+    TSimpleRecursiveMutex - public methods
+-------------------------------------------------------------------------------}
+
+constructor TSimpleRecursiveMutex.Create(var SimpleRecursiveMutexState: TSimpleRecursiveMutexState);
+begin
+Create(PSimpleSynchronizerState(@SimpleRecursiveMutexState));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRecursiveMutex.Init;
+begin
+SimpleRecursiveMutexInit(PSimpleRecursiveMutexState(fStatePtr)^);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRecursiveMutex.Enter;
+begin
+SimpleRecursiveMutexLock(PSimpleRecursiveMutexState(fStatePtr)^);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRecursiveMutex.Leave;
+begin
+SimpleRecursiveMutexUnlock(PSimpleRecursiveMutexState(fStatePtr)^);
 end;
 
 {$ENDIF}

@@ -29,7 +29,7 @@
 
   Version 1.0 (2024-04-14)
 
-  Last change 2024-04-28
+  Last change 2024-10-04
 
   ©2024 František Milt
 
@@ -350,6 +350,15 @@ type
   }
     Function AddressIndexOf(Address: Pointer; Strict: Boolean = False): Integer; virtual;
   {
+    Finds block to which given address points, stores its index in Index output
+    parameter and returns true. If no block overlapping with the given address
+    can be found, then the function returns false and value of Index is
+    undefined.
+
+    Refer to method AddressIndexOf for explanation of parameter Strict.
+  }
+    Function AddressFind(Address: Pointer; Strict: Boolean; out Index: Integer): Boolean; virtual;
+  {
     BlockOwned
 
     Returns true when the given address points to any present block (its
@@ -363,6 +372,14 @@ type
     not point to any block, then a negative value is returned.
   }
     Function BlockIndexOf(Block: Pointer): Integer; virtual;
+  {
+    BlockFind
+
+    Finds block with the given starting address, stores its index in Index
+    output parameter and returns true. If no block with given address can be
+    found, then the function returns false and value of Index is undefined.
+  }
+    Function BlockFind(Block: Pointer; out Index: Integer): Boolean; virtual;
     //- basic (de)allocation ---------------------------------------------------
   {
     AllocateBlock
@@ -1702,6 +1719,14 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TMBASegment.AddressFind(Address: Pointer; Strict: Boolean; out Index: Integer): Boolean;
+begin
+Index := AddressIndexOf(Address,Strict);
+Result := CheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TMBASegment.BlockOwned(Block: Pointer): Boolean;
 var
   Index:  Integer;
@@ -1736,6 +1761,14 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TMBASegment.BlockFind(Block: Pointer; out Index: Integer): Boolean;
+begin
+Index := BlockIndexOf(Block);
+Result := CheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TMBASegment.AllocateBlock(out Block: Pointer; InitMemory: Boolean);
 var
   Index:  Integer;
@@ -1764,8 +1797,7 @@ procedure TMBASegment.FreeBlock(var Block: Pointer);
 var
   Index:  Integer;
 begin
-Index := BlockIndexOf(Block);
-If CheckIndex(Index) then
+If BlockFind(Block,Index) then
   begin
     If not fAllocationMap[Index] then
       raise EMBAInvalidState.CreateFmt('TMBASegment.FreeBlock: Block %d not allocated.',[Index]);
@@ -1837,8 +1869,7 @@ var
 begin
 If BufferSize > 0 then
   begin
-    Index := BlockIndexOf(Buffer);
-    If CheckIndex(Index) then
+    If Blockfind(Buffer,Index) then
       begin
         RequiredBlockCount := BufferBlockCount(BufferSize);
         If RequiredBlockCount <= (fBlockCount - Index) then
@@ -2544,8 +2575,7 @@ ValidationInfo.BlockIndex := -1;
 // and now the fun part...
 For i := LowIndex to HighIndex do
   begin
-    Index := fSegments[i].BlockIndexOf(Block);
-    If fSegments[i].CheckIndex(Index) then
+    If fSegments[i].BlockFind(Block,Index) then
       begin
         ValidationInfo.Owned := True;
         ValidationInfo.Allocated := fSegments[i].AllocationMap[Index];
@@ -2581,8 +2611,7 @@ For i := Low(Blocks) to High(Blocks) do
     ValidationInfo[i].Address := Blocks[i];
     For j := LowIndex to HighIndex do
       begin
-        Index := fSegments[j].BlockIndexOf(Blocks[i]);
-        If fSegments[j].CheckIndex(Index) then
+        If fSegments[i].BlockFind(Blocks[i],Index) then
           begin
             ValidationInfo[i].Owned := True;
             ValidationInfo[i].Allocated := fSegments[j].AllocationMap[Index];

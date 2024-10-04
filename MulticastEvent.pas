@@ -11,7 +11,7 @@
 
   Version 1.1.1 (2024-05-03)
 
-  Last change 2024-05-03
+  Last change 2024-10-04
 
   ©2015-2024 František Milt
 
@@ -115,6 +115,8 @@ type
     Function HighIndex: Integer; override;
     Function IndexOf(const Handler: TCallback): Integer; overload; virtual;
     Function IndexOf(const Handler: TEvent): Integer; overload; virtual;
+    Function Find(const Handler: TCallback; out Index: Integer): Boolean; overload; virtual;
+    Function Find(const Handler: TEvent; out Index: Integer): Boolean; overload; virtual;
     Function Add(const Handler: TCallback; AllowDuplicity: Boolean = False): Integer; overload; virtual;
     Function Add(const Handler: TEvent; AllowDuplicity: Boolean = False): Integer; overload; virtual;
     Function Remove(const Handler: TCallback; RemoveAll: Boolean = True): Integer; overload; virtual;
@@ -139,6 +141,8 @@ type
   public
     Function IndexOf(const Handler: TNotifyCallback): Integer; reintroduce; overload;
     Function IndexOf(const Handler: TNotifyEvent): Integer; reintroduce; overload;
+    Function Find(const Handler: TNotifyCallback; out Index: Integer): Boolean; reintroduce; overload;
+    Function Find(const Handler: TNotifyEvent; out Index: Integer): Boolean; reintroduce; overload;
     Function Add(const Handler: TNotifyCallback; AllowDuplicity: Boolean = False): Integer; reintroduce; overload;
     Function Add(const Handler: TNotifyEvent; AllowDuplicity: Boolean = False): Integer; reintroduce; overload;
     Function Remove(const Handler: TNotifyCallback; RemoveAll: Boolean = True): Integer; reintroduce; overload;
@@ -280,12 +284,27 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TMulticastEvent.Find(const Handler: TCallback; out Index: Integer): Boolean;
+begin
+Index := IndexOf(Handler);
+Result := CheckIndex(Index);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TMulticastEvent.Find(const Handler: TEvent; out Index: Integer): Boolean;
+begin
+Index := IndexOf(Handler);
+Result := CheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TMulticastEvent.Add(const Handler: TCallback; AllowDuplicity: Boolean = False): Integer;
 begin
 If Assigned(Handler) then
   begin
-    Result := IndexOf(Handler);
-    If (Result < 0) or AllowDuplicity then
+    If not Find(Handler,Result) or AllowDuplicity then
       begin
         Grow;
         Result := fCount;
@@ -303,8 +322,7 @@ Function TMulticastEvent.Add(const Handler: TEvent; AllowDuplicity: Boolean = Fa
 begin
 If Assigned(TMethod(Handler).Code) and Assigned(TMethod(Handler).Data) then
   begin
-    Result := IndexOf(Handler);
-    If (Result < 0) or AllowDuplicity then
+    If not Find(Handler,Result) or AllowDuplicity then
       begin
         Grow;
         Result := fCount;
@@ -321,8 +339,7 @@ end;
 Function TMulticastEvent.Remove(const Handler: TCallback; RemoveAll: Boolean = True): Integer;
 begin
 repeat
-  Result := IndexOf(Handler);
-  If Result >= 0 then
+  If Find(Handler,Result) then
     Delete(Result);
 until not RemoveAll or (Result < 0);
 end;
@@ -332,8 +349,7 @@ end;
 Function TMulticastEvent.Remove(const Handler: TEvent; RemoveAll: Boolean = True): Integer;
 begin
 repeat
-  Result := IndexOf(Handler);
-  If Result >= 0 then
+  If Find(Handler,Result) then
     Delete(Result);
 until not RemoveAll or (Result < 0);
 end;
@@ -398,6 +414,20 @@ end;
 Function TMulticastNotifyEvent.IndexOf(const Handler: TNotifyEvent): Integer;
 begin
 Result := inherited IndexOf(TEvent(Handler));
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMulticastNotifyEvent.Find(const Handler: TNotifyCallback; out Index: Integer): Boolean;
+begin
+Result := inherited Find(TCallback(Handler),Index);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TMulticastNotifyEvent.Find(const Handler: TNotifyEvent; out Index: Integer): Boolean;
+begin
+Result := inherited Find(TEvent(Handler),Index);
 end;
 
 //------------------------------------------------------------------------------
