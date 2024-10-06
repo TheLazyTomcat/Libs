@@ -18,6 +18,14 @@
     classes with items of type Integer are provided (you can refer to them for
     more details).
 
+    Note that any of the vectors can be created as invariant-size circular/ring
+    buffer (if vector is full, its oldest item is replaced by any newly added
+    one). You only need to set constructor's CircularCapacity parameter to
+    desired capacity of the buffer (a number larger than zero).
+
+      WARNING - if the vector is created in this mode, you cannot change its
+                capacity allocated during creation.
+
   Version 1.0 (2024-07-15)
 
   Last change (2024-07-15)
@@ -91,23 +99,24 @@
   //procedure ItemRead(Item: Pointer; Stream: TStream); override;
   //class Function ManagedItemStreaming: Boolean; override;
   public
-    constructor Create(OperationMode: TSVOperationMode);
+    constructor Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
     Function IndexOf(Item: @Type@): Integer; reintroduce;
     Function Find(Item: @Type@; out Index: Integer): Boolean; reintroduce;
     procedure Push(Item: @Type@); reintroduce;
     Function Peek: @Type@; reintroduce;
     Function Pop: @Type@; reintroduce;
+    Function Pick(Index: Integer): @Type@; reintroduce;
     property Items[Index: Integer]: @Type@ read GetItem write SetItem;
   end;
 
   @FIFOClassName@ = class(@ClassName@)
   public
-    constructor Create;
+    constructor Create(CircularCapacity: Integer = -1);
   end;
 
   @LIFOClassName@ = class(@ClassName@)
   public
-    constructor Create;
+    constructor Create(CircularCapacity: Integer = -1);
   end;
 
 ==  Implementation  ============================================================
@@ -216,9 +225,9 @@ end;
 
 //==============================================================================
 
-constructor @ClassName@.Create(OperationMode: TSVOperationMode);
+constructor @ClassName@.Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
 begin
-inherited Create(OperationMode,SizeOf(@Type@));
+inherited Create(OperationMode,SizeOf(@Type@),CircularCapacity);
 end;
 
 //------------------------------------------------------------------------------
@@ -256,18 +265,25 @@ begin
 inherited Pop(@Result);
 end;
 
-//==============================================================================
+//------------------------------------------------------------------------------
 
-constructor @FIFOClassName@.Create;
+Function @ClassName@.Pick(Index: Integer): @Type@;
 begin
-inherited Create(omFIFO);
+inherited Pick(Index,@Result);
 end;
 
 //==============================================================================
 
-constructor @LIFOClassName@.Create;
+constructor @FIFOClassName@.Create(CircularCapacity: Integer = -1);
 begin
-inherited Create(omLIFO);
+inherited Create(omFIFO,CircularCapacity);
+end;
+
+//==============================================================================
+
+constructor @LIFOClassName@.Create(CircularCapacity: Integer = -1);
+begin
+inherited Create(omLIFO,CircularCapacity);
 end;
 
 *******************************************************************************)
@@ -336,6 +352,7 @@ type
     fCount:             Integer;
     fHighMemory:        Pointer;
     fFirstItemPosition: Integer;
+    fCircularCapacity:  Integer;
     fUpdateCounter:     Integer;
     fChanged:           Boolean;
     fOnChangeEvent:     TNotifyEvent;
@@ -357,7 +374,7 @@ type
     procedure ItemWrite(Item: Pointer; Stream: TStream); virtual;
     procedure ItemRead(Item: Pointer; Stream: TStream); virtual;
     // init/final
-    procedure Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize); virtual;
+    procedure Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer); virtual;
     procedure Finalize; virtual;
     // internals
     Function ItemsMemorySize(Count: Integer): TMemSize; virtual;
@@ -371,7 +388,7 @@ type
     procedure PopLast(ItemPtr: Pointer); virtual;
     procedure InternalReadFromStream(Stream: TStream); virtual;
   public
-    constructor Create(OperationMode: TSVOperationMode; ItemSize: TMemSize);
+    constructor Create(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer = -1);
     destructor Destroy; override;
     procedure BeginUpdate; virtual;
     procedure EndUpdate; virtual;
@@ -383,6 +400,7 @@ type
     procedure Push(ItemPtr: Pointer); virtual;
     procedure Peek(ItemPtr: Pointer); virtual;
     procedure Pop(ItemPtr: Pointer); virtual;
+    procedure Pick(Index: Integer; ItemPtr: Pointer); virtual;
     procedure Clear; virtual;
     // I/O
     procedure WriteToStream(Stream: TStream); virtual;
@@ -400,6 +418,7 @@ type
     property ItemSize: TMemSize read fItemSize;
     property Memory: Pointer read fMemory;
     property MemorySize: TMemSize read fMemorySize;
+    property CircularCapacity: Integer read fCircularCapacity;
     property Pointers[Index: Integer]: Pointer read GetItemPtr;
     property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
     property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
@@ -429,12 +448,13 @@ type
     procedure ItemRead(Item: Pointer; Stream: TStream); override;
     class Function ManagedItemStreaming: Boolean; override;
   public
-    constructor Create(OperationMode: TSVOperationMode);
+    constructor Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
     Function IndexOf(Item: Integer): Integer; reintroduce;
     Function Find(Item: Integer; out Index: Integer): Boolean; reintroduce;
     procedure Push(Item: Integer); reintroduce;
     Function Peek: Integer; reintroduce;
     Function Pop: Integer; reintroduce;
+    Function Pick(Index: Integer): Integer; reintroduce;
     property Items[Index: Integer]: Integer read GetItem write SetItem;
   end;
 
@@ -449,7 +469,7 @@ type
 type
   TIntegerFIFOVector = class(TIntegerSequentialVector)
   public
-    constructor Create;
+    constructor Create(CircularCapacity: Integer = -1);
   end;
 
   // aliasses
@@ -467,7 +487,7 @@ type
 type
   TIntegerLIFOVector = class(TIntegerSequentialVector)
   public
-    constructor Create;
+    constructor Create(CircularCapacity: Integer = -1);
   end;
 
   // aliasses
@@ -550,7 +570,7 @@ If Value < 0 then
   raise ESVInvalidValue.CreateFmt('TSequentialVector.SetCapacity: Invalid new capacity (%d).',[Value]);
 If Value < fCount then
   raise ESVInvalidOperation.CreateFmt('TSequentialVector.SetCapacity: Cannot lower capacity (%d) below count (%d).',[Value,fCount]);
-If Value <> fCapacity then
+If (Value <> fCapacity) and (fCircularCapacity <= 0) then
   begin
     If fCount > 0 then
       begin
@@ -641,7 +661,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSequentialVector.Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize);
+procedure TSequentialVector.Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer);
 begin
 fOperationMode := OperationMode;
 case fOperationMode of
@@ -663,6 +683,10 @@ fCapacity := 0;
 fCount := 0;
 fHighMemory := fMemory;
 fFirstItemPosition := 0;
+fCircularCapacity := 0;
+If CircularCapacity > 0 then
+  SetCapacity(CircularCapacity);
+fCircularCapacity := CircularCapacity;
 fUpdateCounter := 0;
 fChanged := False;
 fOnChangeEvent := nil;
@@ -799,10 +823,10 @@ end;
     TSequentialVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TSequentialVector.Create(OperationMode: TSVOperationMode; ItemSize: TMemSize);
+constructor TSequentialVector.Create(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer = -1);
 begin
 inherited Create;
-Initialize(OperationMode,ItemSize);
+Initialize(OperationMode,ItemSize,CircularCapacity);
 end;
 
 //------------------------------------------------------------------------------
@@ -885,12 +909,32 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSequentialVector.Push(ItemPtr: Pointer);
+var
+  ChangedItem:  Pointer;
 begin
 // push is the same for lifo and fifo
-Grow;
-Inc(fCount);
-ItemAssign(ItemPtr,GetItemPtr(HighIndex));
-DoChange;
+If (fCircularCapacity > 0) and (fCount >= fCircularCapacity) and (fCircularCapacity = fCapacity) then
+  begin
+  {
+    Operating as circular buffer with limited size - remove oldest item and
+    replace it with the new one. Remember to do implicit item cleanup.
+  }
+    ChangedItem := GetItemPtr(LowIndex);
+    ItemFinal(ChangedItem);
+    ItemAssign(ItemPtr,ChangedItem);
+    Inc(fFirstItemPosition);
+    If fFirstItemPosition >= fCapacity then
+      fFirstItemPosition := 0;
+    DoChange;
+  end
+else
+  begin
+    // vanilla stuff
+    Grow;
+    Inc(fCount);
+    ItemAssign(ItemPtr,GetItemPtr(HighIndex));
+    DoChange;
+  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -913,6 +957,41 @@ If fCount > 0 then
     DoChange;
   end
 else raise ESVNoItem.Create('TSequentialVector.Pop: Cannot pop an empty vector.');
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSequentialVector.Pick(Index: Integer; ItemPtr: Pointer);
+var
+  CurrItem: Pointer;
+  NextItem: Pointer;
+  i:        Integer;
+begin
+If CheckIndex(Index) then
+  begin
+    If Index = LowIndex then
+      PopFirst(ItemPtr)
+    else If Index = HighIndex then
+      PopLast(ItemPtr)
+    else
+      begin
+        // if we are here, it means there are at least 3 items!
+        ItemAssign(GetItemPtr(Index),ItemPtr);
+        CurrItem := GetItemPtr(Index);
+        NextItem := NextItemPtr(CurrItem);
+        For i := Index to Pred(HighIndex) do
+          begin
+            Move(NextItem^,CurrItem^,fItemSize);
+            // following should be faster than constantly calling GetItemPtr
+            CurrItem := NextItem;
+            NextItem := NextItemPtr(CurrItem);
+          end;
+        Dec(fCount);
+        Shrink;
+      end;
+    DoChange;
+  end
+else raise ESVIndexOutOfBounds.CreateFmt('TSequentialVector.Pick: Index (%d) out of bounds.',[Index]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1129,9 +1208,9 @@ end;
     TIntegerSequentialVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TIntegerSequentialVector.Create(OperationMode: TSVOperationMode);
+constructor TIntegerSequentialVector.Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
 begin
-inherited Create(OperationMode,SizeOf(Integer));
+inherited Create(OperationMode,SizeOf(Integer),CircularCapacity);
 end;
 
 //------------------------------------------------------------------------------
@@ -1169,6 +1248,13 @@ begin
 inherited Pop(@Result);
 end;
 
+//------------------------------------------------------------------------------
+
+Function TIntegerSequentialVector.Pick(Index: Integer): Integer;
+begin
+inherited Pick(Index,@Result);
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1182,9 +1268,9 @@ end;
     TIntegerFIFOVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TIntegerFIFOVector.Create;
+constructor TIntegerFIFOVector.Create(CircularCapacity: Integer = -1);
 begin
-inherited Create(omFIFO);
+inherited Create(omFIFO,CircularCapacity);
 end;
 
 
@@ -1200,9 +1286,9 @@ end;
     TIntegerLIFOVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TIntegerLIFOVector.Create;
+constructor TIntegerLIFOVector.Create(CircularCapacity: Integer = -1);
 begin
-inherited Create(omLIFO);
+inherited Create(omLIFO,CircularCapacity);
 end;
 
 

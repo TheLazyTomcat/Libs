@@ -9,9 +9,9 @@
 
   Auxiliary classes and other class-related things
 
-  Version 1.2.2 (2024-04-14)
+  Version 1.2.3 (2024-10-04)
 
-  Last change 2024-04-28
+  Last change 2024-10-04
 
   ©2018-2024 František Milt
 
@@ -272,12 +272,65 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function Max(A,B: Integer): Integer;
+Function ResolveGrowDelta(Capacity,Count,MinDelta: Integer; GrowSettings: TListGrowSettings; out Delta: Integer): Boolean;
 begin
-If A > B then
-  Result := A
-else
-  Result := B;
+// we are assuming sane inputs, namely that count is NOT bigger than capacity
+If (Count + MinDelta) > Capacity then
+  begin
+    If Capacity > 0 then
+      case GrowSettings.GrowMode of
+        gmLinear:
+          Delta := Trunc(GrowSettings.GrowFactor);
+        gmFast:
+          Delta := Trunc(Capacity * GrowSettings.GrowFactor);
+        gmFastAttenuated:
+          If Capacity < GrowSettings.GrowLimit then
+            Delta := Trunc(Capacity * GrowSettings.GrowFactor)
+          else
+            Delta := GrowSettings.GrowLimit shr 4;
+      else
+       {gmSlow}
+        Delta := 1;
+      end
+    else Delta := GrowSettings.GrowInit;
+    If Delta < MinDelta then
+      Delta := MinDelta;
+  end
+else Delta := 0;
+Result := Delta > 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveShrinkCapacity(Capacity,Count: Integer; GrowSettings: TListGrowSettings; out NewCapacity: Integer): Boolean;
+
+  Function Max(A,B: Integer): Integer;
+  begin
+    If A > B then
+      Result := A
+    else
+      Result := B;
+  end;
+
+begin
+Result := True;
+If Capacity > 0 then
+  case GrowSettings.ShrinkMode of
+    smNormal:
+      If Count <= 0 then
+        NewCapacity := 0
+      else If (Capacity > GrowSettings.ShrinkLimit) and
+              (Count <= Trunc(Capacity * GrowSettings.ShrinkFactor)) then
+        NewCapacity := Max(Trunc(Capacity * GrowSettings.ShrinkFactor),GrowSettings.ShrinkLimit)
+      else
+        Result := False;
+    smToCount:
+      NewCapacity := Count;
+  else
+    {smKeepCap}
+    Result := False;
+  end
+else Result := False;
 end;
 
 {===============================================================================

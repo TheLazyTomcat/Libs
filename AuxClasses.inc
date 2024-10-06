@@ -11,9 +11,9 @@
 
     This file contains main classes template used by AuxClasses library.
 
-  Version 1.2.2 (2024-04-14)
+  Version 1.2.3 (2024-10-04)
 
-  Last change 2024-04-28
+  Last change 2024-10-04
 
   ©2018-2024 František Milt
 
@@ -418,51 +418,18 @@ procedure {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF}.Grow
 var
   Delta:  Integer;
 begin
-If Count >= Capacity then
-  begin
-    If Capacity <= 0 then
-      Delta := fListGrowSettings.GrowInit
-    else
-      case fListGrowSettings.GrowMode of
-        gmLinear:
-          Delta := Trunc(fListGrowSettings.GrowFactor);
-        gmFast:
-          Delta := Trunc(Capacity * fListGrowSettings.GrowFactor);
-        gmFastAttenuated:
-          If Capacity >= fListGrowSettings.GrowLimit then
-            Delta := fListGrowSettings.GrowLimit shr 4
-          else
-            Delta := Trunc(Capacity * fListGrowSettings.GrowFactor);
-      else
-       {gmSlow}
-        Delta := 1;
-      end;
-    If Delta < MinDelta then
-      Delta := MinDelta;
-    If Delta <= 0 then
-      Delta := 1;
-    Capacity := Capacity + Delta;
-  end;
+If ResolveGrowDelta(Capacity,Count,MinDelta,fListGrowSettings,Delta) then
+  Capacity := Capacity + Delta;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF}.Shrink;
+var
+  NewCap: Integer;
 begin
-If Capacity > 0 then
-  case fListGrowSettings.ShrinkMode of
-    smNormal:
-      If Count <= 0 then
-        Capacity := 0
-      else If (Capacity > fListGrowSettings.ShrinkLimit) and
-              (Count <= Trunc(Capacity * fListGrowSettings.ShrinkFactor)) then
-        Capacity := Max(Trunc(Capacity * fListGrowSettings.ShrinkFactor),fListGrowSettings.ShrinkLimit);
-    smToCount:
-      Capacity := Count;
-  else
-    {smKeepCap}
-    //do nothing
-  end;
+If ResolveShrinkCapacity(Capacity,Count,fListGrowSettings,NewCap) then
+  Capacity := NewCap;
 end;
 
 {-------------------------------------------------------------------------------
@@ -711,31 +678,8 @@ var
 begin
 If CheckList(List) then
   begin
-    If Count[List] >= Capacity[List] then
-      begin
-        If Capacity[List] <= 0 then
-          Delta := fListGrowSettings[List].GrowInit
-        else
-          case fListGrowSettings[List].GrowMode of
-            gmLinear:
-              Delta := Trunc(fListGrowSettings[List].GrowFactor);
-            gmFast:
-              Delta := Trunc(Capacity[List] * fListGrowSettings[List].GrowFactor);
-            gmFastAttenuated:
-              If Capacity[List] >= fListGrowSettings[List].GrowLimit then
-                Delta := fListGrowSettings[List].GrowLimit shr 4
-              else
-                Delta := Trunc(Capacity[List] * fListGrowSettings[List].GrowFactor);
-          else
-           {gmSlow}
-            Delta := 1;
-          end;
-        If Delta < MinDelta then
-          Delta := MinDelta;
-        If Delta <= 0 then
-          Delta := 1;
-        Capacity[List] := Capacity[List] + Delta;
-      end;
+    If ResolveGrowDelta(Capacity[List],Count[List],MinDelta,fListGrowSettings[List],Delta) then
+      Capacity[List] := Capacity[List] + Delta;
   end
 else raise EACIndexOutOfBounds.CreateFmt('%s.Grow: List index (%d) out of bounds.',[StaticClassName,List]);
 end;
@@ -743,23 +687,13 @@ end;
 //------------------------------------------------------------------------------
 
 procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.Shrink(List: Integer);
+var
+  NewCap: Integer;
 begin
 If CheckList(List) then
   begin
-    If Capacity[List] > 0 then
-      case fListGrowSettings[List].ShrinkMode of
-        smToCount:
-          Capacity[List] := Count[List];
-        smNormal:
-          If Count[List] <= 0 then
-            Capacity[List] := 0
-          else If (Capacity[List] > fListGrowSettings[List].ShrinkFactor) and
-                  (Count[List] <= Trunc(Capacity[List] * fListGrowSettings[List].ShrinkFactor)) then
-            Capacity[List] := Max(Trunc(Capacity[List] * fListGrowSettings[List].ShrinkFactor),fListGrowSettings[List].ShrinkLimit);
-      else
-        {smKeepCap}
-        //do nothing
-      end;
+    If ResolveShrinkCapacity(Capacity[List],Count[List],fListGrowSettings[List],NewCap) then
+      Capacity[List] := NewCap;
   end
 else raise EACIndexOutOfBounds.CreateFmt('%s.Shrink: List index (%d) out of bounds.',[StaticClassName,List]);
 end;
@@ -819,7 +753,7 @@ begin
 If Self.ListCount = Source.ListCount then
   begin
     For i := LowList to HighList do
-      fListGrowSettings[i] := AC_LIST_GROW_SETTINGS_DEF;
+      fListGrowSettings[i] := Source.ListGrowSettings[i];
   end
 else raise EACIncompatibleClass.CreateFmt('%s.CopyGrowSettings: List count mismatch (%d,%d).',[StaticClassName,Self.ListCount,Source.ListCount]);
 end;

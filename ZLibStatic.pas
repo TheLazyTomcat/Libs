@@ -20,7 +20,7 @@
 
   Build against zlib version 1.3.1
 
-  Last change 2024-05-10
+  Last change 2024-10-06
 
   ©2017-2024 František Milt
 
@@ -67,7 +67,7 @@ unit ZLibStatic;
 interface
 
 uses
-  AuxTypes, ZLibCommon;
+  ZLibCommon;
 
 {===============================================================================
     Zlib functions
@@ -1607,7 +1607,7 @@ Function inflateSyncPoint(strm: z_streamp): int; cdecl; external;
 Function get_crc_table: pz_crc_t; cdecl; external;
 Function inflateUndermine(strm: z_streamp; subvert: int): int; cdecl; external;
 Function inflateValidate(strm: z_streamp; check: int): int; cdecl; external;
-Function inflateCodesUsed(strm: z_streamp): UInt32; cdecl; external;
+Function inflateCodesUsed(strm: z_streamp): ulong; cdecl; external;
 Function inflateResetKeep(strm: z_streamp): int; cdecl; external;
 Function deflateResetKeep(strm: z_streamp): int; cdecl; external;
 {$IF Defined(GZIP_Support) and Defined(Windows)}
@@ -1615,11 +1615,6 @@ Function gzopen_w(path: PWideChar; mode: PAnsiChar): gzFile; cdecl; external;
 {$IFEND}
 
 implementation
-
-{$IF Defined(GZIP_Support) and Defined(Windows)}
-uses
-  DynLibUtils;
-{$IFEND}
 
 //== Macro implementation ======================================================
 
@@ -1818,262 +1813,203 @@ end;
 
 {$IF Defined(GZIP_Support) and Defined(Windows)}
 
-var
-  CRT_LibraryHandle:      TDLULibraryHandle = DefaultLibraryHandle;
-  CRT_libfunc_strlen:     Pointer = nil;
-  CRT_libfunc_open:       Pointer = nil;
-  CRT_libfunc_lseek:      Pointer = nil;
-  CRT_libfunc_wcstombs:   Pointer = nil;
-  CRT_libfunc_wopen:      Pointer = nil;
-  CRT_libfunc_vsnprintf:  Pointer = nil;
-  CRT_libfunc_close:      Pointer = nil;
-  CRT_libfunc_memchr:     Pointer = nil;
-  CRT_libfunc_read:       Pointer = nil;
-  CRT_libfunc_strerror:   Pointer = nil;
-  CRT_libfunc_errno:      Pointer = nil;
-  CRT_libfunc_write:      Pointer = nil;
-  CRT_libfunc_snprintf:   Pointer = nil;
-  CRT_libfunc_memmove:    Pointer = nil;
-  CRT_libfunc_lseeki64:   Pointer = nil;
-
-//------------------------------------------------------------------------------
-
-procedure CRT_Initialize;
-begin
-If OpenLibraryAndResolveSymbols('msvcrt.dll',CRT_LibraryHandle,[
-  Symbol(@CRT_libfunc_strlen   ,'strlen'),
-  Symbol(@CRT_libfunc_open     ,'_open'),
-  Symbol(@CRT_libfunc_lseek    ,'_lseek'),
-  Symbol(@CRT_libfunc_wcstombs ,'wcstombs'),
-  Symbol(@CRT_libfunc_wopen    ,'_wopen'),
-  Symbol(@CRT_libfunc_vsnprintf,'_vsnprintf'),
-  Symbol(@CRT_libfunc_close    ,'_close'),
-  Symbol(@CRT_libfunc_memchr   ,'memchr'),
-  Symbol(@CRT_libfunc_read     ,'_read'),
-  Symbol(@CRT_libfunc_strerror ,'strerror'),
-  Symbol(@CRT_libfunc_errno    ,'_errno'),
-  Symbol(@CRT_libfunc_write    ,'_write'),
-  Symbol(@CRT_libfunc_snprintf ,'_snprintf'),
-  Symbol(@CRT_libfunc_memmove  ,'memmove'),
-  Symbol(@CRT_libfunc_lseeki64 ,'_lseeki64')
-],True) <> 15 then
-  raise EZLibException.Create('Failed to initialize CRT.');
-end;
-
-//------------------------------------------------------------------------------
-
-procedure CRT_Finalize;
-begin
-CloseLibrary(CRT_LibraryHandle);
-end;
-
-//==============================================================================
-
 {$STACKFRAMES OFF}
-
 const
 {$IFDEF x64}
   SymbolPrefix = '';
 {$ELSE}
   SymbolPrefix = '_';
 {$ENDIF}
+  crtlib = 'msvcrt.dll';
 
 //------------------------------------------------------------------------------
 
+procedure CRT_libfunc_strlen; cdecl; external crtlib name 'strlen';
+
 procedure strlen; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
-asm
+asm  
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_strlen]
-{$ELSE}
-    JMP   CRT_libfunc_strlen
 {$ENDIF}
+    JMP   CRT_libfunc_strlen
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_open; cdecl; external crtlib name '_open';
 
 procedure open; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_open]
-{$ELSE}
-    JMP   CRT_libfunc_open
 {$ENDIF}
+    JMP   CRT_libfunc_open
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_lseek; cdecl; external crtlib name '_lseek';
 
 procedure lseek; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_lseek]
-{$ELSE}
-    JMP   CRT_libfunc_lseek
 {$ENDIF}
+    JMP   CRT_libfunc_lseek
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_wcstombs; cdecl; external crtlib name 'wcstombs';
 
 procedure wcstombs; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_wcstombs]
-{$ELSE}
-    JMP   CRT_libfunc_wcstombs
 {$ENDIF}
+    JMP   CRT_libfunc_wcstombs
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_wopen; cdecl; external crtlib name '_wopen';
 
 procedure _wopen; cdecl;{$IFDEF FPC} public name '__imp_' + SymbolPrefix + '_wopen';{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_wopen]
-{$ELSE}
-    JMP   CRT_libfunc_wopen
 {$ENDIF}
+    JMP   CRT_libfunc_wopen
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_vsnprintf; cdecl; external crtlib name '_vsnprintf';
 
 procedure vsnprintf; cdecl;{$IFDEF FPC} public name SymbolPrefix + '__ms_vsnprintf';{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_vsnprintf]
-{$ELSE}
-    JMP   CRT_libfunc_vsnprintf
 {$ENDIF}
+    JMP   CRT_libfunc_vsnprintf
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_close; cdecl; external crtlib name '_close';
 
 procedure close; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_close]
-{$ELSE}
-    JMP   CRT_libfunc_close
 {$ENDIF}
+    JMP   CRT_libfunc_close
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_memchr; cdecl; external crtlib name 'memchr';
 
 procedure memchr; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_memchr]
-{$ELSE}
-    JMP   CRT_libfunc_memchr
 {$ENDIF}
+    JMP   CRT_libfunc_memchr
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_read; cdecl; external crtlib name '_read';
 
 procedure read; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_read]
-{$ELSE}
-    JMP   CRT_libfunc_read
 {$ENDIF}
+    JMP   CRT_libfunc_read
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_strerror; cdecl; external crtlib name 'strerror';
 
 procedure strerror; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_strerror]
-{$ELSE}
-    JMP   CRT_libfunc_strerror
 {$ENDIF}
+    JMP   CRT_libfunc_strerror
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_errno; cdecl; external crtlib name '_errno';
 
 procedure __errno; cdecl;{$IFDEF FPC} public name '__imp_' + SymbolPrefix + '_errno';{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_errno]
-{$ELSE}
-    JMP   CRT_libfunc_errno
 {$ENDIF}
+    JMP   CRT_libfunc_errno
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_write; cdecl; external crtlib name '_write';
 
 procedure write; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_write]
-{$ELSE}
-    JMP   CRT_libfunc_write
 {$ENDIF}
+    JMP   CRT_libfunc_write
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_snprintf; cdecl; external crtlib name '_snprintf';
 
 procedure snprintf; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_snprintf]
-{$ELSE}
-    JMP   CRT_libfunc_snprintf
 {$ENDIF}
+    JMP   CRT_libfunc_snprintf
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_memmove; cdecl; external crtlib name 'memmove';
 
 procedure memmove; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_memmove]
-{$ELSE}
-    JMP   CRT_libfunc_memmove
 {$ENDIF}
+    JMP   CRT_libfunc_memmove
 end;
 
 //------------------------------------------------------------------------------
+
+procedure CRT_libfunc_lseeki64; cdecl; external crtlib name '_lseeki64';
 
 procedure _lseeki64; cdecl;{$IFDEF FPC} public;{$ENDIF} assembler;{$IFDEF FPC} nostackframe; {$ENDIF}
 asm
 {$IFDEF x64}
   {$IFNDEF FPC}.NOFRAME{$ENDIF}
-    JMP   [RIP + CRT_libfunc_lseeki64]
-{$ELSE}
-    JMP   CRT_libfunc_lseeki64
 {$ENDIF}
+    JMP   CRT_libfunc_lseeki64
 end;
 
 {$IFEND}
 
 //==============================================================================
 
-initialization
 {$IFDEF CheckCompatibility)}
+initialization
   CheckCompatibility(zlibCompileFlags);
 {$ENDIF}
-{$IF Defined(GZIP_Support) and Defined(Windows)}
-  CRT_Initialize;
-{$IFEND}
-
-finalization
-{$IF Defined(GZIP_Support) and Defined(Windows)}
-  CRT_Finalize;
-{$IFEND}
 
 end.
 
