@@ -14,11 +14,11 @@
 
     More info about the mpg123 library can be found at: https://www.mpg123.de
 
-  Version 1.0.6 (2024-05-03)
+  Version 1.0.7 (2024-10-14)
 
   Build against library version 1.25.13 (mpg123 API version 44)
 
-  Last change 2024-05-03
+  Last change 2024-10-14
 
   ©2018-2024 František Milt
 
@@ -47,6 +47,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
@@ -1568,13 +1569,13 @@ uses
   DynLibUtils;
 
 var
-  mpg123_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
+  mpg123_LibraryContext:  TDLULibraryContext;
 
 //------------------------------------------------------------------------------  
 
 Function mpg123_Initialized: Boolean;
 begin
-Result := CheckLibrary(mpg123_LibraryHandle);
+Result := CheckLibrary(mpg123_LibraryContext);
 end;
 
 //------------------------------------------------------------------------------
@@ -1584,7 +1585,7 @@ const
   // function name suffix for large files support  
   LFS_DEF_SUFFIX = {$IFDEF LARGE_FILES_SUPPORT}'_64'{$ELSE}''{$ENDIF};  
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,mpg123_LibraryHandle,[
+Result := OpenLibraryAndResolveSymbols(LibPath,mpg123_LibraryContext,[
   // mpg123 library and handle setup - - - - - - - - - - - - - - - - - - - - - -
   Symbol(@@mpg123_init                    ,'mpg123_init'),
   Symbol(@@mpg123_exit                    ,'mpg123_exit'),
@@ -1734,7 +1735,7 @@ Result := OpenLibraryAndResolveSymbols(LibPath,mpg123_LibraryHandle,[
   Symbol(@@mpg123_replace_reader_64       ,'mpg123_replace_reader_64'),
   Symbol(@@mpg123_replace_reader_handle   ,'mpg123_replace_reader_handle' + LFS_DEF_SUFFIX),
   Symbol(@@mpg123_replace_reader_handle_32,'mpg123_replace_reader_handle_32'),
-  Symbol(@@mpg123_replace_reader_handle_64,'mpg123_replace_reader_handle_64')],True) = 135;
+  Symbol(@@mpg123_replace_reader_handle_64,'mpg123_replace_reader_handle_64')],[optExceptionOnFailure]) = 135;
 // init library
 If Result and InitLib then
   Result := mpg123_init() = MPG123_OK;
@@ -1746,7 +1747,12 @@ procedure mpg123_Finalize(FinalLib: Boolean = True);
 begin   
 If FinalLib and Assigned(mpg123_exit) then
   mpg123_exit;
-CloseLibrary(mpg123_LibraryHandle);
+CloseLibrary(mpg123_LibraryContext);
 end;
+
+//==============================================================================
+
+initialization
+  mpg123_LibraryContext := DefaultLibraryContext;
 
 end.

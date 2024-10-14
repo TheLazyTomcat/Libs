@@ -15,9 +15,9 @@
     Since the interface is slightly different, it is not intended as a direct
     drop-in replacement.
 
-  Version 1.1.1 (2024-02-03)
+  Version 1.1.2 (2024-10-14)
 
-  Last change 2024-02-03
+  Last change 2024-10-14
 
   ©2019-2024 František Milt
 
@@ -49,9 +49,10 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
-    WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
+    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
 unit RegistryEx;
@@ -7852,7 +7853,7 @@ var
 
 procedure UnitInitialize;
 begin
-AdvApi32Handle := OpenAndCheckLibrary('advapi32.dll');
+AdvApi32Handle := OpenLibrary('advapi32.dll',[optExceptionOnFailure]);
 {$IFNDEF CPU64bit}
 {
   Functions Reg*ReflectionKey are always loaded on 64bit Windows. On 32bit
@@ -7862,12 +7863,12 @@ AdvApi32Handle := OpenAndCheckLibrary('advapi32.dll');
 If IsWindowsVistaOrGreater or IsRunningUnderWoW64 then
 {$ENDIF}
   begin
-    RegQueryReflectionKey := GetAndCheckSymbolAddr(AdvApi32Handle,'RegQueryReflectionKey');
-    RegEnableReflectionKey := GetAndCheckSymbolAddr(AdvApi32Handle,'RegEnableReflectionKey');
-    RegDisableReflectionKey := GetAndCheckSymbolAddr(AdvApi32Handle,'RegDisableReflectionKey');
+    RegQueryReflectionKey := GetSymbolAddr(AdvApi32Handle,'RegQueryReflectionKey',[optExceptionOnFailure]);
+    RegEnableReflectionKey := GetSymbolAddr(AdvApi32Handle,'RegEnableReflectionKey',[optExceptionOnFailure]);
+    RegDisableReflectionKey := GetSymbolAddr(AdvApi32Handle,'RegDisableReflectionKey',[optExceptionOnFailure]);
   end;
 If IsWindowsVistaOrGreater then
-  RegDisablePredefinedCacheEx := GetAndCheckSymbolAddr(AdvApi32Handle,'RegDisablePredefinedCacheEx');
+  RegDisablePredefinedCacheEx := GetSymbolAddr(AdvApi32Handle,'RegDisablePredefinedCacheEx',[optExceptionOnFailure]);
 end;
 
 //------------------------------------------------------------------------------

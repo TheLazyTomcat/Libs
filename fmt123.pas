@@ -14,11 +14,11 @@
 
     More info about the mpg123 library can be found at: https://www.mpg123.de
 
-  Version 1.0.6 (2024-05-03)
+  Version 1.0.7 (2024-10-14)
 
   Build against library version 1.25.13
 
-  Last change 2024-05-03
+  Last change 2024-10-14
 
   ©2018-2024 František Milt
 
@@ -47,6 +47,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils

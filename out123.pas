@@ -14,11 +14,11 @@
 
     More info about the mpg123 library can be found at: https://www.mpg123.de
 
-  Version 1.0.6 (2024-05-03)
+  Version 1.0.7 (2024-10-14)
 
   Build against library version 1.25.13 (libout123 API version 2)
 
-  Last change 2024-05-03
+  Last change 2024-10-14
 
   ©2018-2024 František Milt
 
@@ -47,6 +47,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
@@ -667,20 +668,20 @@ end;
 //==============================================================================
 
 var
-  out123_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
+  out123_LibraryContext:  TDLULibraryContext;
 
 //------------------------------------------------------------------------------
 
 Function out123_Initialized: Boolean;
 begin
-Result := CheckLibrary(out123_LibraryHandle);
+Result := CheckLibrary(out123_LibraryContext);
 end;
 
 //------------------------------------------------------------------------------
 
 Function out123_Initialize(const LibPath: String = out123_LibFileName): Boolean;
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,out123_LibraryHandle,[
+Result := OpenLibraryAndResolveSymbols(LibPath,out123_LibraryContext,[
   Symbol(@@out123_new           ,'out123_new'),
   Symbol(@@out123_del           ,'out123_del'),
   Symbol(@@out123_strerror      ,'out123_strerror'),
@@ -710,14 +711,19 @@ Result := OpenLibraryAndResolveSymbols(LibPath,out123_LibraryHandle,[
   Symbol(@@out123_drain         ,'out123_drain'),
   Symbol(@@out123_ndrain        ,'out123_ndrain'),
   Symbol(@@out123_buffered      ,'out123_buffered'),
-  Symbol(@@out123_getformat     ,'out123_getformat')],True) = 30;
+  Symbol(@@out123_getformat     ,'out123_getformat')],[optExceptionOnFailure]) = 30;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure out123_Finalize;
 begin
-CloseLibrary(out123_LibraryHandle);
+CloseLibrary(out123_LibraryContext);
 end;
+
+//==============================================================================
+
+initialization
+  out123_LibraryContext := DefaultLibraryContext;
 
 end.

@@ -16,9 +16,9 @@
     There are also contexts which offer more advanced options, but they are
     currently untested - use them with caution.
 
-  Version 1.3.2 (2024-05-03)
+  Version 1.4 (2024-10-14)
 
-  Last change 2024-05-03
+  Last change 2024-10-14
 
   ©2020-2024 František Milt
 
@@ -39,6 +39,7 @@
   Dependencies:
   * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
   * SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
   * WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
@@ -143,9 +144,10 @@ uses
 type
   EDLUException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
-  EDLULibraryOpenError = class(EDLUException);
-  EDLUInvalidParameter = class(EDLUException);
-  EDLUSymbolError      = class(EDLUException);
+  EDLULibraryOpenError  = class(EDLUException);
+  EDLULibraryCloseError = class(EDLUException);
+  EDLUInvalidParameter  = class(EDLUException);
+  EDLUSymbolError       = class(EDLUException);
 
 {$IFDEF Windows}
 {===============================================================================
@@ -178,10 +180,10 @@ Function Symbol(AddressVar: PPointer; const Name: String): TDLUSymbol; overload;
 {
   LibraryIsPresent
 
-  Tries to load the requested library. If it succeeded, it returns true,
+  Tries to load the requested library. If it succeeds, it returns true,
   otherwise it will return false.
 
-    NOTE - critical error dialog is suppressed.
+  Critical error dialog is suppressed.
 }
 Function LibraryIsPresent(const LibFileName: String): Boolean;
 
@@ -196,8 +198,20 @@ Function LibraryIsPresent(const LibFileName: String): Boolean;
 
   If the library cannot be loaded, it will raise an EDLULibraryOpenError
   exception.
+
+  Critical error dialog is suppressed.
 }
 Function SymbolIsPresent(const LibFileName, SymbolName: String): Boolean;
+
+{
+  LibrarySymbolIsPresent
+
+  Returns true when the requested library can be loaded and requested symbol
+  can be obtained from it, false otherwise. No exceptions are raised.
+
+  Critical error dialog is suppressed.
+}
+Function LibrarySymbolIsPresent(const LibFileName, SymbolName: String): Boolean;
 
 
 {===============================================================================
@@ -205,6 +219,16 @@ Function SymbolIsPresent(const LibFileName, SymbolName: String): Boolean;
                                 Handle functions
 --------------------------------------------------------------------------------
 ===============================================================================}
+{
+  Functions operating on library handles are supposed to be used only locally
+  (no global variables and such) or when the handles are strictly managed.
+  If you want to operate on libraries globally (ie. using global variables)
+  or from multiple threads, use contexts.
+
+  Given the implementation, a variable of type TDLULibraryHandle must be
+  assigned only once, because each call to CloseLibrary on it will invalidate
+  that variable.
+}
 {===============================================================================
     Handle functions - declaration
 ===============================================================================}
@@ -215,77 +239,272 @@ type
 const
   DefaultLibraryHandle = TDLULibraryHandle({$IFDEF Windows}0{$ELSE}nil{$ENDIF});
 
+type
+{
+  TDLUOption
+
+  Individual values of this enumeration are used to activate or deactivate
+  specific options available in calls provided by this library.
+
+  Most of implemented functions support only a subset of all options - refer
+  to description of each function to see what options are observed.
+
+  optDeepCheck
+
+    Normally, when a library handle is checked for validity, it is only probed
+    whether is is assigned - ie. is not null or nil.
+
+    When this option is added, the checking continues by trying to obtain some
+    (inplementation-specific) information about the library using the handle.
+    If this succeeds, then the handle is assumed to be valid. In case of
+    failure it is assumed to be invalid.
+
+  optNoCriticalError
+
+    In Windows OS, when a library cannot be loaded for whatever reason, the
+    called WinAPI function will initiate critical system error, which will
+    display an error dialog (a window).
+    This might be very obtrusive (eg. when probing DLL existence) - so if this
+    behavior is undesirable, include this option and this error dialog will be
+    suppressed.
+
+    This option has effect only in Windows OS, it is ignored elsewhere.
+
+      WARNING - suppressing error dialog is inherently thread unsafe in systems
+                older than Windows 7.
+
+  optExceptionOnFailure
+
+    This option is somewhat universal, because it can be observed by several
+    groups of functions.
+
+      Functions opening/loading libraries (eg. OpenLibrary)
+
+        These usually indicate success or failure using boolean result. When
+        this option is activated, then an EDLULibraryOpenError exception is
+        raised when the loading fails for any reason (success is still
+        indicated by returning True).
+
+      Functions closing/unloading libraries (eg. CloseLibrary)
+
+        These functions normally do not check for errors when calling the
+        system functions doing the cleanup, but when this option is activated,
+        the check is performed and an EDLULibraryCloseError exception is raised
+        on failure.
+
+      Functions resolving symbols (eg. GetSymbolAddr or ResolveSymbol)
+
+        When resolving symbols, the failure is normally indicated by returning
+        a nil pointer. With this option active, the EDLUSymbolError exception
+        is raised whenever the symbol cannot be resolved.
+
+          NOTE - there are situations where nil pointer is considered to be a
+                 valid return, so some functions might return nil and not raise
+                 an exception even with this option.
+
+  optResolveNow
+
+    When activated, loading of a library also resolves all undefined symbol
+    before returning (RTLD_NOW is put into flags), as apposed to lazy binding
+    when this option is not active (flags contain RTLD_LAZY).
+
+    This has effect only in Linux OS, it is ignored in Windows. For more
+    information please refer to Linux manual (dlopen(3)).
+
+  optSafeLoad
+
+    Activate this option if you want to preserve some selected system settings
+    across the call when loading or unloading a library.
+
+    In current implementation, it preserves process/thread error mode on
+    Windows OS and X87 control word (FPU settings) and MXCSR register (SSE and
+    AVX settings) on x86(-64) processors.
+
+    It is here for situations where the loaded library is changing those
+    settings but this behavior is undesirable.
+
+  optBreakOnUnresolved
+
+    This option is observed only by functions resolving multiple symbols. When
+    active, it forces interruption of array/list traversal when currently
+    processed symbol cannot be resolved.
+
+      NOTE - option optExceptionOnFailure takes precedence over this one. If
+             both are active and symbol that cannot be resolved is encountered,
+             then an exception is raised as prescribed by optExceptionOnFailure.
+
+  optNoSerialize
+
+    This option affects only functions operating on contexts - when active,
+    the call does not lock the context it is operating on (is not serialized).
+
+    It can be used to improve performance in cases where serialization of
+    every single call is not necessary.
+
+      WARNING - this option is observed only when added to call parameter
+                Options, its presence in context-stored options is ignored.
+                This is due to a fact that context needs to be locked before
+                the stored options can be accessed and probed for this option,
+                and that locking directly contradicts this option being used.
+
+      WARNING - take great care where and when you use this option, as using
+                it in an inappropriate situation will inadvertently lead to
+                corruption of the affected context.
+                Generally, you should never use this option on sole calls,
+                use it only if the context is currently thread locked, as
+                the locking and unlocking calls do way more than just that.
+
+  optAlwaysLoad
+
+    Under normal circumstances, context function OpenLibrary loads the library
+    (that is, calls system function to do so) only when first called on
+    particular context variable - that variable is initialized in this call
+    and the library is loaded. On subsequent calls it only increments internal
+    reference count.
+    But when this option is active, then this function loads the library even
+    if the context is already intialized and library was already loaded.
+
+    This option works similarly for CloseLibrary - this function decrements
+    the internal reference count and only unloads the library if the count
+    reaches zero. With this option active it always cloases the library
+    (whether it is unloaded is decided by the OS).
+
+    Each opening call with this option active must be paired by a closing
+    class with it.
+
+    Note that operating system keeps its own reference count for each loaded
+    module/object, so this option might seem to be somewhat superfluous. But
+    it is intended for situation where repeated loading or closing of one
+    library pose some problem, whatever it migh be. 
+
+  optSymbolListResolve
+
+    If this option is active during symbol resolving using context, then the
+    symbol is first searched for in context's list of resolved symbols.
+    If found there, then address stored in this list is returned. When not
+    found, then the symbol is resolved as usual (using system call and stored
+    library handle).
+
+  optSymbolListStore
+
+    When resolving symbols using contexts with this option enabled, every
+    successfully resolved symbol is stored along with its address in the list
+    of resolved symbols within the context - as long as it was not resolved
+    using the list (see optSymbolListResolve). If this option is not active,
+    then nothing is written to this list.
+
+    If the resolved symbol already is in the list, its address is updated
+    on every new successful resolving.
+
+  optContextOptions
+
+    Affects only functions working with contexts.
+
+    Each context stores its own options set, but under normal circumstances all
+    functions working with contexts will use options given in the call argument
+    Options, even if nothing is explicitly assigned there (a default empty set
+    is used).
+
+    When this option is included in Options parameter, then the called function
+    will use context-stored options to alter its behaviour and will ignore
+    other options given in the parameter. If this is active in contex options,
+    then all calls working on that context will use contex options, irrespective
+    of whether optContextOptions is given in Options argument or not.
+}
+  TDLUOption = (optDeepCheck,optNoCriticalError,optExceptionOnFailure,
+                optResolveNow,optSafeLoad,optBreakOnUnresolved,optNoSerialize,
+                optAlwaysLoad,optSymbolListResolve,optSymbolListStore,
+                optContextOptions);
+
+  TDLUOptions = set of TDLUOption;
+
+{
+  TDLUSymReslResult
+  TDLUSymReslResults
+
+  These types are used when resolving multiple symbols to indicate which
+  symbols were passed to resolving (field Processed) and which were succesfully
+  resolved (field Resolved).
+
+  It can be used eg. in situation where option optBreakOnUnresolved is not
+  activated and some symbols could not be resolved - to find which ones.
+}
+  TDLUSymReslResult = record
+    Processed:  Boolean;
+    Resolved:   Boolean;
+  end;
+
+  TDLUSymReslResults = array of TDLUSymReslResult;
+
 {-------------------------------------------------------------------------------
     Handle functions - library functions
 -------------------------------------------------------------------------------}
 {
   CheckLibrary
 
-  Returns true when passed parameter is initialized (is not null/nil), ie. it
-  contains handle to a library, false otherwise.
+  Returns true when passed library handle is valid, false otherwise.
+
+  Observed options:
+
+    optDeepCheck
 }
-Function CheckLibrary(LibraryHandle: TDLULibraryHandle): Boolean; overload;
+Function CheckLibrary(LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []): Boolean; overload;
 
 {
   OpenLibrary
 
-  Loads the requested library. It will return null/nil if it cannot be loaded.
+  Loads the requested library and returns a handle to it. It will return null
+  or nil (depending on OS) if it cannot be loaded.
 
-  In Windows OS, when the library cannot be loaded for whatever reason, the
-  called WinAPI function will initiate critical system error, which will
-  display an error dialog (a window).
-  This might be very obtrusive (eg. when probing DLL existence) - so if this
-  behavior is undesirable, set SilentCriticalErrors parameter to true and this
-  error dialog will be suppressed.
+  This handle must be closed using function CloseLibrary when you are done
+  with it.
 
-    NOTE - parameter SilentCriticalErrors has no effect in operating systems
-           other than windows.
+  Observed options:
 
-    WARNING - suppressing error dialog is inherently thread unsafe in systems
-              older than Windows 7.
+    optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
+    optSafeLoad
 }
-Function OpenLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle; overload;
+Function OpenLibrary(const LibFileName: String; Options: TDLUOptions = []): TDLULibraryHandle; overload;
 
 {
-  OpenLibraryAndCheck
+  OpenLibrary
 
-  Works the same as OpenLibrary (in fact it is calling it), but when the
-  library cannot be loaded (null/nil handle returned) it will raise an
-  EDLULibraryOpenError exception.
+  Loads the requested library and returns handle to it in output parameter
+  LibraryHandle. This parameter is set to null or nil (depending on OS) if
+  the library cannot be loaded. Returns true when the loading succeeds, false
+  otherwise.
+
+    NOTE - CheckLibrary is called internally to check whether the library was
+           loaded successfully or not.
+
+  The returned library handle must be closed using function CloseLibrary when
+  you are done using it.
+
+  If an exception is raised, then value of LibraryHandle is undefined.
+
+  Observed options:
+
+    optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
+    optSafeLoad
 }
-Function OpenAndCheckLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle;
-
-{
-  SafeOpenLibrary
-
-  Works the same as OpenLibrary, but it preserves some of the system settings
-  across the call, namely process/thread error mode on Windows OS and X87
-  control word and MXCSR register on x86(-64) processors.
-  It is here for situations where the loaded library is changing those settings
-  but this behavior is undesirable.
-}
-Function SafeOpenLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle; overload;
-
-{
-  SafeOpenAndCheckLibrary
-
-  Works the same as OpenAndCheckLibrary, but preserves selected system settings
-  (see SafeOpenLibrary for details).
-}
-Function SafeOpenAndCheckLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle;
+Function OpenLibrary(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []): Boolean; overload;
 
 {
   CloseLibrary
 
-  Closes and potentially unloads the library (unloading is managed by OS).
+  Closes and potentially unloads the library (unloading is managed by the OS).
 
-  It checks the handle (function CheckLibrary) before processing, if it is not
-  deemed to be valid, it will exit without doing anything.
+  It checks the handle (calls CheckLibrary) before processing. If it is not
+  deemed to be valid, it will exit without doing anything (no exception).
 
-  Note that it will invalide the library handle, irrespective of whether the OS
-  unloads the library or not.
+  Note that it will always invalide the library handle, irrespective of whether
+  the OS unloads the library or not.
+
+  Observed options:
+
+    optDeepCheck, optSafeLoad, optExceptionOnFailure
 }
-procedure CloseLibrary(var LibraryHandle: TDLULibraryHandle); overload;
+procedure CloseLibrary(var LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []); overload;
 
 {-------------------------------------------------------------------------------
     Handle functions - symbols addresses
@@ -293,12 +512,17 @@ procedure CloseLibrary(var LibraryHandle: TDLULibraryHandle); overload;
 {
   GetSymbolAddr
 
-  Returns pointer to requested symbol. If it canot be resolved, it returns nil.
+  Returns pointer to requested symbol. If it cannot be resolved, it returns nil.
 
   If the library handle is not valid, it will raise an EDLUInvalidParameter
-  exception.
+  exception (irrespective of whether optExceptionOnFailure is included in
+  options or not).
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure
 }
-Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String): Pointer; overload;
+Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String; Options: TDLUOptions = []): Pointer; overload;
 
 {
   GetSymbolAddr
@@ -308,134 +532,163 @@ Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: Strin
   Returns true when the symbol was properly resolved, false otherwise (in which
   case the value of Address is undefined).
 
-  If the library handle is not valid, it will raise an EDLUInvalidParameter
-  exception.
+  Always raises an EDLUInvalidParameter exception if the library handle is not
+  valid.
+
+  This function is intended for situations where one wants to check validity
+  of returned address even if it can be nil, without raising an exception.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure
 }
-Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String; out Address: Pointer): Boolean; overload;
-
-{
-  GetAndCheckSymbolAddr
-
-  Tries to resolve requested symbol and return its address.
-
-  If the requested symbol is not successfully resolved, then this function will
-  raise an EDLUSymbolError exception. Otherwise it works the same as function
-  GetSymbolAddr.
-
-  If the library handle is not valid, it will raise an EDLUInvalidParameter
-  exception.
-}
-Function GetAndCheckSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String): Pointer; overload;
+Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String; out Address: Pointer; Options: TDLUOptions = []): Boolean; overload;
 
 {-------------------------------------------------------------------------------
     Handle functions - symbols resolving
 -------------------------------------------------------------------------------}
 {
-  ResolveSymbolNames
-
-  Resolves given symbols and stores obtained pointers to variables pointed by
-  the items in Addresses array. For each symbol name, the resolved address is
-  stored at the same position in Addresses (eg. address for second name is
-  stored at second position).
-
-  If FailOnUnresolved is set to false, the function will try to resolve
-  everything. That some names were not resoved is evidenced by returned value
-  being lower than length of Names array.
-
-    WARNING - it is not possible to discern which symbols were not resolved,
-              as any symbol can be CORRECTLY resolved to nil. You have to test
-              each symbol separately for example in calls to overload of
-              GetSymbolAddr that indicates failure/success.
-
-  If FailOnUnresolved is set to true, the function will raise an EDLUSymbolError
-  exception on first unresolved symbol.
-
-  Length of both Names and Addresses arrays must be the same, otherwise an
-  EDLUInvalidParameter exception is raised.
-
-  Returns number of succesfully resolved symbols.  
-}
-Function ResolveSymbolNames(LibraryHandle: TDLULibraryHandle; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False): Integer; overload;
-
-{
   ResolveSymbol
 
   Resolves symbol whose name is given in Name field of parameter Symbol and
-  stores the address to a variable pointed to by the field AddressVar in the
-  same parameter.
+  stores its address to a variable pointed to by the field AddressVar in the
+  same parameter. When it succeeds then True is returned, on failure False is
+  returned.
 
-  When FailOnUnresolved is se to true, then the function will raise an
-  EDLUSymbolError exception when the symbol cannot be resolved, otherwise the
-  failure (false) or success (true) is indicated in the result.
+  Note that variable for symbol address might be assigned even on failure,
+  in which case its content is undefined.
+
+  Always raises an EDLUInvalidParameter exception if the library handle is not
+  valid.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure
 }
-Function ResolveSymbol(LibraryHandle: TDLULibraryHandle; Symbol: TDLUSymbol; FailOnUnresolved: Boolean = False): Boolean; overload;
+Function ResolveSymbol(LibraryHandle: TDLULibraryHandle; Symbol: TDLUSymbol; Options: TDLUOptions = []): Boolean; overload;
 
 {
   ResolveSymbols
 
-  This function works the same as the ResolveSymbolNames, but names of
-  individual symbols are taken from passed string list and resulting addresses
-  are stored at respective places in Objects property (typecasted to TObject).
+  Traverses given array of TDLUSymbol records (parameter Symbols) and tries to
+  resolve all symbols within (see description of function ResolveSymbol for
+  details as this function is internally called). Note that if one symbol is
+  included multiple-times, it is resolved separately for each iteration (there
+  is no duplicity protection).
 
-  The parameter Symbols is not declared as TStrings because that class does not
-  fully implement Objects property.
+  Result is set to number of successfully resolved symbols. If this number is
+  equal to length of given array, then all symbols have been resolved without
+  errors.
+
+  Output parameter Results (in overload accepting this parameter) can be probed
+  to see which symbols were successfully resolved and which not in case the
+  returned count indicates not all were.
+
+  Always raises an EDLUInvalidParameter exception if the library handle is not
+  valid.
+
+    NOTE - validity of provided library handle is checked even if no symbols
+           (an empty array) is given.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optBreakOnUnresolved
 }
-Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; Symbols: TStringList; FailOnUnresolved: Boolean = False): Integer; overload;
+Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; const Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; const Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer; overload;
 
 {
-  ResolveSymbols
+  ResolveSymbolList
 
-  This overload is only repeatedly calling function ResolveSymbol to resolve
-  individual TDLUSymbol structures in the passed array, see description of
-  ResolveSymbol for details on its behavior.
+  This function works the same as ResolveSymbols (see there for more info),
+  but names of individual symbols are taken from items of passed string list
+  and resulting addresses are stored at respective places in the list's Objects
+  property (the pointers are casted to TObject).
 
-  Other parameters and result value behaves the same as in the first overload
-  of ResolveSymbols.
+  Parameter SymbolList is not declared as more general TStrings because that
+  class does not fully implement Objects property, which is required here.
+
+  Always raises an EDLUInvalidParameter exception if the library handle is not
+  valid.
+
+    NOTE - validity of provided library handle is checked even if no symbols
+           (an empty list) is given.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optBreakOnUnresolved
 }
-Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False): Integer; overload;
+Function ResolveSymbolList(LibraryHandle: TDLULibraryHandle; SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function ResolveSymbolList(LibraryHandle: TDLULibraryHandle; SymbolList: TStringList; Options: TDLUOptions = []): Integer; overload;
+
+{
+  ResolveSymbolNames
+
+  Works the same as ResolveSymbols (see there for more info), but names of
+  individual symbols are taken from items in Names array and the resulting
+  addresses are stored to variables pointed to by respective items in
+  AddressPtrs array (eg. address for name in Names[3] is stored to variable
+  pointed to by AddressVars[3]).
+
+  Length of both Names and AddressVars arrays must be the same, otherwise an
+  EDLUInvalidParameter exception is raised (irrespective of whether option
+  optExceptionOnFailure is active or not).
+
+  Always raises an EDLUInvalidParameter exception if the library handle is not
+  valid.
+
+    NOTE - validity of provided library handle is checked even if no symbols
+           (an empty arrays) is given.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optBreakOnUnresolved
+}
+Function ResolveSymbolNames(LibraryHandle: TDLULibraryHandle; const Names: array of String;
+  const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function ResolveSymbolNames(LibraryHandle: TDLULibraryHandle; const Names: array of String;
+  const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer; overload;
 
 {-------------------------------------------------------------------------------
     Handle functions - macro functions
 -------------------------------------------------------------------------------}
 {
-  OpenLibraryAndResolveSymbol(s/Names)
+  OpenLibraryAndResolveSymbol(s/List/Names)
 
-  Following functions are just an macro functions that are calling
-  OpenAndCheckLibrary and then ResolveSymbol(s/Names). Refer to description of
-  those functions for their behavior (raised exceptions, meaning of parameters,
-  ...). 
+  All these functions are just simple macros calling OpenLibrary (overload
+  directly returning handle) and then appropriate ResolveSymbol(s/List/Names).
+  Refer to description of those called functions for their behavior (observed
+  options, raised exceptions, meaning of parameters, return values, ...).
 
-  Returns a return value of particular ResolveSymbol(s/Names) used in the
-  implementation of given function.
+  Returns a return value of particular ResolveSymbol* used in the implementation
+  of given function.
 
   If an exception is raised, then content of the output parameter LibraryHandle
-  is undefined (when the exception is raised after the library was successfully
-  opened, it gets closed)
+  is undefined (if the exception is raised after the library was successfully
+  opened, it is automatically closed).
+
+    NOTE - given options are in effect for both OpenLibrary and ResolveSymbol*.
+           This must be considered especially for option optExceptionOnFailure.
+
+  Observed options:
+
+    optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
+    optSafeLoad, optBreakOnUnresolved
 }
-Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
-
 Function OpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
-
+  Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
 Function OpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
+  Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer; overload;
 
-{
-  SafeOpenLibraryAndResolveSymbol(s/Names)
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
+  SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
+  SymbolList: TStringList; Options: TDLUOptions = []): Integer; overload;
 
-  These functions are working the same as OpenLibraryAndResolveSymbol(s/Names),
-  but they preserve selected system settings (see SafeOpenLibrary for details).
-}
-Function SafeOpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
-
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
-  
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
+  const Names: array of String; const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
+  const Names: array of String; const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer; overload;
 
 
 {===============================================================================
@@ -444,49 +697,103 @@ Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; out Library
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  Contexts are meant for situations where it is desirable to ensure that the
-  library is loaded and unloaded only once - contexts ensure this using internal
-  reference count. But note that this holds true only per context, not globally
-  (the same library can be loaded using a different context).
+  Contexts provide more robust way of loading libraries and storing their
+  handles for symbol resolving and unloading, and are a preffered way if you
+  want to operate on libraries using global variables or in a multi-thread
+  environment, as access to each context is serialized. But note that for
+  simple cases it is still better to use library handles as they have much
+  lower overhead.
+
+  Each context stores and provides not only the handle obtained when loading
+  a library, but also more information about that library along with some
+  statistics, though this is currently implemented only in a limited form.
+
+  The most important feature of contexts is, that the library to which a
+  context is bound is loaded (ie. system function loading it is called) only
+  once, in the first loading call. Also, the system freeing is done only once.
+  This is achieved by maintaining an internal reference count. But note that
+  this all holds true only per context, not globally (the same library can be
+  loaded using a different context), and also can be disabled using options.
 
   Because the loading indicates whether the library was already loaded or not,
   this can be also used for optimizations in symbol resolving (ie. resolving is
-  performed only on the first load and is omitted on subsequent loads).
+  performed only on the first load and is omitted on subsequent load calls).
 
-  Contexts can also provide more information about the library and some
-  statistics, though this is currently implemented only in a limited form.
+  For more information, refer to description of types and functions operating
+  on contexts.
 }
 {===============================================================================
     Context functions - declaration
 ===============================================================================}
 type
 {
-  Always make sure to initialize the context variable, either by assigning
-  DefaultLibraryContext to it or by zeroing the memory.
+  TDLULibraryContextData
+
+  This structure is used to store and return information and statistics about
+  specific context.
+
+  Some fields might need clarification, namely:
+
+    OpenCount
+
+      Stores how many times was this context used to open its library. It gets
+      decremented on each closing.
+
+    OpenFileName
+
+      Stores exact string that was used to load the library - ie. the string
+      used in a call that initialized this context.
+
+    FullFileName
+
+      This string is obtained from OS using the opened library handle. It is
+      here to provide full library path when only file name or relative path
+      was used to load the library.
+
+    ResolvedSymbols
+
+      This stores a list of already resolved symbols with their addresses.
 }
-  TDLULibraryContext = array[0..{$IFDEF CPU64bit}17{$ELSE}9{$ENDIF}] of UInt32;
-
-  // used to store name:address pair in list of resolved symbols
-  TDLUSymbolAddress = record
-    Name:     String;
-    Address:  Pointer;
-  end;
-
   TDLULibraryContextData = record
-    Handle:             TDLULibraryHandle;
-    ReferenceCount:     Integer;
-    OriginalFileName:   String;                     // string used to load the library
-    TrueFileName:       String;                     // full path obtained back from the handle
-    SymbolList:         array of TDLUSymbolAddress; // list of resolved symbols
-    Options: record                                 
-      SymbolListActive:   Boolean;
-      SymbolListResolve:  Boolean;
-    end;
+    Handle:           TDLULibraryHandle;
+    OpenCount:        Integer;
+    OpenFileName:     String;
+    FullFileName:     String;
+    Options:          TDLUOptions;
+    ResolvedSymbols:  array of record
+                        Name:     String;
+                        Address:  Pointer;
+                      end;
   end;
 
 const
+{
+  DLUContextSize
+  DLUContextWords
+
+  These two constants are intended only for internal use, please ignore them
+  as they might be changed or even removed in the future.
+}
+  DLUContextSize = (3 * SizeOf(Integer)) + SizeOf(Boolean) + SizeOf(TObject) + SizeOf(TDLULibraryContextData);
+  DLUContextWords = (DLUContextSize + {$IFDEF CPU64bit}7) shr 3{$ELSE}3) shr 2{$ENDIF};
+
+type
+{
+  TDLULibraryContext
+
+  Semi-opaque public type used to store the actual internal context.
+
+  Always make sure to initialize the context variable, either by assigning
+  DefaultLibraryContext constant to it or by zeroing the memory. But note that
+  in (object) pascal, global and thread variables are automatically zeroed by
+  the compiller, so this applies mainly to local or reused variables.
+}
+  TDLULibraryContext = array[0..Pred(DLUContextWords)] of NativeInt;
+  PDLULibraryContext = ^TDLULibraryContext;
+
+const
   DefaultLibraryContext: TDLULibraryContext =
-    (0,0,0,0,0,0,0,0,0,0{$IFDEF CPU64bit},0,0,0,0,0,0,0,0{$ENDIF});
+    (0,0,0,0,0,0,0,0,0{$IFNDEF CPU64bit},0,0{$ENDIF});
 
 {-------------------------------------------------------------------------------
     Context functions - utility functions
@@ -495,9 +802,16 @@ const
   ContextLock
 
   Locks the passed context so that only the current thread can access it.
-  
-  Nested locks are allowed, but remember to pair each lock operation with an
-  unlock operation.
+
+  If this function is called while the lock is held by other thread, the call
+  will block until the holder realeases its lock.
+
+  Nested locks are allowed, but each lock operation must be paired with an
+  unlock operation (a call to ContextUnlock).
+
+  This direct access to internal lock is provided to allow for more complex
+  operations on the context to be performed atomically - everything between
+  ContextLock-ContextUnlock calls will be executed in a thread-safe manner.
 }
 procedure ContextLock(var Context: TDLULibraryContext); overload;
 
@@ -508,58 +822,135 @@ procedure ContextLock(var Context: TDLULibraryContext); overload;
 }
 procedure ContextUnlock(var Context: TDLULibraryContext); overload;
 
+//------------------------------------------------------------------------------
 {
-  GetContextData
+  ContextGetData
 
-  Returns internal data of the passed context.
+  Returns information and statistics of the passed context.
 
   Raises an EDLUInvalidParameter exception if the context is not valid.
 
-    WARNING - if the context is accessed from multiple threads, the data might
-              not be accurate by the time the function returns.
+    WARNING - if the context is accessed from multiple threads, then returned
+              data might not be accurate by the time the function returns,
+              unless it is called inside a locked block.
+
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
 }
-Function ContextGetData(var Context: TDLULibraryContext): TDLULibraryContextData;
+Function ContextGetData(var Context: TDLULibraryContext; Options: TDLUOptions = []): TDLULibraryContextData;
 
 {
-  ContextSymbolListActive
+  ContextGetOptions
 
-  Activates or deactivates storing of resolved symbols into the symbol list.
-  Existing list is not deleted when deactivating.
+  Returns context-stored options.
 
-  When this option is active, every successful resolving of a symbol leads to
-  that symbol being added into the symbol list along with its address.
-  If option SymbolListResolve is inactive and the symbol is already present,
-  its stored address is rewritten.
-
-  To get current state of this option without changing it, use ContextGetData.
+    Each context stores its own set of options that can be used to alter
+    behaviour of calls performed on that context - see description of type
+    TDLUOption, enum value optContextOptions.
 
   Raises an EDLUInvalidParameter exception if the context is not valid.
 
-  Initialy disabled.
+    WARNING - if the context is accessed from multiple threads, then returned
+              value might not be accurate by the time the function returns,
+              unless it is called inside a locked block.
+
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
 }
-Function ContextOptSymbolListActive(var Context: TDLULibraryContext; Activate: Boolean): Boolean;
+Function ContextGetOptions(var Context: TDLULibraryContext; Options: TDLUOptions = []): TDLUOptions;
 
 {
-  ContextSymbolListResolve
+  ContextSetOptions
 
-  Activates or deactivates resolving of symbols from symbol list when already
-  present.
-
-  When a symbol is being resolved (its address obtained) and this option is
-  active, the the symbol is first looked for in the list of already resolved
-  symbols. If found, then address stored in this list is returned. When not
-  found or when this option is inactive, it is resolved as usual (using system
-  calls).
-
-  To get current state of this option without changing it, use ContextGetData.
+  Sets context-stored options to NewOptions and returns their previous value.
 
   Raises an EDLUInvalidParameter exception if the context is not valid.
 
-  Initialy disabled.
+    WARNING - if the context is accessed from multiple threads, then returned
+              value might not be accurate by the time the function returns,
+              unless it is called inside a locked block.
 
-    NOTE - this option is independent of SymbolListActive.      
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
 }
-Function ContextOptSymbolListResolve(var Context: TDLULibraryContext; Activate: Boolean): Boolean;
+Function ContextSetOptions(var Context: TDLULibraryContext; NewOptions: TDLUOptions; Options: TDLUOptions = []): TDLUOptions;
+
+{
+  ContextSetOptions
+
+  Returns state of selected Option within context-stored options. If the option
+  is active, then True is returned, false otherwise.
+
+  Raises an EDLUInvalidParameter exception if the context is not valid.
+
+    WARNING - if the context is accessed from multiple threads, then returned
+              value might not be accurate by the time the function returns,
+              unless it is called inside a locked block.
+
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
+}
+Function ContextGetOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): Boolean;
+
+{
+  ContextSetOptions
+
+  Sets selected Option in context-stored options of given context to a value
+  selected in NewState. When NewState is set to true, then the selected option
+  is enabled, when set to false then it is disabled. Returns previous state of
+  the selected option.
+
+  Raises an EDLUInvalidParameter exception if the context is not valid.
+
+    WARNING - if the context is accessed from multiple threads, then returned
+              value might not be accurate by the time the function returns,
+              unless it is called inside a locked block.
+
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
+}
+Function ContextSetOption(var Context: TDLULibraryContext; Option: TDLUOption; NewState: Boolean; Options: TDLUOptions = []): Boolean;
+
+{
+  ContextSetOptions
+
+  Enables selected Option in context-stored options of given context, returning
+  previous value of those options.
+
+  Raises an EDLUInvalidParameter exception if the context is not valid.
+
+    WARNING - if the context is accessed from multiple threads, then returned
+              value might not be accurate by the time the function returns,
+              unless it is called inside a locked block.
+
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
+}
+Function ContextIncludeOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): TDLUOptions;
+
+{
+  ContextSetOptions
+
+  Disables selected Option in context-stored options of given context, returning
+  previous value of those options.
+
+  Raises an EDLUInvalidParameter exception if the context is not valid.
+
+    WARNING - if the context is accessed from multiple threads, then returned
+              value might not be accurate by the time the function returns,
+              unless it is called inside a locked block.
+
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
+}
+Function ContextExcludeOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): TDLUOptions;
 
 {-------------------------------------------------------------------------------
     Context functions - library functions
@@ -571,36 +962,61 @@ Function ContextOptSymbolListResolve(var Context: TDLULibraryContext; Activate: 
 
   Context is considered valid when a library was previously successfully opened
   using it, ie. it contains a valid handle to a loaded library.
+
+  Observed options:
+
+    optDeepCheck, optNoSerialize, optContextOptions
 }
-Function CheckLibrary(var Context: TDLULibraryContext): Boolean; overload;
+Function CheckLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []): Boolean; overload;
 
 {
   OpenLibrary
 
-  If the context is not initialized, it opens the requested library using
-  function OpenAndCheckLibrary, initializes the context and returns true.
+  If the context is not initialized, then it initializes the provided context
+  variable (context-stored options are initialized to an empty set), loads
+  the requested library and returns true.
 
   If the context is already initialized (that is, it was previously used to
-  open a library), then the LibFileName is ignored (no check is performed
-  whether the requested file is the same as was opened previously!) and only
-  the context's internal reference count is incremented. In this case false is
-  returned.
+  successfully load a library), then it will return false and further behavior
+  of this functions depends on whether option optAlwaysLoad is active or not...
 
-    WARNING - if the context is accessed by multiple threads, then the function
-              can return false and not actually open the library even if the
-              context was uninitialized prior the call to this function. This
-              is because other thread can initialize it before the call is able
-              to do its own initialization.
+      optAlwaysLoad is active
+
+        The function loads the library (calls system function) again and also
+        increments internal reference count. Stored handle is not updated as
+        the system function should return the same handle for the same opened
+        object (both in Windows and Linux) - this is checked and if the new
+        handle do not match the stored one, then an EDLULibraryOpenError
+        exception s raised.
+        The string given in LibFileName is ignored, instead a string stored in
+        the context's field FullFileName is used.
+
+      optAlwaysLoad is not active
+
+        Function does NOT load the library again, only increments context's
+        internal reference count (field OpenCount). LibFileName is ignored.
+
+    WARNING - in both cases, no check is performed whether the currently
+              requested file is the same as was opened in the original loading
+              call, the given LibFileName string is completely ignored!
+
+  If the library is loaded (first call), the returned handle is always checked
+  for validity (whether with deep check depends on options). If it is not valid,
+  then an EDLULibraryOpenError is raised, irrespective of whether the option
+  optExceptionOnFailure is active or not.
+
+    NOTE - if the context is accessed by multiple threads, then the function
+           can return false and not actually load the library even if the
+           context was uninitialized prior the call to this function. This is
+           because other thread can initialize it before this call is able to
+           do its own initialization.
+
+  Observed options:
+
+    optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
+    optSafeLoad, optNoSerialize, optAlwaysLoad, optContextOptions
 }
-Function OpenLibrary(const LibFileName: String; var Context: TDLULibraryContext; SilentCriticalErrors: Boolean = False): Boolean; overload;
-
-{
-  SafeOpenLibrary
-
-  Works the same as OpenLibrary, but preserves selected system settings (see
-  SafeOpenLibrary function working with handle for details).
-}
-Function SafeOpenLibrary(const LibFileName: String; var Context: TDLULibraryContext; SilentCriticalErrors: Boolean = False): Boolean; overload;
+Function OpenLibrary(const LibFileName: String; var Context: TDLULibraryContext; Options: TDLUOptions = []): Boolean; overload;
 
 {
   CloseLibrary
@@ -608,73 +1024,209 @@ Function SafeOpenLibrary(const LibFileName: String; var Context: TDLULibraryCont
   Decrements reference count of the context, when it reaches zero it then
   unloads the library and invalidates the context.
 
-  Result indicates whether the library was unloaded and context invalidated
-  (true) or not (false).
+  Result indicates whether the context was invalidated (true) or not (false).
+
+  If the provided context is not valid, then it raises an EDLUInvalidParameter
+  exception, irrespective of whether optExceptionOnFailure option is active
+  or not.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optSafeLoad, optNoSerialize,
+    optAlwaysLoad, optContextOptions
 }
-Function CloseLibrary(var Context: TDLULibraryContext): Boolean; overload;
+Function CloseLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []): Boolean; overload;
 
 {-------------------------------------------------------------------------------
     Context functions - symbols addresses
 -------------------------------------------------------------------------------}
 {
-  Following threee functions are behaviorally equivalent to functions of the
-  same name and arguments list that are operating on handles instead of
-  contexts, refer there for details.
-}
-Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String): Pointer; overload;
-Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String; out Address: Pointer): Boolean; overload;
+  GetSymbolAddr
 
-Function GetAndCheckSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String): Pointer; overload;
+  Returns pointer to requested symbol. If it cannot be resolved, it returns nil.
+
+  If the context is not valid, it will raise an EDLUInvalidParameter exception
+  (irrespective of whether optExceptionOnFailure is included in options or not).
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optNoSerialize, optSymbolListStore,
+    optSymbolListResolve, optContextOptions
+}
+Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String; Options: TDLUOptions = []): Pointer; overload;
+
+{
+  GetSymbolAddr
+
+  Stores address of requested symbol to Address output parameter. Returns true
+  when the symbol was properly resolved, false otherwise (in which case the
+  value of Address is undefined).
+
+  Always raises an EDLUInvalidParameter exception if the contex is not valid.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optNoSerialize, optSymbolListStore,
+    optSymbolListResolve, optContextOptions
+}
+Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String; out Address: Pointer; Options: TDLUOptions = []): Boolean; overload;
 
 {-------------------------------------------------------------------------------
     Context functions - symbols resolving
 -------------------------------------------------------------------------------}
 {
-  Following four funtions behave the same as their handle counterparts, see
-  them for details.
+  ResolveSymbol
+
+  Resolves symbol whose name is given in Name field of parameter Symbol and
+  stores its address to a variable pointed to by the field AddressVar in the
+  same parameter. When it succeeds then True is returned, on failure False is
+  returned.
+
+  Note that variable for symbol address might be assigned even on failure,
+  in which case its content is undefined.
+
+  Always raises an EDLUInvalidParameter exception if the contex is not valid.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optNoSerialize, optSymbolListStore,
+    optSymbolListResolve, optContextOptions
+}
+Function ResolveSymbol(var Context: TDLULibraryContext; Symbol: TDLUSymbol; Options: TDLUOptions = []): Boolean; overload;
+
+{
+  ResolveSymbols
+
+  Traverses given array of TDLUSymbol records (parameter Symbols) and tries to
+  resolve all symbols within (see description of function ResolveSymbol for
+  details as this function is internally called). Note that if one symbol is
+  included multiple-times, it is resolved separately for each iteration (there
+  is no duplicity protection).
+
+  Result is set to number of successfully resolved symbols. If this number is
+  equal to length of given array, then all symbols have been resolved without
+  errors.
+
+  Output parameter Results (in overload accepting this parameter) can be probed
+  to see which symbols were successfully resolved and which not in case the
+  returned count indicates not all were.
+
+  Always raises an EDLUInvalidParameter exception if the context is not valid.
+
+    NOTE - validity of provided context is checked even if no symbols (an empty
+           array) is given.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optBreakOnUnresolved, optNoSerialize,
+    optSymbolListStore, optSymbolListResolve, optContextOptions
+}
+Function ResolveSymbols(var Context: TDLULibraryContext; const Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function ResolveSymbols(var Context: TDLULibraryContext; const Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer; overload;
+
+{
+  ResolveSymbolList
+
+  This function works the same as ResolveSymbols (see there for more info),
+  but names of individual symbols are taken from items of passed string list
+  and resulting addresses are stored at respective places in the list's Objects
+  property (the pointers are casted to TObject).
+
+  Parameter SymbolList is not declared as more general TStrings because that
+  class does not fully implement Objects property, which is required here.
+
+  Always raises an EDLUInvalidParameter exception if the context is not valid.
+
+    NOTE - validity of provided context is checked even if no symbols (an empty
+           list) is given.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optBreakOnUnresolved, optNoSerialize,
+    optSymbolListStore, optSymbolListResolve, optContextOptions
+}
+Function ResolveSymbolList(var Context: TDLULibraryContext; SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function ResolveSymbolList(var Context: TDLULibraryContext; SymbolList: TStringList; Options: TDLUOptions = []): Integer; overload;
+
+{
+  ResolveSymbolNames
+
+  Works the same as ResolveSymbols (see there for more info), but names of
+  individual symbols are taken from items in Names array and the resulting
+  addresses are stored to variables pointed to by respective items in
+  AddressPtrs array (eg. address for name in Names[3] is stored to variable
+  pointed to by AddressVars[3]).
+
+  Length of both Names and AddressVars arrays must be the same, otherwise an
+  EDLUInvalidParameter exception is raised (irrespective of whether option
+  optExceptionOnFailure is active or not).
+
+  Always raises an EDLUInvalidParameter exception if the context is not valid.
+
+    NOTE - validity of provided context is checked even if no symbols (an empty
+           arrays) is given.
+
+  Observed options:
+
+    optDeepCheck, optExceptionOnFailure, optBreakOnUnresolved, optNoSerialize,
+    optSymbolListStore, optSymbolListResolve, optContextOptions
 }
 Function ResolveSymbolNames(var Context: TDLULibraryContext; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False): Integer; overload;
-
-Function ResolveSymbol(var Context: TDLULibraryContext; Symbol: TDLUSymbol; FailOnUnresolved: Boolean = False): Boolean; overload;
-
-Function ResolveSymbols(var Context: TDLULibraryContext; Symbols: TStringList; FailOnUnresolved: Boolean = False): Integer; overload;
-Function ResolveSymbols(var Context: TDLULibraryContext; Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False): Integer; overload;
+  const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function ResolveSymbolNames(var Context: TDLULibraryContext; const Names: array of String;
+  const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer; overload;
 
 {-------------------------------------------------------------------------------
     Context functions - macro functions
 -------------------------------------------------------------------------------}
 {
-  See corresponding functions working on handles to get details about following
-  six functions.
+  OpenLibraryAndResolveSymbol(s/List/Names)
+
+  All these functions are just simple macros calling OpenLibrary (overload
+  directly returning handle) and then appropriate ResolveSymbol(s/List/Names).
+  Refer to description of those called functions for their behavior (observed
+  options, raised exceptions, meaning of parameters, return values, ...).
+
+  Returns a return value of particular ResolveSymbol* used in the implementation
+  of given function.
+
+  If an exception is raised, then content of the output parameter Context is
+  undefined.
+
+    NOTE - given options are in effect for both OpenLibrary and ResolveSymbol*,
+           be aware of that!
+
+  Observed options:
+
+    optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
+    optSafeLoad, optBreakOnUnresolved, optNoSerialize, optAlwaysLoad,
+    optSymbolListStore, optSymbolListResolve, optContextOptions
 }
-Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
-
 Function OpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
+  Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
 Function OpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
+  Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer; overload;
 
-Function SafeOpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; var Context: TDLULibraryContext;
+  SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; var Context: TDLULibraryContext;
+  SymbolList: TStringList; Options: TDLUOptions = []): Integer; overload;
 
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;    
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer; overload;
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext;
+  const Names: array of String; const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext;
+  const Names: array of String; const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer; overload;
 
 implementation
 
 uses
   {$IFNDEF Windows}baseunix, dl,{$ENDIF} SyncObjs,
-  StrRect{$IFDEF CPU_x86x}, SimpleCPUID{$ENDIF}
+  StrRect, InterlockedOps{$IFDEF CPU_x86x}, SimpleCPUID{$ENDIF}
   {$IFDEF Windows}, WindowsVersion{$ENDIF};
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
 {$ENDIF}
 
 {===============================================================================
@@ -745,30 +1297,30 @@ type
 
 //------------------------------------------------------------------------------
 
-procedure SafeLoadSaveState(out State: TDLUSafeLoadState);
+procedure SL_SaveState(out State: TDLUSafeLoadState);
 begin
 {$IFDEF Windows}
 State.ErrorMode := GetThreadErrorMode;
 {$ENDIF}
 {$IFDEF CPU_x86x}
-If (VAR_SafeLoadCPUFlags or DLU_SL_CPUFLAG_X87) <> 0 then
+If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_X87) <> 0 then
   State.X87CW := GetX87CW;
-If (VAR_SafeLoadCPUFlags or DLU_SL_CPUFLAG_SSE) <> 0 then
+If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_SSE) <> 0 then
   State.MXCSR := GetMXCSR;
 {$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
-procedure SafeLoadRestoreState(const State: TDLUSafeLoadState);
+procedure SL_RestoreState(const State: TDLUSafeLoadState);
 begin
 {$IFDEF Windows}
 SetThreadErrorMode(State.ErrorMode,nil);
 {$ENDIF}
 {$IFDEF CPU_x86x}
-If (VAR_SafeLoadCPUFlags or DLU_SL_CPUFLAG_X87) <> 0 then
+If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_X87) <> 0 then
   SetX87CW(State.X87CW);
-If (VAR_SafeLoadCPUFlags or DLU_SL_CPUFLAG_SSE) <> 0 then
+If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_SSE) <> 0 then
   SetMXCSR(State.MXCSR);
 {$ENDIF}
 end;
@@ -812,7 +1364,7 @@ end;
   use of SetErrorMode WinAPI function are called instead.
 }
 
-Function EMUL_GetThreadErrorMode: DWORD; stdcall;
+Function PEM_EMUL_GetThreadErrorMode: DWORD; stdcall;
 begin
 // note that GetErrorMode is available only from Windows Vista
 Result := SetErrorMode(0);
@@ -821,7 +1373,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function EMUL_SetThreadErrorMode(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL; stdcall;
+Function PEM_EMUL_SetThreadErrorMode(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL; stdcall;
 begin
 If Assigned(lpOldMode) then
   lpOldMode^ := SetErrorMode(dwNewMode)
@@ -832,8 +1384,8 @@ end;
 
 //------------------------------------------------------------------------------
 var
-  VAR_GetThreadErrorMode: Function: DWORD; stdcall = EMUL_GetThreadErrorMode;
-  VAR_SetThreadErrorMode: Function(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL; stdcall = EMUL_SetThreadErrorMode;
+  PEM_VAR_GetThreadErrorMode: Function: DWORD; stdcall = PEM_EMUL_GetThreadErrorMode;
+  PEM_VAR_SetThreadErrorMode: Function(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL; stdcall = PEM_EMUL_SetThreadErrorMode;
 
 //------------------------------------------------------------------------------
 
@@ -852,8 +1404,8 @@ If IsWindows7OrGreater then
     Module := GetModuleHandle('kernel32.dll');
     If Module <> 0 then
       begin
-        @VAR_GetThreadErrorMode := GetAndCheckSymbolAddr(Module,'GetThreadErrorMode');
-        @VAR_SetThreadErrorMode := GetAndCheckSymbolAddr(Module,'SetThreadErrorMode');
+        @PEM_VAR_GetThreadErrorMode := GetSymbolAddr(Module,'GetThreadErrorMode',[optExceptionOnFailure]);
+        @PEM_VAR_SetThreadErrorMode := GetSymbolAddr(Module,'SetThreadErrorMode',[optExceptionOnFailure]);
       end
     else raise EDLULibraryOpenError.Create('Kernel32.dll not loaded.');
   end;
@@ -865,14 +1417,14 @@ end;
 
 Function GetThreadErrorMode: DWORD;
 begin
-Result := VAR_GetThreadErrorMode;
+Result := PEM_VAR_GetThreadErrorMode;
 end;
 
 //------------------------------------------------------------------------------
 
 Function SetThreadErrorMode(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL;
 begin
-Result := VAR_SetThreadErrorMode(dwNewMode,lpOldMode);
+Result := PEM_VAR_SetThreadErrorMode(dwNewMode,lpOldMode);
 end;
 
 {$ENDIF}
@@ -904,11 +1456,11 @@ Function LibraryIsPresent(const LibFileName: String): Boolean;
 var
   LibraryHandle:  TDLULibraryHandle;
 begin
-LibraryHandle := SafeOpenLibrary(LibFileName,True);
+LibraryHandle := OpenLibrary(LibFileName,[optNoCriticalError,optSafeLoad]);
 try
-  Result := CheckLibrary(LibraryHandle);
+  Result := CheckLibrary(LibraryHandle,[optDeepCheck]);
 finally
-  CloseLibrary(LibraryHandle);  // if the handle is not valid, this won't do anything
+  CloseLibrary(LibraryHandle,[optSafeLoad]);
 end;
 end;
 
@@ -919,396 +1471,42 @@ var
   LibraryHandle:  TDLULibraryHandle;
   SymbolAddress:  Pointer;
 begin
-LibraryHandle := SafeOpenAndCheckLibrary(LibFileName,True);
+LibraryHandle := OpenLibrary(LibFileName,[optDeepCheck,optNoCriticalError,optExceptionOnFailure,optSafeLoad]);
 try
   Result := GetSymbolAddr(LibraryHandle,SymbolName,SymbolAddress);
 finally
-  CloseLibrary(LibraryHandle);
+  CloseLibrary(LibraryHandle,[optSafeLoad]);
 end;
 end;
 
+//------------------------------------------------------------------------------
+
+Function LibrarySymbolIsPresent(const LibFileName, SymbolName: String): Boolean;
+var
+  LibraryHandle:  TDLULibraryHandle;
+  SymbolAddress:  Pointer;
+begin
+LibraryHandle := OpenLibrary(LibFileName,[optNoCriticalError,optSafeLoad]);
+try
+  If CheckLibrary(LibraryHandle,[optDeepCheck]) then
+    Result := GetSymbolAddr(LibraryHandle,SymbolName,SymbolAddress)
+  else
+    Result := False;
+finally
+  CloseLibrary(LibraryHandle,[optSafeLoad]);
+end;
+end;
 
 {===============================================================================
---------------------------------------------------------------------------------
-                                Handle functions
---------------------------------------------------------------------------------
+    External and system funtions - declaration
 ===============================================================================}
-{===============================================================================
-    Handle functions - implementation
-===============================================================================}
-{-------------------------------------------------------------------------------
-    Handle functions - library functions
--------------------------------------------------------------------------------}
-
-Function CheckLibrary(LibraryHandle: TDLULibraryHandle): Boolean;
-begin
-{$IFDEF Windows}
-Result := LibraryHandle <> 0;
-{$ELSE}
-Result := Assigned(LibraryHandle);
-{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
-
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function OpenLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle;
-{$IFDEF Windows}
-var
-  OldErrorMode: DWORD;
-begin
-OldErrorMode := 0;
-If SilentCriticalErrors then
-  begin
-    OldErrorMode := GetThreadErrorMode;
-    SetThreadErrorMode(OldErrorMode or SEM_FAILCRITICALERRORS,nil);
-  end;
-try
-  Result := LoadLibraryEx(PSysChar(StrToSys(LibFileName)),0,0);
-finally
-  If SilentCriticalErrors then
-    SetThreadErrorMode(OldErrorMode,nil);
-end;
-end;
-{$ELSE}
-begin
-Result := dlopen(PSysChar(StrToSys(LibFileName)),RTLD_NOW);
-end;
-{$ENDIF}
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-Function OpenAndCheckLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle;
-begin
-Result := OpenLibrary(LibFileName,SilentCriticalErrors);
-If not CheckLibrary(Result) then
-  raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s".',[LibFileName]);
-end;
-
-//------------------------------------------------------------------------------
-
-Function SafeOpenLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle;
-var
-  State:  TDLUSafeLoadState;
-begin
-SafeLoadSaveState(State);
-try
-  Result := OpenLibrary(LibFileName,SilentCriticalErrors);
-finally
-  SafeLoadRestoreState(State);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SafeOpenAndCheckLibrary(const LibFileName: String; SilentCriticalErrors: Boolean = False): TDLULibraryHandle;
-var
-  State:  TDLUSafeLoadState;
-begin
-SafeLoadSaveState(State);
-try
-  Result := OpenAndCheckLibrary(LibFileName,SilentCriticalErrors);
-finally
-  SafeLoadRestoreState(State);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure CloseLibrary(var LibraryHandle: TDLULibraryHandle);
-begin
-If CheckLibrary(LibraryHandle) then
-  begin
-  {$IFDEF Windows}
-    FreeLibrary(LibraryHandle);
-    LibraryHandle := 0;
-  {$ELSE}
-    dlclose(LibraryHandle); // it can fail, but let's ignore it here
-    LibraryHandle := nil;
-  {$ENDIF}
-  end;
-end;
-
-
-{-------------------------------------------------------------------------------
-    Handle functions - symbols addresses
--------------------------------------------------------------------------------}
-
-Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String): Pointer;
-begin
-If CheckLibrary(LibraryHandle) then
-{$IFDEF Windows}
-  Result := GetProcAddress(LibraryHandle,PSysChar(StrToSys(SymbolName)))
-{$ELSE}
-  Result := dlsym(LibraryHandle,PSysChar(StrToSys(SymbolName)))
-{$ENDIF}
-else
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-  raise EDLUInvalidParameter.CreateFmt('GetSymbolAddr: Invalid library handle (0x%p).',[Pointer(LibraryHandle)]);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-end;
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String; out Address: Pointer): Boolean;
-begin
-If CheckLibrary(LibraryHandle) then
-  begin
-  {$IFDEF Windows}
-    Address := GetProcAddress(LibraryHandle,PSysChar(StrToSys(SymbolName)));
-    Result := Assigned(Address);
-  {$ELSE}
-  {
-    dlsym can return a VALID nil value, to check for errors, we have to look
-    into what dlerror function returns after a call to dlsym, if it does not
-    return anything (null/nil), we can assume no error has occured
-  }
-    dlerror;  // clear last error
-    Address := dlsym(LibraryHandle,PSysChar(StrToSys(SymbolName)));
-    Result := not Assigned(dlerror);
-  {$ENDIF}
-  end
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-else raise EDLUInvalidParameter.CreateFmt('GetSymbolAddr: Invalid library handle (0x%p).',[Pointer(LibraryHandle)]);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
-
-Function GetAndCheckSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String): Pointer;
-{$IFNDEF Windows}
-var
-  ErrorMsg: PSysChar;
-{$ENDIF}
-begin
-If CheckLibrary(LibraryHandle) then
-  begin
-  {$IFDEF Windows}
-    Result := GetProcAddress(LibraryHandle,PSysChar(StrToSys(SymbolName)));
-    If not Assigned(Result) then
-      raise EDLUSymbolError.CreateFmt('GetAndCheckSymbolAddr: Unable to resolve symbol "%s" (0x%.8x).',[SymbolName,GetLastError]);
-  {$ELSE}
-    dlerror;  // clear last error
-    Result := dlsym(LibraryHandle,PSysChar(StrToSys(SymbolName)));
-    ErrorMsg := dlerror;
-    If Assigned(ErrorMsg) then
-      raise EDLUSymbolError.CreateFmt('GetAndCheckSymbolAddr: Unable to resolve symbol "%s" (%s).',[SymbolName,SysToStr(ErrorMsg)]);
-  {$ENDIF}
-  end
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-else raise EDLUInvalidParameter.CreateFmt('GetAndCheckSymbolAddr: Invalid library handle (0x%p).',[Pointer(LibraryHandle)]);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-end;
-
-
-{-------------------------------------------------------------------------------
-    Handle functions - symbols resolving
--------------------------------------------------------------------------------}
-
-Function ResolveSymbolNames(LibraryHandle: TDLULibraryHandle; const Names: array of String; Addresses: array of PPointer; FailOnUnresolved: Boolean = False): Integer;
-var
-  i:  Integer;
-begin
-Result := 0;
-If Length(Names) = Length(Addresses) then
-  begin
-    If FailOnUnresolved then
-      begin
-        For i := Low(Names) to High(Names) do
-          Addresses[i]^ := GetAndCheckSymbolAddr(LibraryHandle,Names[i]);
-        Result := Length(Names);
-      end
-    else
-      begin
-        For i := Low(Names) to High(Names) do
-          If GetSymbolAddr(LibraryHandle,Names[i],Addresses[i]^) then
-            Inc(Result);
-      end;
-  end
-else raise EDLUInvalidParameter.CreateFmt('ResolveSymbolNames: Length of arrays do not match (%d,%d).',[Length(Names),Length(Addresses)]);
-end;
-
-//------------------------------------------------------------------------------
-
-Function ResolveSymbol(LibraryHandle: TDLULibraryHandle; Symbol: TDLUSymbol; FailOnUnresolved: Boolean = False): Boolean;
-begin
-If FailOnUnresolved then
-  begin
-    Symbol.AddressVar^ := GetAndCheckSymbolAddr(LibraryHandle,Symbol.Name);
-    Result := True; // if something would be wrong, the GetAndCheckSymbolAddr would raise an exception
-  end
-else Result := GetSymbolAddr(LibraryHandle,Symbol.Name,Symbol.AddressVar^);
-end;
-
-//------------------------------------------------------------------------------
-
-Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; Symbols: TStringList; FailOnUnresolved: Boolean = False): Integer;
-var
-  i:        Integer;
-  TempPtr:  Pointer;
-begin
-Result := 0;
-If FailOnUnresolved then
-  begin
-    For i := 0 to Pred(Symbols.Count) do
-      Symbols.Objects[i] := TObject(GetAndCheckSymbolAddr(LibraryHandle,Symbols[i]));
-    Result := Symbols.Count;
-  end
-else
-  begin
-    For i := 0 to Pred(Symbols.Count) do
-      If GetSymbolAddr(LibraryHandle,Symbols[i],TempPtr) then
-        begin
-          Symbols.Objects[i] := TObject(TempPtr);
-          Inc(Result);
-        end
-      else Symbols.Objects[i] := nil;
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False): Integer; overload;
-var
-  i:  Integer;
-begin
-Result := 0;
-For i := Low(Symbols) to High(Symbols) do
-  If ResolveSymbol(LibraryHandle,Symbols[i],FailOnUnresolved) then
-    Inc(Result);
-end;
-
-
-{-------------------------------------------------------------------------------
-    Handle functions - macro functions
--------------------------------------------------------------------------------}
-
-Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  const Names: array of String; Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-begin
-LibraryHandle := OpenAndCheckLibrary(LibFileName,SilentCriticalErrors);
-try
-  Result := ResolveSymbolNames(LibraryHandle,Names,Addresses,FailOnUnresolved);
-except
-  CloseLibrary(LibraryHandle);
-  raise;  // re-raise exception
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function OpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-begin
-LibraryHandle := OpenAndCheckLibrary(LibFileName,SilentCriticalErrors);
-try
-  Result := ResolveSymbols(LibraryHandle,Symbols,FailOnUnresolved);
-except
-  CloseLibrary(LibraryHandle);
-  raise;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function OpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-begin
-LibraryHandle := OpenAndCheckLibrary(LibFileName,SilentCriticalErrors);
-try
-  Result := ResolveSymbols(LibraryHandle,Symbols,FailOnUnresolved);
-except
-  CloseLibrary(LibraryHandle);
-  raise;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SafeOpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  const Names: array of String; Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-var
-  State:  TDLUSafeLoadState;
-begin
-SafeLoadSaveState(State);
-try
-  Result := OpenLibraryAndResolveSymbolNames(LibFileName,LibraryHandle,Names,Addresses,FailOnUnresolved,SilentCriticalErrors);
-finally
-  SafeLoadRestoreState(State);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-var
-  State:  TDLUSafeLoadState;
-begin
-SafeLoadSaveState(State);
-try
-  Result := OpenLibraryAndResolveSymbols(LibFileName,LibraryHandle,Symbols,FailOnUnresolved,SilentCriticalErrors);
-finally
-  SafeLoadRestoreState(State);
-end;
-end;
-
-//------------------------------------------------------------------------------
-  
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-var
-  State:  TDLUSafeLoadState;
-begin
-SafeLoadSaveState(State);
-try
-  Result := OpenLibraryAndResolveSymbols(LibFileName,LibraryHandle,Symbols,FailOnUnresolved,SilentCriticalErrors);
-finally
-  SafeLoadRestoreState(State);
-end;
-end;
-
-
-{===============================================================================
---------------------------------------------------------------------------------
-                                Context functions
---------------------------------------------------------------------------------
-===============================================================================}
-type
-  TDLULibraryContextInternal = record
-    Contenders: Integer;
-    InitLock:   Integer;
-    DataLock:   TCriticalSection;
-    Data:       TDLULibraryContextData;
-    Internals:  record
-      SymbolListCount: Integer;
-    end;
-  end;
-  PDLULibraryContextInternal = ^TDLULibraryContextInternal;
-
-{$If SizeOf(TDLULibraryContext) < SizeOf(TDLULibraryContextInternal)}
-  {$MESSAGE FATAL 'Public context too small.'}
-{$IFEND}
-
-const
-  DLU_CTX_INITLOCK_UNLOCKED = 0;
-  DLU_CTX_INITLOCK_LOCKED   = -1;
-
-  DLU_CTX_SYMBOLLIST_GROWDELTA = 32;
-
-  DLU_CTX_RESOLVEMETHOD_ADDRESS = 0;
-  DLU_CTX_RESOLVEMETHOD_VALID   = 1;
-  DLU_CTX_RESOLVEMETHOD_RAISE   = 2;
-
 {$IFDEF Windows}
 const
   UNICODE_STRING_MAX_CHARS = 32767;
 
-Function GetModuleFileNameExW(hProcess: THandle; hModule: THandle;
-  lpFilename: PWideChar; nSize: DWORD): DWORD; stdcall; external 'psapi.dll';
+Function SwitchToThread: BOOL; stdcall; external kernel32;
 
-{$ELSE}
+{$ELSE}//-----------------------------------------------------------------------
 const
   RTLD_DI_LINKMAP = 2;
 
@@ -1324,7 +1522,465 @@ type
 
 Function dlinfo(handle: Pointer; request: cInt; info: Pointer): cInt; cdecl; external;
 
+Function sched_yield: cint; cdecl; external;
 {$ENDIF}
+
+{===============================================================================
+    Internal auxiliary funtions - implementation
+===============================================================================}
+
+Function HandleToPtr(LibraryHandle: TDLULibraryHandle): Pointer;
+begin
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+Result := Pointer(LibraryHandle);
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                Handle functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Handle functions - implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Handle functions - library functions
+-------------------------------------------------------------------------------}
+
+Function CheckLibrary(LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []): Boolean;
+{$IFDEF Windows}
+var
+  TempStr:  WideString;
+begin
+Result := LibraryHandle <> 0;
+TempStr := '';
+If Result and (optDeepCheck in Options) then
+  begin
+  {
+    Note that I am NOT trying to get full module name here, this code will
+    fail at doing that. So do not use it for that purpose!
+  }
+    SetLength(TempStr,UNICODE_STRING_MAX_CHARS);
+    Result := GetModuleFileNameW(LibraryHandle,PWideChar(TempStr),Length(TempStr)) > 0;
+  end;
+end;
+{$ELSE}
+var
+  TempMap:  link_map;
+begin
+Result := Assigned(LibraryHandle);
+If Result and (optDeepCheck in Options) then
+  Result := dlinfo(LibraryHandle,RTLD_DI_LINKMAP,@TempMap) = 0;
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function OpenLibrary(const LibFileName: String; Options: TDLUOptions = []): TDLULibraryHandle; overload;
+var
+  SL_State:     TDLUSafeLoadState;
+{$IFDEF Windows}
+  OldErrorMode: DWORD;
+{$ENDIF}
+begin
+If optSafeLoad in Options then
+  SL_SaveState(SL_State);
+try
+{$IFDEF Windows}
+  OldErrorMode := 0;
+  // windows-only code
+  If optNoCriticalError in Options then
+    begin
+      OldErrorMode := GetThreadErrorMode;
+      SetThreadErrorMode(OldErrorMode or SEM_FAILCRITICALERRORS,nil);
+    end;
+  try
+    Result := LoadLibraryEx(PSysChar(StrToSys(LibFileName)),0,0);
+  finally
+    If optNoCriticalError in Options then
+      SetThreadErrorMode(OldErrorMode,nil);
+  end;
+{$ELSE}
+  // linux-only code
+  If optResolveNow in Options then
+    Result := dlopen(PSysChar(StrToSys(LibFileName)),RTLD_NOW)
+  else
+    Result := dlopen(PSysChar(StrToSys(LibFileName)),RTLD_LAZY);
+{$ENDIF}
+  // common code, check for failures
+  If optExceptionOnFailure in Options then
+    If not CheckLibrary(Result,Options) then
+      raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s".',[LibFileName]);
+finally
+  If optSafeLoad in Options then
+    SL_RestoreState(SL_State);
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function OpenLibrary(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []): Boolean;
+begin
+{
+  Following OpenLibrary calls CheckLibrary if option optExceptionOnFailure is
+  active.
+  We can assume, when this option is active and no exception was raised, that
+  the check was already performed and is was succesfull, so we can optimize-out
+  local check and return true straight away.
+}
+LibraryHandle := OpenLibrary(LibFileName,Options);
+If not (optExceptionOnFailure in Options) then
+  Result := CheckLibrary(LibraryHandle,Options)
+else
+  Result := True
+end;
+
+//------------------------------------------------------------------------------
+
+procedure CloseLibrary(var LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []);
+var
+  SL_State: TDLUSafeLoadState;
+begin
+If optSafeLoad in Options then
+  SL_SaveState(SL_State);
+try
+  If CheckLibrary(LibraryHandle,Options) then
+    begin
+    {$IFDEF Windows}
+      If not FreeLibrary(LibraryHandle) then
+        If optExceptionOnFailure in Options then
+          raise EDLULibraryCloseError.CreateFmt('CloseLibrary: Failed to free library (%d).',[GetLastError]);
+    {$ELSE}
+      If dlclose(LibraryHandle) <> 0 then
+        If optExceptionOnFailure in Options then
+          raise EDLULibraryCloseError.CreateFmt('CloseLibrary: Failed to free library (%s).',[dlerror]);
+    {$ENDIF}
+      LibraryHandle := DefaultLibraryHandle;
+    end;
+finally
+  If optSafeLoad in Options then
+    SL_RestoreState(SL_State);
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Handle functions - symbols addresses
+-------------------------------------------------------------------------------}
+
+Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String; Options: TDLUOptions = []): Pointer;
+{$IFNDEF Windows}
+var
+  ErrStr: PSysChar;
+{$ENDIF}
+begin
+If CheckLibrary(LibraryHandle,Options) then
+  begin
+  {$IFDEF Windows}
+    Result := GetProcAddress(LibraryHandle,PSysChar(StrToSys(SymbolName)));
+    If not Assigned(Result) and (optExceptionOnFailure in Options) then
+      raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%d).',[SymbolName,GetLastError]);
+  {$ELSE}
+  {
+    dlsym can return a VALID nil value, to check for errors, we have to look
+    into what dlerror function returns after a call to dlsym. If it does not
+    return anything (null/nil), we can assume no error has occured.
+  }
+    dlerror;  // clear last error
+    Result := dlsym(LibraryHandle,PSysChar(StrToSys(SymbolName)));
+    If not Assigned(Result) and (optExceptionOnFailure in Options) then
+      begin
+        ErrStr := dlerror;
+        If Assigned(ErrStr) then
+          raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%s).',[SymbolName,SysToStr(ErrStr)]);
+      end;
+  {$ENDIF}
+  end
+else raise EDLUInvalidParameter.CreateFmt('GetSymbolAddr: Invalid library handle (0x%p).',[HandleToPtr(LibraryHandle)]);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetSymbolAddr(LibraryHandle: TDLULibraryHandle; const SymbolName: String; out Address: Pointer; Options: TDLUOptions = []): Boolean;
+{$IFNDEF Windows}
+var
+  ErrStr: PSysChar;
+{$ENDIF}
+begin
+If CheckLibrary(LibraryHandle,Options) then
+  begin
+  {$IFDEF Windows}
+    Address := GetProcAddress(LibraryHandle,PSysChar(StrToSys(SymbolName)));
+    Result := Assigned(Address);
+    If not Result and (optExceptionOnFailure in Options) then
+      raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%d).',[SymbolName,GetLastError]);
+  {$ELSE}
+    dlerror;
+    Address := dlsym(LibraryHandle,PSysChar(StrToSys(SymbolName)));
+    If not Assigned(Address) then
+      begin
+        ErrStr := dlerror;
+        Result := not Assigned(ErrStr);
+        If not Result and (optExceptionOnFailure in Options) then
+          raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%s).',[SymbolName,SysToStr(ErrStr)]);
+      end
+    else Result := True;
+  {$ENDIF}
+  end
+else raise EDLUInvalidParameter.CreateFmt('GetSymbolAddr: Invalid library handle (0x%p).',[HandleToPtr(LibraryHandle)]);
+end;
+
+{-------------------------------------------------------------------------------
+    Handle functions - symbols resolving
+-------------------------------------------------------------------------------}
+
+Function ResolveSymbol(LibraryHandle: TDLULibraryHandle; Symbol: TDLUSymbol; Options: TDLUOptions = []): Boolean;
+begin
+Result := GetSymbolAddr(LibraryHandle,Symbol.Name,Symbol.AddressVar^,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; const Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+Results := nil;
+SetLength(Results,Length(Symbols));
+{
+  Check library here and then remove optDeepCheck from options to prevent
+  unnecessary repeated deep checks in ResolveSymbol when this option is active.
+}
+If CheckLibrary(LibraryHandle,Options) then
+  begin
+    Exclude(Options,optDeepCheck);
+    // initialize results
+    For i := Low(Results) to High(Results) do
+      begin
+        Results[i].Processed := False;
+        Results[i].Resolved := False;
+      end;
+    // traverse symbols
+    For i := Low(Symbols) to High(Symbols) do
+      begin
+        Results[i].Processed := True;
+        Results[i].Resolved := ResolveSymbol(LibraryHandle,Symbols[i],Options);
+      {
+        If ResolveSymbol raises an exception (when optExceptionOnFailure is
+        included in options) then following is not executed.
+      }
+        If Results[i].Resolved then
+          Inc(Result)
+        else If optBreakOnUnresolved in Options then
+          Break{For i};
+      end;
+  end
+else raise EDLUInvalidParameter.CreateFmt('ResolveSymbols: Invalid library handle (0x%p).',[HandleToPtr(LibraryHandle)]);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResolveSymbols(LibraryHandle: TDLULibraryHandle; const Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := ResolveSymbols(LibraryHandle,Symbols,Results,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveSymbolList(LibraryHandle: TDLULibraryHandle; SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  i:        Integer;
+  TempPtr:  Pointer;
+begin
+Result := 0;
+Results := nil;
+SetLength(Results,SymbolList.Count);
+If CheckLibrary(LibraryHandle,Options) then
+  begin
+    Exclude(Options,optDeepCheck);
+    For i := Low(Results) to High(Results) do
+      begin
+        Results[i].Processed := False;
+        Results[i].Resolved := False;
+      end;
+    For i := 0 to Pred(SymbolList.Count) do
+      begin
+        Results[i].Processed := True;
+        Results[i].Resolved := ResolveSymbol(LibraryHandle,Symbol(SymbolList[i],@TempPtr),Options);
+        If Results[i].Resolved then
+          begin
+            SymbolList.Objects[i] := TObject(TempPtr);
+            Inc(Result);
+          end
+        else If optBreakOnUnresolved in Options then
+          Break{For i};
+      end;
+  end
+else raise EDLUInvalidParameter.CreateFmt('ResolveSymbolList: Invalid library handle (0x%p).',[HandleToPtr(LibraryHandle)]);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResolveSymbolList(LibraryHandle: TDLULibraryHandle; SymbolList: TStringList; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := ResolveSymbolList(LibraryHandle,SymbolList,Results,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveSymbolNames(LibraryHandle: TDLULibraryHandle; const Names: array of String; const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+Results := nil;
+SetLength(Results,Length(Names));
+If Length(Names) <> Length(AddressVars) then
+  raise EDLUInvalidParameter.CreateFmt('ResolveSymbolNames: Length of arrays do not match (%d,%d).',[Length(Names),Length(AddressVars)]);
+If not CheckLibrary(LibraryHandle,Options) then
+  raise EDLUInvalidParameter.CreateFmt('ResolveSymbolNames: Invalid library handle (0x%p).',[HandleToPtr(LibraryHandle)]);
+Exclude(Options,optDeepCheck);
+For i := Low(Results) to High(Results) do
+  begin
+    Results[i].Processed := False;
+    Results[i].Resolved := False;
+  end;
+For i := Low(Names) to High(Names) do
+  begin
+    Results[i].Processed := True;
+    Results[i].Resolved := ResolveSymbol(LibraryHandle,Symbol(Names[i],AddressVars[i]),Options);
+    If Results[i].Resolved then
+      Inc(Result)
+    else If optBreakOnUnresolved in Options then
+      Break{For i};
+  end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResolveSymbolNames(LibraryHandle: TDLULibraryHandle; const Names: array of String; const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := ResolveSymbolNames(LibraryHandle,Names,AddressVars,Results,Options);
+end;
+
+{-------------------------------------------------------------------------------
+    Handle functions - macro functions
+-------------------------------------------------------------------------------}
+
+Function OpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+begin
+LibraryHandle := OpenLibrary(LibFileName,Options);
+try
+{
+  When optExceptionOnFailure is included in options, then handle validity check
+  is performed in OpenLibrary. And if here, it means it was successful
+  (otherwise and exception would be raised and following code would not be
+  executed).
+  This also means that in such a case, there is no need to perform more calls
+  to CheckLibrary from ResolveSymbols - we cannot directly disable them, so we
+  at least disable deep checks.
+}
+  If optExceptionOnFailure in Options then
+    Exclude(Options,optDeepCheck);
+  Result := ResolveSymbols(LibraryHandle,Symbols,Results,Options);
+except
+  CloseLibrary(LibraryHandle,Options);
+  raise;  // re-raise exception
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function OpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := OpenLibraryAndResolveSymbols(LibFileName,LibraryHandle,Symbols,Results,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+begin
+LibraryHandle := OpenLibrary(LibFileName,Options);
+try
+  If optExceptionOnFailure in Options then
+    Exclude(Options,optDeepCheck);
+  Result := ResolveSymbolList(LibraryHandle,SymbolList,Results,Options);
+except
+  CloseLibrary(LibraryHandle,Options);
+  raise;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; SymbolList: TStringList; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := OpenLibraryAndResolveSymbolList(LibFileName,LibraryHandle,SymbolList,Results,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; const Names: array of String; const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+begin
+LibraryHandle := OpenLibrary(LibFileName,Options);
+try
+  If optExceptionOnFailure in Options then
+    Exclude(Options,optDeepCheck);
+  Result := ResolveSymbolNames(LibraryHandle,Names,AddressVars,Results,Options);
+except
+  CloseLibrary(LibraryHandle,Options);
+  raise;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; const Names: array of String; const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := OpenLibraryAndResolveSymbolNames(LibFileName,LibraryHandle,Names,AddressVars,Results,Options);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                Context functions
+--------------------------------------------------------------------------------
+===============================================================================}
+type
+  TDLULibraryContextInternal = packed record
+    Contenders:   Integer;
+    InitLock:     Integer;
+    DataLock:     TCriticalSection;
+    Internals:    packed record
+      ResolvedSymbolCount:  Integer;  // used to hold true count of resolved symbols in data
+    end;
+    Data:         TDLULibraryContextData;
+  end;
+  PDLULibraryContextInternal = ^TDLULibraryContextInternal;
+
+{$If SizeOf(TDLULibraryContext) < SizeOf(TDLULibraryContextInternal)}
+  {$MESSAGE FATAL 'Public context too small.'}
+{$IFEND}
+
+const
+  DLU_CTX_INITLOCK_UNINITIALIZED = 0;
+  DLU_CTX_INITLOCK_INITIALIZED   = -1;
+  DLU_CTX_INITLOCK_BEINGUPDATED  = 1; // any number except for 0 and -1 corresponds to this state
+
+  DLU_CTX_SYMBOLLIST_GROWDELTA = 32;
 
 {===============================================================================
     Context functions - implementation
@@ -1334,27 +1990,41 @@ Function dlinfo(handle: Pointer; request: cInt; info: Pointer): cInt; cdecl; ext
 -------------------------------------------------------------------------------}
 
 procedure ContextLock(var Context: TDLULibraryContextInternal); overload;
-var
-  IsDone: Boolean;
 begin
 InterlockedIncrement(Context.Contenders);
-repeat
-  If InterlockedExchange(Context.InitLock,DLU_CTX_INITLOCK_LOCKED) = DLU_CTX_INITLOCK_UNLOCKED then
-    begin
-      // context was unlocked and is now locked, create data section is necessary
-      If not Assigned(Context.DataLock) then
-        Context.DataLock := TCriticalSection.Create;
-      InterlockedExchange(Context.InitLock,DLU_CTX_INITLOCK_UNLOCKED);
-      Context.DataLock.Enter;
-      IsDone := True;
-    end
-  else
-    begin
-      // context was locked, wait a moment and try again
-      Sleep(1);
-      IsDone := False;
+while True do
+  case InterlockedCompareExchange(Context.InitLock,DLU_CTX_INITLOCK_BEINGUPDATED,DLU_CTX_INITLOCK_UNINITIALIZED) of
+    DLU_CTX_INITLOCK_UNINITIALIZED: begin
+    {
+      InitLock now contains DLU_CTX_INITLOCK_BEINGUPDATED.
+      
+      Context is not initialized, do the initialization.
+    }
+      Context.DataLock := TCriticalSection.Create;
+      // nobody should be in datalock, so it is save to assign OpenCount directly
+      Context.Data.OpenCount := 0;
+      // other fields are initialized by caller
+      InterlockedStore(Context.InitLock,DLU_CTX_INITLOCK_INITIALIZED);
+      Break{while...};
     end;
-until IsDone;
+    DLU_CTX_INITLOCK_INITIALIZED:   begin
+      // context is ready to be used, just continue
+      Break{while...};
+    end;
+  else
+  {
+    Someone is either initializing or finalizing the context, wait a moment and
+    try again.
+  }
+  {$IFDEF Windows}
+    If not SwitchToThread then
+  {$ELSE}
+    If sched_yield <> 0 then
+  {$ENDIF}
+      Sleep(1);
+    // cycle repeats...
+  end;
+Context.DataLock.Enter;
 end;
 
 //------------------------------------------------------------------------------
@@ -1362,119 +2032,124 @@ end;
 procedure ContextUnlock(var Context: TDLULibraryContextInternal); overload;
 var
   DestroyLock:  Boolean;
-  IsDone:       Boolean;
 begin
-DestroyLock := Context.Data.ReferenceCount <= 0;
+DestroyLock := Context.Data.OpenCount <= 0;
 Context.DataLock.Leave;
 If DestroyLock then
-  repeat
-    If InterlockedExchange(Context.InitLock,DLU_CTX_INITLOCK_LOCKED) = DLU_CTX_INITLOCK_UNLOCKED then
-      begin
-        If InterlockedExchangeAdd(Context.Contenders,0) <= 1 then
+  while True do
+    case InterlockedCompareExchange(Context.InitLock,DLU_CTX_INITLOCK_BEINGUPDATED,DLU_CTX_INITLOCK_INITIALIZED) of
+      DLU_CTX_INITLOCK_UNINITIALIZED: begin
+        // someone managed to do finalizing before us, just leave
+        Break{while...};
+      end;
+      DLU_CTX_INITLOCK_INITIALIZED:   begin
+      {
+        InitLock now contains DLU_CTX_INITLOCK_BEINGUPDATED.
+
+        Finalize the context, but only if we are the sole contender - this is
+        because between our DataLock.Leave and CMPXCH, some other thread could
+        have acquired the context lock and might be still holding it. If that
+        would be the case, we would destroy the lock while it is held by that
+        thread - no bueno. If contender count is one (or less) here, we can be
+        fairly sure nobody else holds the lock or can acquire it before we
+        release InitLock.
+      }
+        If InterlockedLoad(Context.Contenders) <= 1 then
           FreeAndNil(Context.DataLock);
-        InterlockedExchange(Context.InitLock,DLU_CTX_INITLOCK_UNLOCKED);
-        IsDone := True;
-      end
+        InterlockedStore(Context.InitLock,DLU_CTX_INITLOCK_UNINITIALIZED);
+        Break{while...};      
+      end;
     else
-      begin
+    {$IFDEF Windows}
+      If not SwitchToThread then
+    {$ELSE}
+      If sched_yield <> 0 then
+    {$ENDIF}
         Sleep(1);
-        IsDone := False;
-      end;
-  until IsDone;
-InterlockedDecrement(Context.Contenders);
-end;
-
-//------------------------------------------------------------------------------
-
-Function ContextSymbolResolve(var Context: TDLULibraryContextInternal; const SymbolName: String; out Address: Pointer; Method: Integer): Boolean;
-
-  Function SymbolIndexOf: Integer;
-  var
-    i:  Integer;
-  begin
-    Result := -1;
-    For i := Low(Context.Data.SymbolList) to High(Context.Data.SymbolList) do
-      // symbol names are case sensitive...
-      If AnsiSameStr(Context.Data.SymbolList[i].Name,SymbolName) then
-        begin
-          Result := i;
-          Break{For i};
-        end;
-  end;
-
-  procedure ContextSymbolAdd(Address: Pointer);
-  var
-    Index:  Integer;
-  begin
-    If Length(Context.Data.SymbolList) >= Context.Internals.SymbolListCount then
-      SetLength(Context.Data.SymbolList,Length(Context.Data.SymbolList) + DLU_CTX_SYMBOLLIST_GROWDELTA);
-    Index := Context.Internals.SymbolListCount;
-    Context.Data.SymbolList[Index].Name := SymbolName;
-    Context.Data.SymbolList[Index].Address := Address;
-    Inc(Context.Internals.SymbolListCount);
-  end;
-
-var
-  Index:  Integer;
-begin
-// context is assumed to be locked here
-If Context.Data.Options.SymbolListActive or Context.Data.Options.SymbolListResolve then
-  Index := SymbolIndexOf
-else
-  Index := -1;
-Result := True;
-If not Context.Data.Options.SymbolListResolve or (Index < 0) then
-  begin
-    case Method of
-      DLU_CTX_RESOLVEMETHOD_VALID:
-        Result := GetSymbolAddr(Context.Data.Handle,SymbolName,Address);
-      DLU_CTX_RESOLVEMETHOD_RAISE:
-        begin
-          // following raises an exception in case of failure
-          Address := GetAndCheckSymbolAddr(Context.Data.Handle,SymbolName);
-          Result := True;
-        end;
-    else
-     {DLU_CTX_RESOLVEMETHOD_ADDRESS}
-      Address := GetSymbolAddr(Context.Data.Handle,SymbolName);
-      Result := True;
     end;
-    If Result and Context.Data.Options.SymbolListActive then
-      begin
-        If Index >= 0 then
-          begin
-            Context.Data.SymbolList[Index].Name := SymbolName;
-            Context.Data.SymbolList[Index].Address := Address;
-          end
-        else ContextSymbolAdd(Address);
-      end;
-  end
-else Address := Context.Data.SymbolList[Index].Address;
+InterlockedDecrement(Context.Contenders);     
 end;
 
 //------------------------------------------------------------------------------
 
-Function GetLibTrueFilePath(Handle: TDLULibraryHandle): String;
+Function ContextGetEffectiveOptions(const Context: TDLULibraryContextInternal; CallOptions: TDLUOptions): TDLUOptions;
+begin
+If (optContextOptions in Context.Data.Options) or (optContextOptions in CallOptions) then
+  Result := (Context.Data.Options - [optNoSerialize]) + (CallOptions * [optNoSerialize])
+else
+  Result := CallOptions;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ContextCheckLibrary(const Context: TDLULibraryContextInternal; Options: TDLUOptions): Boolean;
+begin
+// this function only observes optDeepCheck, also the context must be locked
+If Context.Data.OpenCount > 0 then
+  Result := CheckLibrary(Context.Data.Handle,Options)
+else
+  Result := False;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure ContextGetFullFileName(var Context: TDLULibraryContextInternal);
 {$IFDEF Windows}
 var
   ModuleFileName: WideString;
+  ReturnValue:    DWORD;
 begin
 ModuleFileName := '';
-SetLength(ModuleFileName,UNICODE_STRING_MAX_CHARS);
-SetLength(ModuleFileName,GetModuleFileNameExW(GetCurrentProcess,Handle,
-  PWideChar(ModuleFileName),Length(ModuleFileName)));
-Result := WideToStr(ModuleFileName);
+repeat
+  SetLength(ModuleFileName,Length(ModuleFileName) + UNICODE_STRING_MAX_CHARS);
+  ReturnValue := GetModuleFileNameW(Context.Data.Handle,PWideChar(ModuleFileName),Length(ModuleFileName))
+until Integer(ReturnValue) < Length(ModuleFileName);
+SetLength(ModuleFileName,ReturnValue);
+Context.Data.FullFileName := WideToStr(ModuleFileName);
 end;
 {$ELSE}
 var
   Info: plink_map;
 begin
-If dlinfo(Handle,RTLD_DI_LINKMAP,@Info) = 0 then
-  Result := ExpandFileName(SysToStr(Info^.l_name))
+If dlinfo(Context.Data.Handle,RTLD_DI_LINKMAP,@Info) = 0 then
+  Context.Data.FullFileName := ExpandFileName(SysToStr(Info^.l_name))
 else
-  Result := ''; // do not raise exception, just return an empty string
+  Context.Data.FullFileName := '';  // do not raise exception, just use an empty string
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function ContextSymbolFind(var Context: TDLULibraryContextInternal; const SymbolName: String; out Index: Integer): Boolean;
+var
+  i:  Integer;
+begin
+Result := False;
+Index := -1;
+For i := Low(Context.Data.ResolvedSymbols) to Pred(Context.Internals.ResolvedSymbolCount) do
+  // comparison must be case-sensitive
+  If AnsiSameStr(SymbolName,Context.Data.ResolvedSymbols[i].Name) then
+    begin
+      Index := i;
+      Result := True;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ContextSymbolAdd(var Context: TDLULibraryContextInternal; const SymbolName: String; Address: Pointer): Integer;
+begin
+If not ContextSymbolFind(Context,SymbolName,Result) then
+  begin
+    If Length(Context.Data.ResolvedSymbols) <= Context.Internals.ResolvedSymbolCount then
+      SetLength(Context.Data.ResolvedSymbols,Length(Context.Data.ResolvedSymbols) + DLU_CTX_SYMBOLLIST_GROWDELTA);
+    Result := Context.Internals.ResolvedSymbolCount;
+    Inc(Context.Internals.ResolvedSymbolCount);
+  end;
+Context.Data.ResolvedSymbols[Result].Name := SymbolName;
+Context.Data.ResolvedSymbols[Result].Address := Address;
+end;
 
 {-------------------------------------------------------------------------------
     Context functions - utility functions
@@ -1492,65 +2167,164 @@ begin
 ContextUnlock(PDLULibraryContextInternal(@Context)^);
 end;
 
-//------------------------------------------------------------------------------
+//==============================================================================
 
-Function ContextGetData(var Context: TDLULibraryContext): TDLULibraryContextData;
+Function ContextGetData(var Context: TDLULibraryContext; Options: TDLUOptions = []): TDLULibraryContextData;
 var
-  i:  Integer;
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  i:            Integer;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  If CheckLibrary(PDLULibraryContextInternal(@Context)^.Data.Handle) then
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
     begin
-      Result := PDLULibraryContextInternal(@Context)^.Data;
-      UniqueString(Result.OriginalFileName);
-      UniqueString(Result.TrueFileName);
+      Result := InternalCtx.Data;
+      UniqueString(Result.OpenFileName);
+      UniqueString(Result.FullFileName);
       // following always creates unique copy
-      SetLength(Result.SymbolList,PDLULibraryContextInternal(@Context)^.Internals.SymbolListCount);
-      For i := Low(Result.SymbolList) to High(Result.SymbolList) do
-        UniqueString(Result.SymbolList[i].Name);
+      SetLength(Result.ResolvedSymbols,InternalCtx.Internals.ResolvedSymbolCount);
+      For i := Low(Result.ResolvedSymbols) to High(Result.ResolvedSymbols) do
+        UniqueString(Result.ResolvedSymbols[i].Name);
     end
   else raise EDLUInvalidParameter.Create('ContextGetData: Invalid context.');
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function ContextOptSymbolListActive(var Context: TDLULibraryContext; Activate: Boolean): Boolean;
+Function ContextGetOptions(var Context: TDLULibraryContext; Options: TDLUOptions = []): TDLUOptions;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  with PDLULibraryContextInternal(@Context)^ do
-    begin
-      Result := Data.Options.SymbolListActive;
-      If CheckLibrary(Data.Handle) then
-        Data.Options.SymbolListActive := Activate
-      else
-        raise EDLUInvalidParameter.Create('ContextOptSymbolListActive: Invalid context.');
-    end;
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    Result := InternalCtx.Data.Options
+  else
+    raise EDLUInvalidParameter.Create('ContextGetOptions: Invalid context.');
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function ContextOptSymbolListResolve(var Context: TDLULibraryContext; Activate: Boolean): Boolean;
+Function ContextSetOptions(var Context: TDLULibraryContext; NewOptions: TDLUOptions; Options: TDLUOptions = []): TDLUOptions;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  with PDLULibraryContextInternal(@Context)^ do
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
     begin
-      Result := Data.Options.SymbolListResolve;
-      If CheckLibrary(Data.Handle) then
-        Data.Options.SymbolListResolve := Activate
-      else
-        raise EDLUInvalidParameter.Create('ContextOptSymbolListResolve: Invalid context.');
-    end;
+      Result := InternalCtx.Data.Options;
+      InternalCtx.Data.Options := NewOptions;
+    end
+  else raise EDLUInvalidParameter.Create('ContextSetOptions: Invalid context.');
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ContextGetOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): Boolean;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+begin
+Result := False;  // dunno, delphi is complaining about undefined result
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
+try
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    Result := Option in InternalCtx.Data.Options
+  else
+    raise EDLUInvalidParameter.Create('ContextGetOption: Invalid context.');
+finally
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ContextSetOption(var Context: TDLULibraryContext; Option: TDLUOption; NewState: Boolean; Options: TDLUOptions = []): Boolean;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+begin
+Result := False;
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
+try
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    begin
+      Result := Option in InternalCtx.Data.Options;
+      If NewState then
+        Include(InternalCtx.Data.Options,Option)
+      else
+        Exclude(InternalCtx.Data.Options,Option);
+    end
+  else raise EDLUInvalidParameter.Create('ContextSetOption: Invalid context.');
+finally
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ContextIncludeOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): TDLUOptions;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+begin
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
+try
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    begin
+      Result := InternalCtx.Data.Options;
+      Include(InternalCtx.Data.Options,Option);
+    end
+  else raise EDLUInvalidParameter.Create('ContextIncludeOption: Invalid context.');
+finally
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ContextExcludeOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): TDLUOptions;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+begin
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
+try
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    begin
+      Result := InternalCtx.Data.Options;
+      Exclude(InternalCtx.Data.Options,Option);
+    end
+  else raise EDLUInvalidParameter.Create('ContextExcludeOption: Invalid context.');
+finally
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
@@ -1558,91 +2332,109 @@ end;
     Context functions - library functions
 -------------------------------------------------------------------------------}
 
-Function CheckLibrary(var Context: TDLULibraryContext): Boolean;
-begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
-try
-  Result := CheckLibrary(PDLULibraryContextInternal(@Context)^.Data.Handle);
-finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function OpenLibrary(const LibFileName: String; var Context: TDLULibraryContext; SilentCriticalErrors: Boolean = False): Boolean;
-begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
-try
-  with PDLULibraryContextInternal(@Context)^ do
-    begin
-      If Data.ReferenceCount <= 0 then
-        begin
-          Data.Handle := OpenAndCheckLibrary(LibFileName,SilentCriticalErrors);
-          // init data
-          Data.ReferenceCount := 1;
-          Data.OriginalFileName := LibFileName;
-          UniqueString(Data.OriginalFileName);
-          Data.TrueFileName := GetLibTrueFilePath(Data.Handle);
-          UniqueString(Data.TrueFileName);
-          Data.Options.SymbolListActive := False;
-          Data.Options.SymbolListResolve := False;
-          SetLength(Data.SymbolList,0);
-          Internals.SymbolListCount := 0;
-          Result := True;
-        end
-      else
-        begin
-          Inc(Data.ReferenceCount);
-          Result := False;
-        end;
-    end;
-finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SafeOpenLibrary(const LibFileName: String; var Context: TDLULibraryContext; SilentCriticalErrors: Boolean = False): Boolean;
+Function CheckLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []): Boolean;
 var
-  State:  TDLUSafeLoadState;
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
 begin
-SafeLoadSaveState(State);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  Result := OpenLibrary(LibFileName,Context,SilentCriticalErrors);
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  Result := ContextCheckLibrary(InternalCtx,Options);
 finally
-  SafeLoadRestoreState(State);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CloseLibrary(var Context: TDLULibraryContext): Boolean;
+Function OpenLibrary(const LibFileName: String; var Context: TDLULibraryContext; Options: TDLUOptions = []): Boolean;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  NewHandle:    TDLULibraryHandle;
 begin
 Result := False;
-ContextLock(PDLULibraryContextInternal(@Context)^);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  with PDLULibraryContextInternal(@Context)^ do
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If InternalCtx.Data.OpenCount <= 0 then
     begin
-      Dec(Data.ReferenceCount);
-      If Data.ReferenceCount <= 0 then
-        begin
-          CloseLibrary(Data.Handle);
-          // clear data
-          Data.Handle := DefaultLibraryHandle;
-          Data.ReferenceCount := 0;
-          Data.OriginalFileName := '';
-          Data.TrueFileName := '';
-          Data.Options.SymbolListActive := False;
-          Data.Options.SymbolListResolve := False;
-          SetLength(Data.SymbolList,0);
-          Internals.SymbolListCount := 0;
-          Result := True;
-        end;
-    end;
+      // initializing call
+      InternalCtx.Data.Handle := OpenLibrary(LibFileName,Options);
+    {
+      If optExceptionOnFailure is active, it means the library handle was
+      already checked in previous OpenLibrary call.
+    }
+      If not (optExceptionOnFailure in Options) then
+        If not CheckLibrary(InternalCtx.Data.Handle,Options) then
+          raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s".',[LibFileName]);
+      InternalCtx.Data.OpenCount := 1;
+      InternalCtx.Data.OpenFileName := LibFileName;
+      UniqueString(InternalCtx.Data.OpenFileName);
+      ContextGetFullFileName(InternalCtx);
+      UniqueString(InternalCtx.Data.FullFileName);
+      InternalCtx.Data.Options := [];
+      InternalCtx.Data.ResolvedSymbols := nil;
+      InternalCtx.Internals.ResolvedSymbolCount := 0;      
+      Result := True;
+    end
+  // the context was already used to load a library, ...
+  else If optAlwaysLoad in Options then
+    begin
+      // ...load it again
+      NewHandle := OpenLibrary(InternalCtx.Data.FullFileName,Options);
+      If NewHandle <> InternalCtx.Data.Handle then
+        raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to re-open library "%s".',[LibFileName]);
+      Inc(InternalCtx.Data.OpenCount);
+    end
+  // ...do not load it again, only increment refcount
+  else Inc(InternalCtx.Data.OpenCount);
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CloseLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []): Boolean;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  TempHandle:   TDLULibraryHandle;
+begin
+Result := False;
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
+try
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    begin
+      Dec(InternalCtx.Data.OpenCount);
+      If InternalCtx.Data.OpenCount <= 0 then
+        begin
+          // last closing call, unload the library and finalize the context
+          CloseLibrary(InternalCtx.Data.Handle,Options);  // sets handle to default
+          InternalCtx.Data.OpenCount := 0;
+          InternalCtx.Data.OpenFileName := '';
+          InternalCtx.Data.FullFileName := '';
+          InternalCtx.Data.Options := [];
+          SetLength(InternalCtx.Data.ResolvedSymbols,0);
+          InternalCtx.Internals.ResolvedSymbolCount := 0;
+          Result := True;
+        end
+      else If optAlwaysLoad in Options then
+        begin
+          // unload library - preserve the handle (CloseLibrary would invalidate it)
+          TempHandle := InternalCtx.Data.Handle;
+          CloseLibrary(TempHandle,Options);
+        end;
+    end
+  else raise EDLUInvalidParameter.Create('CloseLibrary: Invalid context.');
+finally
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
@@ -1650,37 +2442,67 @@ end;
     Context functions - symbols addresses
 -------------------------------------------------------------------------------}
 
-Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String): Pointer;
+Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String; Options: TDLUOptions = []): Pointer;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  Index:        Integer;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,SymbolName,Result,DLU_CTX_RESOLVEMETHOD_ADDRESS);
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    begin
+      Exclude(Options,optDeepCheck);
+      // first try to find the symbol in a list of already resolved (if allowed)
+      If optSymbolListResolve in Options then
+        If ContextSymbolFind(InternalCtx,SymbolName,Index) then
+          begin
+            Result := InternalCtx.Data.ResolvedSymbols[Index].Address;
+            Exit; // do not continue this function
+          end;
+      // do normal resolving
+      If GetSymbolAddr(InternalCtx.Data.Handle,SymbolName,Result,Options) then
+        If optSymbolListStore in Options then
+          ContextSymbolAdd(InternalCtx,SymbolName,Result);
+    end
+  else raise EDLUInvalidParameter.Create('GetSymbolAddr: Invalid context.');
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String; out Address: Pointer): Boolean;
+Function GetSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String; out Address: Pointer; Options: TDLUOptions = []): Boolean;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  Index:        Integer;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+Result := False;
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  Result := ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,SymbolName,Address,DLU_CTX_RESOLVEMETHOD_VALID);
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    begin
+      Exclude(Options,optDeepCheck);
+      If optSymbolListResolve in Options then
+        If ContextSymbolFind(InternalCtx,SymbolName,Index) then
+          begin
+            Address := InternalCtx.Data.ResolvedSymbols[Index].Address;
+            Result := True;
+            Exit;
+          end;
+      Result := GetSymbolAddr(InternalCtx.Data.Handle,SymbolName,Address,Options);
+      If Result and (optSymbolListStore in Options) then
+        ContextSymbolAdd(InternalCtx,SymbolName,Address);
+    end
+  else raise EDLUInvalidParameter.Create('GetSymbolAddr: Invalid context.');
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function GetAndCheckSymbolAddr(var Context: TDLULibraryContext; const SymbolName: String): Pointer;
-begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
-try
-  ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,SymbolName,Result,DLU_CTX_RESOLVEMETHOD_RAISE);
-finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
@@ -1688,220 +2510,277 @@ end;
     Context functions - symbols resolving
 -------------------------------------------------------------------------------}
 
-Function ResolveSymbolNames(var Context: TDLULibraryContext; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False): Integer;
-var
-  i:  Integer;
+Function ResolveSymbol(var Context: TDLULibraryContext; Symbol: TDLUSymbol; Options: TDLUOptions = []): Boolean;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+Result := GetSymbolAddr(Context,Symbol.Name,Symbol.AddressVar^,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveSymbols(var Context: TDLULibraryContext; const Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  i:            Integer;
+begin
+Result := 0;
+Results := nil;
+SetLength(Results,Length(Symbols));
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  Result := 0;
-  If Length(Names) = Length(Addresses) then
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  if optNoSerialize in options then
+    writeln('boo');
+  If ContextCheckLibrary(InternalCtx,Options) then
     begin
-      If FailOnUnresolved then
+      Exclude(Options,optDeepCheck);
+      For i := Low(Results) to High(Results) do
         begin
-          For i := Low(Names) to High(Names) do
-            ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Names[i],Addresses[i]^,DLU_CTX_RESOLVEMETHOD_RAISE);
-          Result := Length(Names);
-        end
-      else
+          Results[i].Processed := False;
+          Results[i].Resolved := False;
+        end;
+      For i := Low(Symbols) to High(Symbols) do
         begin
-          For i := Low(Names) to High(Names) do
-            If ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Names[i],Addresses[i]^,DLU_CTX_RESOLVEMETHOD_VALID) then
+          Results[i].Processed := True;
+        {
+          Note that ResolveSymbol processes both optSymbolListResolve and
+          optSymbolListStore options.
+
+          Also no need to do locking in every call to ResolveSymbol later.
+        }
+          Results[i].Resolved := ResolveSymbol(Context,Symbols[i],Options + [optNoSerialize]);
+          If Results[i].Resolved then
+            Inc(Result)
+          else If optBreakOnUnresolved in Options then
+            Break{For i};
+        end;
+    end
+  else raise EDLUInvalidParameter.Create('ResolveSymbols: Invalid context.');
+finally
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
+end;    
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResolveSymbols(var Context: TDLULibraryContext; const Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := ResolveSymbols(Context,Symbols,Results,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveSymbolList(var Context: TDLULibraryContext; SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  i:            Integer;
+  TempPtr:      Pointer;
+begin
+Result := 0;
+Results := nil;
+SetLength(Results,SymbolList.Count);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
+try
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
+    begin
+      Exclude(Options,optDeepCheck);
+      For i := Low(Results) to High(Results) do
+        begin
+          Results[i].Processed := False;
+          Results[i].Resolved := False;
+        end;
+      For i := 0 to Pred(SymbolList.Count) do
+        begin
+          Results[i].Processed := True;
+          Results[i].Resolved := ResolveSymbol(Context,Symbol(SymbolList[i],@TempPtr),Options + [optNoSerialize]);
+          If Results[i].Resolved then
+            begin
+              SymbolList.Objects[i] := TObject(TempPtr);
               Inc(Result);
+            end
+          else If optBreakOnUnresolved in Options then
+            Break{For i};
         end;
     end
-  else raise EDLUInvalidParameter.CreateFmt('ResolveSymbolNames: Length of arrays do not match (%d,%d).',[Length(Names),Length(Addresses)]);
+  else raise EDLUInvalidParameter.Create('ResolveSymbolList: Invalid context.');
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function ResolveSymbol(var Context: TDLULibraryContext; Symbol: TDLUSymbol; FailOnUnresolved: Boolean = False): Boolean;
-begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
-try
-  If FailOnUnresolved then
-    begin
-      ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Symbol.Name,Symbol.AddressVar^,DLU_CTX_RESOLVEMETHOD_RAISE);
-      Result := True;
-    end
-  else Result := ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Symbol.Name,Symbol.AddressVar^,DLU_CTX_RESOLVEMETHOD_VALID);
-finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function ResolveSymbols(var Context: TDLULibraryContext; Symbols: TStringList; FailOnUnresolved: Boolean = False): Integer;
-var
-  i:        Integer;
-  TempPtr:  Pointer;
-begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
-try
-  Result := 0;
-  If FailOnUnresolved then
-    begin
-      For i := 0 to Pred(Symbols.Count) do
-        begin
-          ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Symbols[i],TempPtr,DLU_CTX_RESOLVEMETHOD_RAISE);
-          Symbols.Objects[i] := TObject(TempPtr);
-        end;
-      Result := Symbols.Count;
-    end
-  else
-    begin
-      For i := 0 to Pred(Symbols.Count) do
-        If ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Symbols[i],TempPtr,DLU_CTX_RESOLVEMETHOD_VALID) then
-          begin
-            Symbols.Objects[i] := TObject(TempPtr);
-            Inc(Result);
-          end
-        else Symbols.Objects[i] := nil;
-    end;
-finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ResolveSymbols(var Context: TDLULibraryContext; Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False): Integer;
+Function ResolveSymbolList(var Context: TDLULibraryContext; SymbolList: TStringList; Options: TDLUOptions = []): Integer;
 var
-  i:  Integer;
+  Results:  TDLUSymReslResults;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+Result := ResolveSymbolList(Context,SymbolList,Results,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function ResolveSymbolNames(var Context: TDLULibraryContext; const Names: array of String; const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+  i:            Integer;
+begin
+Result := 0;
+Results := nil;
+SetLength(Results,Length(Names));
+If Length(Names) <> Length(AddressVars) then
+  raise EDLUInvalidParameter.CreateFmt('ResolveSymbolNames: Length of arrays do not match (%d,%d).',[Length(Names),Length(AddressVars)]);
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  Result := 0;
-  // do not use ResolveSymbol to avoid context relock
-  If FailOnUnresolved then
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  If ContextCheckLibrary(InternalCtx,Options) then
     begin
-      For i := Low(Symbols) to High(Symbols) do
-        ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Symbols[i].Name,Symbols[i].AddressVar^,DLU_CTX_RESOLVEMETHOD_RAISE);
-      Result := Length(Symbols);
+      Exclude(Options,optDeepCheck);
+      For i := Low(Results) to High(Results) do
+        begin
+          Results[i].Processed := False;
+          Results[i].Resolved := False;
+        end;
+      For i := Low(Names) to High(Names) do
+        begin
+          Results[i].Processed := True;
+          Results[i].Resolved := ResolveSymbol(Context,Symbol(Names[i],AddressVars[i]),Options + [optNoSerialize]);
+          If Results[i].Resolved then
+            Inc(Result)
+          else If optBreakOnUnresolved in Options then
+            Break{For i};
+        end;
     end
-  else
-    begin
-      For i := Low(Symbols) to High(Symbols) do
-        If ContextSymbolResolve(PDLULibraryContextInternal(@Context)^,Symbols[i].Name,Symbols[i].AddressVar^,DLU_CTX_RESOLVEMETHOD_VALID) then
-          Inc(Result);
-    end;
+  else raise EDLUInvalidParameter.Create('ResolveSymbolNames: Invalid context.');
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResolveSymbolNames(var Context: TDLULibraryContext; const Names: array of String; const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := ResolveSymbolNames(Context,Names,AddressVars,Results,Options);
+end;
+
 
 {-------------------------------------------------------------------------------
     Context functions - macro functions
 -------------------------------------------------------------------------------}
 
-Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
+Function OpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext; Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
 begin
-// following code will recursively relock the context, but the critical section should handle this
-ContextLock(PDLULibraryContextInternal(@Context)^);
+Result := 0;
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  Result := 0;
-  OpenLibrary(LibFileName,Context,SilentCriticalErrors);
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  OpenLibrary(LibFileName,Context,Options);
   try
-    Result := ResolveSymbolNames(Context,Names,Addresses,FailOnUnresolved);
+    If optExceptionOnFailure in Options then
+      Exclude(Options,optDeepCheck);
+    Result := ResolveSymbols(Context,Symbols,Results,Options);
   except
-    CloseLibrary(Context);
-    raise; 
+    CloseLibrary(Context,Options);
+    raise;  // re-raise exception
   end;
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function OpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
-try
-  Result := 0;
-  OpenLibrary(LibFileName,Context,SilentCriticalErrors);
-  try
-    Result := ResolveSymbols(Context,Symbols,FailOnUnresolved);
-  except
-    CloseLibrary(Context);
-    raise;
-  end;
-finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function OpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
+Function OpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext; Symbols: array of TDLUSymbol; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
 begin
-ContextLock(PDLULibraryContextInternal(@Context)^);
+Result := OpenLibraryAndResolveSymbols(LibFileName,Context,Symbols,Results,Options);
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; var Context: TDLULibraryContext; SymbolList: TStringList; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+begin
+Result := 0;
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  Result := 0;
-  OpenLibrary(LibFileName,Context,SilentCriticalErrors);
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  OpenLibrary(LibFileName,Context,Options);
   try
-    Result := ResolveSymbols(Context,Symbols,FailOnUnresolved);
+    If optExceptionOnFailure in Options then
+      Exclude(Options,optDeepCheck);
+    Result := ResolveSymbolList(Context,SymbolList,Results,Options);
   except
-    CloseLibrary(Context);
+    CloseLibrary(Context,Options);
     raise;
   end;
 finally
-  ContextUnlock(PDLULibraryContextInternal(@Context)^);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SafeOpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext; const Names: array of String;
-  Addresses: array of PPointer; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-var
-  State:  TDLUSafeLoadState;
-begin
-SafeLoadSaveState(State);
-try
-  Result := OpenLibraryAndResolveSymbolNames(LibFileName,Context,Names,Addresses,FailOnUnresolved,SilentCriticalErrors);
-finally
-  SafeLoadRestoreState(State);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: TStringList; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
-var
-  State:  TDLUSafeLoadState;
-begin
-SafeLoadSaveState(State);
-try
-  Result := OpenLibraryAndResolveSymbols(LibFileName,Context,Symbols,FailOnUnresolved,SilentCriticalErrors);
-finally
-  SafeLoadRestoreState(State);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  
-Function SafeOpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
-  Symbols: array of TDLUSymbol; FailOnUnresolved: Boolean = False; SilentCriticalErrors: Boolean = False): Integer;
+
+Function OpenLibraryAndResolveSymbolList(const LibFileName: String; var Context: TDLULibraryContext; SymbolList: TStringList; Options: TDLUOptions = []): Integer;
 var
-  State:  TDLUSafeLoadState;
+  Results:  TDLUSymReslResults;
 begin
-SafeLoadSaveState(State);
+Result := OpenLibraryAndResolveSymbolList(LibFileName,Context,SymbolList,Results,Options);
+end;
+
+//------------------------------------------------------------------------------
+
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext; const Names: array of String; const AddressVars: array of PPointer; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer;
+var
+  InternalCtx:  TDLULibraryContextInternal absolute Context;
+begin
+Result := 0;
+If not (optNoSerialize in Options) then
+  ContextLock(InternalCtx);
 try
-  Result := OpenLibraryAndResolveSymbols(LibFileName,Context,Symbols,FailOnUnresolved,SilentCriticalErrors);
+  Options := ContextGetEffectiveOptions(InternalCtx,Options);
+  OpenLibrary(LibFileName,Context,Options);
+  try
+    If optExceptionOnFailure in Options then
+      Exclude(Options,optDeepCheck);
+    Result := ResolveSymbolNames(Context,Names,AddressVars,Results,Options);
+  except
+    CloseLibrary(Context,Options);
+    raise;
+  end;
 finally
-  SafeLoadRestoreState(State);
+  If not (optNoSerialize in Options) then
+    ContextUnlock(InternalCtx);
 end;
 end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context: TDLULibraryContext; const Names: array of String; const AddressVars: array of PPointer; Options: TDLUOptions = []): Integer;
+var
+  Results:  TDLUSymReslResults;
+begin
+Result := OpenLibraryAndResolveSymbolNames(LibFileName,Context,Names,AddressVars,Results,Options);
+end;
+
 
 {===============================================================================
     Unit initialization, finalization

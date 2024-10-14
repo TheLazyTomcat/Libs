@@ -138,9 +138,9 @@
       This all means one important thing - you have to free the returned object
       after use to prevent memory leak!
 
-  version 1.0.1 (2024-05-03)
+  version 1.0.2 (2024-10-14)
 
-  Last change 2024-05-03
+  Last change 2024-10-14
 
   ©2023-2024 František Milt
 
@@ -170,6 +170,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
     WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
@@ -7858,27 +7859,27 @@ begin
 {$IF (GDIPVER >= $0110) and not Defined(NewGDIPStatic)}  
 ContextLock(GDIPLusLibraryContext);         
 try                                   
-If OpenLibrary(GDIPLIB,GDIPLusLibraryContext) then
-  begin
-    If input^.GdiplusVersion >= 2 then
-      ResolveSymbols(GDIPLusLibraryContext,[
-        Symbol('GdipFindFirstImageItem',      @@GdipFindFirstImageItem),
-        Symbol('GdipFindNextImageItem',       @@GdipFindNextImageItem),
-        Symbol('GdipGetImageItemData',        @@GdipGetImageItemData),
-        Symbol('GdipImageSetAbort',           @@GdipImageSetAbort),
-        Symbol('GdipGraphicsSetAbort',        @@GdipGraphicsSetAbort),
-        Symbol('GdipBitmapConvertFormat',     @@GdipBitmapConvertFormat),
-        Symbol('GdipInitializePalette',       @@GdipInitializePalette),
-        Symbol('GdipBitmapApplyEffect',       @@GdipBitmapApplyEffect),
-        Symbol('GdipBitmapCreateApplyEffect', @@GdipBitmapCreateApplyEffect),
-        Symbol('GdipBitmapGetHistogram',      @@GdipBitmapGetHistogram),
-        Symbol('GdipBitmapGetHistogramSize',  @@GdipBitmapGetHistogramSize),
-        Symbol('GdipDrawImageFX',             @@GdipDrawImageFX),
-        Symbol('GdipConvertToEmfPlus',        @@GdipConvertToEmfPlus),
-        Symbol('GdipConvertToEmfPlusToFile',  @@GdipConvertToEmfPlusToFile),
-        Symbol('GdipConvertToEmfPlusToStream',@@GdipConvertToEmfPlusToStream)
-      ],True);
-  end;
+  If OpenLibrary(GDIPLIB,GDIPLusLibraryContext,[optExceptionOnFailure]) then
+    begin
+      If input^.GdiplusVersion >= 2 then
+        ResolveSymbols(GDIPLusLibraryContext,[
+          Symbol('GdipFindFirstImageItem',      @@GdipFindFirstImageItem),
+          Symbol('GdipFindNextImageItem',       @@GdipFindNextImageItem),
+          Symbol('GdipGetImageItemData',        @@GdipGetImageItemData),
+          Symbol('GdipImageSetAbort',           @@GdipImageSetAbort),
+          Symbol('GdipGraphicsSetAbort',        @@GdipGraphicsSetAbort),
+          Symbol('GdipBitmapConvertFormat',     @@GdipBitmapConvertFormat),
+          Symbol('GdipInitializePalette',       @@GdipInitializePalette),
+          Symbol('GdipBitmapApplyEffect',       @@GdipBitmapApplyEffect),
+          Symbol('GdipBitmapCreateApplyEffect', @@GdipBitmapCreateApplyEffect),
+          Symbol('GdipBitmapGetHistogram',      @@GdipBitmapGetHistogram),
+          Symbol('GdipBitmapGetHistogramSize',  @@GdipBitmapGetHistogramSize),
+          Symbol('GdipDrawImageFX',             @@GdipDrawImageFX),
+          Symbol('GdipConvertToEmfPlus',        @@GdipConvertToEmfPlus),
+          Symbol('GdipConvertToEmfPlusToFile',  @@GdipConvertToEmfPlusToFile),
+          Symbol('GdipConvertToEmfPlusToStream',@@GdipConvertToEmfPlusToStream)
+        ],[optExceptionOnFailure]);
+    end;
 finally
   ContextUnlock(GDIPLusLibraryContext);
 end;

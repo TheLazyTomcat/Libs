@@ -40,11 +40,11 @@
               execute any of its code concurrently (in more than one thread at
               any given time).
 
-  Version 1.0.1 (2024-05-03)
+  Version 1.0.2 (2024-10-14)
 
   Build against DevIL library version 1.8.0
 
-  Last change 2024-05-03
+  Last change 2024-10-14
 
   ©2023-2024 František Milt
 
@@ -74,6 +74,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
     WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
@@ -752,20 +753,20 @@ end;
     Library loading - implementation
 ===============================================================================}
 var
-  DevIL_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
+  DevIL_LibraryContext: TDLULibraryContext;
 
 //------------------------------------------------------------------------------
 
 Function DevIL_Initialized: Boolean;
 begin
-Result := CheckLibrary(DevIL_LibraryHandle);
+Result := CheckLibrary(DevIL_LibraryContext);
 end;
 
 //------------------------------------------------------------------------------
 
 Function DevIL_Initialize(const LibPath: String = DevIL_LibFileName; InitLib: Boolean = True): Boolean;
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,DevIL_LibraryHandle,[
+Result := OpenLibraryAndResolveSymbols(LibPath,DevIL_LibraryContext,[
   Symbol(@@ilActiveFace,                'ilActiveFace'),
   Symbol(@@ilActiveImage,               'ilActiveImage'),
   Symbol(@@ilActiveLayer,               'ilActiveLayer'),
@@ -876,7 +877,7 @@ Result := OpenLibraryAndResolveSymbols(LibPath,DevIL_LibraryHandle,[
   Symbol(@@ilLoadData,                  'ilLoadData'),
   Symbol(@@ilLoadDataF,                 'ilLoadDataF'),
   Symbol(@@ilLoadDataL,                 'ilLoadDataL'),
-  Symbol(@@ilSaveData,                  'ilSaveData')],True) = 103;
+  Symbol(@@ilSaveData,                  'ilSaveData')],[optExceptionOnFailure]) = 103;
 // aliasses  
 ilClearColor := ilClearColour;
 ilKeyColor := ilKeyColour;
@@ -894,7 +895,7 @@ procedure DevIL_Finalize(FinalLib: Boolean = True);
 begin
 If FinalLib and Assigned(ilShutDown) then
   ilShutDown;
-CloseLibrary(DevIL_LibraryHandle);
+CloseLibrary(DevIL_LibraryContext);
 end;
 
 
@@ -1163,5 +1164,12 @@ If Stream.Size <= High(ILint) then
   end
 else raise EILStreamTooLarge.CreateFmt('ilLoadDataS: Stream too large (%d).',[Stream.Size]);
 end;
+
+{===============================================================================
+    Global variables initialization
+===============================================================================}
+
+initialization
+  DevIL_LibraryContext := DefaultLibraryContext;
 
 end.

@@ -40,11 +40,11 @@
               execute any of its code concurrently (in more than one thread at
               any given time).
 
-  Version 1.0.1 (2024-05-03)
+  Version 1.0.2 (2024-10-14)
 
   Build against DevIL library version 1.8.0
 
-  Last change 2024-05-03
+  Last change 2024-10-14
 
   ©2023-2024 František Milt
 
@@ -74,6 +74,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
     WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
@@ -291,20 +292,20 @@ uses
     Library loading - implementation
 ===============================================================================}
 var
-  DevILU_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
+  DevILU_LibraryContext:  TDLULibraryContext;
 
 //------------------------------------------------------------------------------
 
 Function DevILU_Initialized: Boolean;
 begin
-Result := CheckLibrary(DevILU_LibraryHandle);
+Result := CheckLibrary(DevILU_LibraryContext);
 end;
 
 //------------------------------------------------------------------------------
 
 Function DevILU_Initialize(const LibPath: String = DevIL_LibFileName; InitLib: Boolean = True): Boolean;
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,DevILU_LibraryHandle,[
+Result := OpenLibraryAndResolveSymbols(LibPath,DevILU_LibraryContext,[
   Symbol(@@iluAlienify,      'iluAlienify'),
   Symbol(@@iluBlurAvg,       'iluBlurAvg'),
   Symbol(@@iluBlurGaussian,  'iluBlurGaussian'),
@@ -353,7 +354,7 @@ Result := OpenLibraryAndResolveSymbols(LibPath,DevILU_LibraryHandle,[
   Symbol(@@iluSetLanguage,   'iluSetLanguage'),
   Symbol(@@iluSharpen,       'iluSharpen'),
   Symbol(@@iluSwapColours,   'iluSwapColours'),
-  Symbol(@@iluWave,          'iluWave')],True) = 49;
+  Symbol(@@iluWave,          'iluWave')],[optExceptionOnFailure]) = 49;
 // aliasses  
 iluColorsUsed := iluColoursUsed;
 iluSwapColors := iluSwapColours;
@@ -369,7 +370,14 @@ end;
 procedure DevILU_Finalize(FinalLib: Boolean = True);
 begin
 If FinalLib then; // do nothing, afaik ILU does not implement any finalization
-CloseLibrary(DevILU_LibraryHandle);
+CloseLibrary(DevILU_LibraryContext);
 end;
+
+{===============================================================================
+    Global variables initialization
+===============================================================================}
+
+initialization
+  DevILU_LibraryContext := DefaultLibraryContext;
 
 end.

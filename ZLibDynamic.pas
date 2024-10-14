@@ -16,11 +16,11 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.6 (2024-05-10)
+  Version 1.1.7 (2024-10-14)
 
   Build against zlib version 1.3.1
 
-  Last change 2024-10-06
+  Last change 2024-10-14
 
   ©2017-2024 František Milt
 
@@ -49,6 +49,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
@@ -237,20 +238,20 @@ end;
 //== Library initialization implementation =====================================
 
 var
-  ZLib_LibraryHandle: TDLULibraryHandle = DefaultLibraryHandle;
+  ZLib_LibraryContext:  TDLULibraryContext;
 
 //------------------------------------------------------------------------------
 
 Function ZLib_Initialized: Boolean;
 begin
-Result := CheckLibrary(ZLib_LibraryHandle);
+Result := CheckLibrary(ZLib_LibraryContext);
 end;
 
 //------------------------------------------------------------------------------
 
 Function ZLib_Initialize(const LibPath: String = LibName): Boolean;
 begin
-Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryHandle,[
+Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryContext,[
   Symbol(@@zlibVersion         ,'zlibVersion'),
   // deflate
   Symbol(@@deflate             ,'deflate'),
@@ -355,7 +356,7 @@ Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryHandle,[
 {$IF Defined(GZIP_Support) and Defined(Windows)}
  ,Symbol(@@gzopen_w            ,'gzopen_w')
 {$IFEND}
-],True) = {$IFDEF GZIP_Support}{$IFDEF Windows}88{$ELSE}87{$ENDIF}{$ELSE}56{$ENDIF};
+],[optExceptionOnFailure]) = {$IFDEF GZIP_Support}{$IFDEF Windows}88{$ELSE}87{$ENDIF}{$ELSE}56{$ENDIF};
 {$IFDEF CheckCompatibility}
 CheckCompatibility(zlibCompileFlags);
 {$ENDIF}
@@ -365,8 +366,13 @@ end;
 
 procedure ZLib_Finalize;
 begin
-CloseLibrary(ZLib_LibraryHandle);
+CloseLibrary(ZLib_LibraryContext);
 end;
+
+//==============================================================================
+
+initialization
+  ZLib_LibraryContext := DefaultLibraryContext;
 
 end.
 

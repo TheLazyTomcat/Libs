@@ -15,11 +15,12 @@
 
     One might ask why is this needed - in the end, all code loaded in one
     virtual address space can see everything thereof, including not only global
-    variables, but even the local ones and more. This is true, but there are
-    several problems with that, namely:
+    variables, but even the local ones (unless they are register-only) and more.
+    This is true, but there are several problems with that, namely:
 
-         - different modules cannot find some specific variable within the
-           memory without communicating/receiving its address
+         - module cannot find any specific variable within the memory that was
+           allocated in a different module without communicating/receiving its
+           address
 
          - if some variable is to be shared, it must be created only once per
            entire process and then kept alive the entire time it is needed
@@ -29,8 +30,9 @@
            inaccessible
 
          - whatewer the implementation, it cannot reference anything within any
-           module (code, data, resources, nothing...), because you never know
-           who created what a who will be unloaded and when (so no classes)
+           module (code, data, resources, nothing...), including its own (so no
+           classes), because you never know who created what a who will be
+           unloaded and when
 
          - allocation cannot be done using integrated memory manager, simply
            because every module can use a different one and what's more, each
@@ -40,11 +42,11 @@
     and allocating mechanism in a separate dynamic library (DLL/SO) - but that
     is exactly what I wanted to avoid, because it requires that this dynamic
     library is deployed with every single program or library that uses such
-    system. This unit implements standalone solution - ne external DLL/SO is
+    system. This unit implements standalone solution - no external DLL/SO is
     needed.
     Another possible solution is also to use memory-mapped files, but that is
-    too heavy for envisioned common use cases (sharing few numbers or maybe
-    some limited resources).
+    too heavy-weight for envisioned common use cases (sharing few numbers or
+    maybe some limited resources).
 
     I will not delve into implementation details (read the code if you are
     interested and brave enough - note that the mechanisms used are the same
@@ -59,8 +61,8 @@
       be wrapped in classes/objects, but those would be local only to module
       running them.
 
-      The variables are distinguished and searched for by their numeral
-      identifiers (meaning there is technical limit of about four billion
+      The variables are distinguished and searched for by their 32bit numeral
+      identifiers (meaning there is a technical limit of about four billion
       distinct variables).
       There are functions accepting string identifiers, but those are only
       for the sake of convenience - the strings are always converted to
@@ -71,17 +73,17 @@
       The implementation also contains what is called "internal compatibility
       version" - only libraries with the same version can share data. This
       mechanism is here to prevent problems when/if this library changes its
-      internal workings, so libraries with incompatible code do not acces the
+      internal workings, so libraries with incompatible code do not access the
       same internal state and inadvertently corrupt it.
 
     For more information about this library, refer to description of provided
     procedural interface and its types.
 
-  Version 1.0 (2024-10-03)
+  Version 1.0 (2024-10-10)
 
   Internal compatibility version - 0 (zero)
 
-  Last change 2024-10-03
+  Last change 2024-10-10
 
   ©2024 František Milt
 
@@ -252,7 +254,7 @@ type
     called, they search the entire internal state for the requested variable,
     and this searching cannot be much optimized.
 
-    To improve preformance, you can call functions accepting direct variable
+    To improve performance, you can call functions accepting direct variable
     reference (provided you already have it, eg. from allocation) - these
     functions are not searching the state, but insteady operate directly on the
     provided memory reference. That being said, make sure you provide a valid
@@ -275,8 +277,8 @@ type
 
     WARNING - in 64bit systems, the highest bit of the result will be set,
               making the number a large negative integer. This is to separate
-              64bit and 32bit implementations in a case they meet in one
-              process (should not be possible, but better be safe than sorry).
+              64bit and 32bit implementations in case they meet in one process
+              (should not be possible, but better be safe than sorry).
 }
 Function GlobVarInternalCompatibilityVersion: Int32;
 
@@ -287,9 +289,9 @@ Function GlobVarInternalCompatibilityVersion: Int32;
   individual variables.
 
   The string is converted to a WideString (to minimize potential problems with
-  encodings - but even then you should avoid diacritics and non-latin glyphs)
-  and an Adler32 checksum is calculated for it. This sum is then casted directly
-  to the resulting identifier. This means, among other things, that there is a
+  encodings - but even then, you should avoid non-ASCII characters) and an
+  Adler32 checksum is calculated for it. This sum is then casted directly to
+  the resulting identifier. This means, among other things, that there is a
   posibility that two different strings produce the same identifier and
   therefore, when used, will reference the same variable - be aware of this.
 
@@ -324,9 +326,11 @@ Function GlobVarTranslateIdentifier(const Identifier: String): TPGVIdentifier;{$
 
       GlobVarInternalCompatibilityVersion
       GlobVarTranslateIdentifier
+      GlobVarLock
+      GlobVarUnlock
 
   ...are acquiring the lock during their execution. This means that all these
-  functions are serialized (ie. only one call can be executed at a time).
+  functions are serialized (ie. only one call can be running at a time).
 
   It is here mainly to protect the state when making complex operations
   involving multiple calls to interface functions. Let's have an example:
@@ -344,9 +348,15 @@ Function GlobVarTranslateIdentifier(const Identifier: String): TPGVIdentifier;{$
         GlobVarUnlock;
       end;
 
-  ...this all will be executed in a thread safe manner. It can also be used
-  to protect individual variables when accesing them directly, without using
-  provided load and store functions (which are serialized too).
+  ...this all will be executed in a thread safe manner.
+
+  It can also be used to protect individual variables when accesing them
+  directly, without using provided load and store functions (which are
+  serialized too).
+
+    WARNING - do not hold the lock for prolonged time periods, since those
+              locks are also acquired during module loading and unloading,
+              it can cause serious problems at unpredictable times.
 }
 procedure GlobVarLock;
 
@@ -408,7 +418,7 @@ Function GlobVarFind(const Identifier: String; out Variable: TPGVVariable; out S
 
 type
 {
-  TPVGGetResult
+  TPGVGetResult
 
   Type used by some overloads of function GlobVarGet to inform the caller
   about the result of operation.
@@ -419,7 +429,7 @@ type
     vgrSizeMismatch - variable exists but its size do not match
     vgrError        - some unspecified error occured
 }
-  TPVGGetResult = (vgrCreated,vgrOpened,vgrSizeMismatch,vgrError);
+  TPGVGetResult = (vgrCreated,vgrOpened,vgrSizeMismatch,vgrError);
   
 {
   GlobVarGet
@@ -429,7 +439,7 @@ type
     Returns a reference to variable of given identifier. If the variable cannot
     be found, then these functions raise an EPGVUnknownVariable exception.
 
-  Second version (returning type TPVGGetResult)
+  Second version (returning type TPGVGetResult)
 
     Tries to find variable of given identifier. If it is not found, then it
     allocates it.
@@ -452,10 +462,23 @@ type
 Function GlobVarGet(Identifier: TPGVIdentifier): TPGVVariable; overload;
 Function GlobVarGet(const Identifier: String): TPGVVariable; overload;
 
-Function GlobVarGet(Identifier: TPGVIdentifier; var Size: TMemSize; out Variable: TPGVVariable): TPVGGetResult; overload;
-Function GlobVarGet(const Identifier: String; var Size: TMemSize; out Variable: TPGVVariable): TPVGGetResult; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GlobVarGet(Identifier: TPGVIdentifier; var Size: TMemSize; out Variable: TPGVVariable): TPGVGetResult; overload;
+Function GlobVarGet(const Identifier: String; var Size: TMemSize; out Variable: TPGVVariable): TPGVGetResult; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 //------------------------------------------------------------------------------
+{
+  GlobVarIsValid
+
+  Returns true when the given variable reference is assigned and references
+  a valid allocated variable, false otherwise.
+
+  If CheckAddress is set to True, then a check whether the reference address
+  actually points to a correct place in internal state is also performed.
+  If set to False, then no such check is done and the reference is assumed to
+  be pointing to a correct place (and you better make sure it does...).
+}
+Function GlobVarIsValid(Variable: TPGVVariable; CheckAddress: Boolean = True): Boolean;
+
 {
   GlobVarExists
 
@@ -566,8 +589,8 @@ Function GlobVarAcquire(Variable: TPGVVariable): UInt32; overload;
 {
   GlobVarRelease
 
-  Decrements reference count of the given variable by one and returns it new
-  value. If the count already is zero, then it is not decremented.
+  Decrements reference count of the given variable by one and returns its new
+  value. If the count already is zero, then it is NOT decremented.
 
   If the reference count drops to zero or already is zero and argument CanFree
   is set to True, then the function also frees and removes the variable before
@@ -579,8 +602,8 @@ Function GlobVarAcquire(Variable: TPGVVariable): UInt32; overload;
   Note that overload accepting variable reference is not provided because
   the reference cannot provide all information necessary for freeing.
 }
-Function GlobVarRelease(Identifier: TPGVIdentifier; CanFree: Boolean = True): UInt32; overload;
-Function GlobVarRelease(const Identifier: String; CanFree: Boolean = True): UInt32; overload;
+Function GlobVarRelease(Identifier: TPGVIdentifier; CanFree: Boolean = False): UInt32; overload;
+Function GlobVarRelease(const Identifier: String; CanFree: Boolean = False): UInt32; overload;
 
 //------------------------------------------------------------------------------
 {
@@ -632,7 +655,7 @@ Function GlobVarAlloc(const Identifier: String; Size: TMemSize): TPGVVariable; o
     If NewSize is above zero, then new variable of given identifier and size is
     allocated (equivalent to calling GlobVarAllocate).
 
-    When NewSize is zero, then nil is returned.
+    When NewSize is zero, then nil is returned and nothing is allocated.
 }
 Function GlobVarReallocate(Identifier: TPGVIdentifier; NewSize: TMemSize): TPGVVariable; overload;
 Function GlobVarReallocate(const Identifier: String; NewSize: TMemSize): TPGVVariable; overload;{$IFDEF CanInline} inline;{$ENDIF}
@@ -702,7 +725,7 @@ Function GlobVarStore(Variable: TPGVVariable; const Buffer; Count: TMemSize): TM
 
   If the variable is larger than is the Count, then only Count bytes will be
   read (filling the buffer), data beyond that are not copied and are not
-  affected (but in rare circumstances might be read by the function).
+  affected (but in rare circumstances might be accessed by the function).
 
   Overload accepting variable reference can also raise an EPGVInvalidVariable
   exception if the reference is not valid.
@@ -1126,6 +1149,33 @@ end;
 Function EntryIsValid(Entry: PPGVSegmentEntry): Boolean;
 begin
 Result := ((Entry^.Flags and PGV_SEFLAG_USED) <> 0) and Assigned(Entry^.Address) and (EntrySize(Entry) <> 0);
+end;
+
+//------------------------------------------------------------------------------
+
+Function EntryIsValidAddress(Entry: PPGVSegmentEntry): Boolean;
+var
+  CurrentSegment: PPGVSegment;
+  Index:          Integer;
+begin
+Result := False;
+CurrentSegment := VAR_HeadPtr^.FirstSegment;
+while Assigned(CurrentSegment) do
+  begin
+  {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+    with CurrentSegment^ do
+      If (PtrUInt(Entry) >= PtrUInt(Addr(Entries[Low(Entries)]))) and
+         (PtrUInt(Entry) <= PtrUInt(Addr(Entries[High(Entries)]))) then
+        begin
+          Index := (PtrUInt(Entry) - PtrUInt(Addr(Entries[Low(Entries)]))) div SizeOf(TPGVSegmentEntry);
+          If (Index >= Low(Entries)) and (Index <= High(Entries)) then
+            Result := Entry = Addr(Entries[Index]);
+          // it the entry is here, it cannot be in any other segment  
+          Break{while};
+        end;
+  {$IFDEF FPCDWM}{$POP}{$ENDIF}
+    CurrentSegment := CurrentSegment^.Head.NextSegment;
+  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -1884,7 +1934,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function GlobVarGet(Identifier: TPGVIdentifier; var Size: TMemSize; out Variable: TPGVVariable): TPVGGetResult;
+Function GlobVarGet(Identifier: TPGVIdentifier; var Size: TMemSize; out Variable: TPGVVariable): TPGVGetResult;
 var
   Segment:  PPGVSegment;
   Entry:    PPGVSegmentEntry;
@@ -1927,12 +1977,36 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function GlobVarGet(const Identifier: String; var Size: TMemSize; out Variable: TPGVVariable): TPVGGetResult;
+Function GlobVarGet(const Identifier: String; var Size: TMemSize; out Variable: TPGVVariable): TPGVGetResult;
 begin
 Result := GlobVarGet(GlobVarTranslateIdentifier(Identifier),Size,Variable);
 end;
 
 //==============================================================================
+
+Function GlobVarIsValid(Variable: TPGVVariable; CheckAddress: Boolean = True): Boolean;
+var
+  Entry:  PPGVSegmentEntry;
+begin
+Result := False;
+If Assigned(Variable) then
+  begin
+    GlobVarLock;
+    try
+      Entry := EntryFromVar(Variable);
+      If CheckAddress then
+        begin
+          If EntryIsValidAddress(Entry) then
+            Result := EntryIsValid(Entry);
+        end
+      else Result := EntryIsValid(Entry);
+    finally
+      GlobVarUnlock;
+    end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
 
 Function GlobVarExists(Identifier: TPGVIdentifier): Boolean;
 var
@@ -2218,7 +2292,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function GlobVarRelease(Identifier: TPGVIdentifier; CanFree: Boolean = True): UInt32;
+Function GlobVarRelease(Identifier: TPGVIdentifier; CanFree: Boolean = False): UInt32;
 var
   Segment:  PPGVSegment;
   Entry:    PPGVSegmentEntry;
@@ -2242,7 +2316,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function GlobVarRelease(const Identifier: String; CanFree: Boolean = True): UInt32;
+Function GlobVarRelease(const Identifier: String; CanFree: Boolean = False): UInt32;
 var
   Segment:  PPGVSegment;
   Entry:    PPGVSegmentEntry;

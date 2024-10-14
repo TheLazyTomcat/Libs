@@ -16,11 +16,11 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.6 (2024-05-10)
+  Version 1.1.7 (2024-10-14)
 
   Build against zlib version 1.3.1
 
-  Last change 2024-10-06
+  Last change 2024-10-14
 
   ©2017-2024 František Milt
 
@@ -49,6 +49,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
