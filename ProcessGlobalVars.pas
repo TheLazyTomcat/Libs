@@ -58,7 +58,7 @@
       that needs to be global within the entire program.
 
       Entire interface is procedural (so no objects), see above why. It can
-      be wrapped in classes/objects, but those would be local only to module
+      be wrapped in classes/objects, but those would be local-only to module
       running them.
 
       The variables are distinguished and searched for by their 32bit numeral
@@ -71,19 +71,19 @@
       strings can point to the same variable.
 
       The implementation also contains what is called "internal compatibility
-      version" - only libraries with the same version can share data. This
-      mechanism is here to prevent problems when/if this library changes its
-      internal workings, so libraries with incompatible code do not access the
-      same internal state and inadvertently corrupt it.
+      version" (ICV) - only libraries with the same version can share data.
+      This mechanism is here to prevent problems when/if this library changes
+      its internal workings, so libraries with incompatible code do not access
+      the same internal state and inadvertently corrupt it.
 
     For more information about this library, refer to description of provided
     procedural interface and its types.
 
-  Version 1.0 (2024-10-10)
+  Version 1.1 (2024-10-25)
 
-  Internal compatibility version - 0 (zero)
+  Internal compatibility version 1
 
-  Last change 2024-10-10
+  Last change 2024-10-25
 
   ©2024 František Milt
 
@@ -181,7 +181,6 @@ type
   EPGVException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   EPGVModuleEnumerationError = class(EPGVException);
-  EPGVModuleCleanupError     = class(EPGVException);
 
   EPGVHeapAllocationError = class(EPGVException);
 
@@ -448,8 +447,8 @@ type
     in parameter Size. If they match, then parameter Size is left unchanged,
     output parameter Variable is set to a reference to the existing variable
     and result is set to vgrOpened. If the sizes do not match, then parameter
-    Size is set to actual size of the variable, Variable is nil and result is
-    set to vgrSizeMismatch.
+    Size is set to actual size of the variable, Variable contains reference to
+    the variable and result is set to vgrSizeMismatch.
 
     If variable of given identifier does not exist, then it is allocated using
     Size parameter (this parameter is not changed). Variable then contains
@@ -465,6 +464,32 @@ Function GlobVarGet(const Identifier: String): TPGVVariable; overload;
 Function GlobVarGet(Identifier: TPGVIdentifier; var Size: TMemSize; out Variable: TPGVVariable): TPGVGetResult; overload;
 Function GlobVarGet(const Identifier: String; var Size: TMemSize; out Variable: TPGVVariable): TPGVGetResult; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+{
+  GlobVarRename
+
+  Changes identifier of selected variable to a new one. No existing references
+  are affected by this operation.
+
+  If variable with OldIdentifier does not exist, then ans EPGVUnknownVariable
+  exception is raised. Overload accepting variable reference will raise an
+  EPGVInvalidVariable exception if the reference is not valid.
+
+  If old and new identifiers match (two different strings can produce the same
+  identifier and therefore be considered equal - see GlobVarTranslateIdentifier
+  for details), then nothing is done. But note that the variable is still
+  searched for, and if it does not exist then an exception is raised.
+
+  If a variable with NewIdentifier already exists, and it is not the one that
+  is being renamed, then an EPGVDuplicateVariable exception is raised.
+}
+Function GlobVarRename(OldIdentifier,NewIdentifier: TPGVIdentifier): TPGVVariable; overload;
+Function GlobVarRename(OldIdentifier: TPGVIdentifier; const NewIdentifier: String): TPGVVariable; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GlobVarRename(const OldIdentifier: String; NewIdentifier: TPGVIdentifier): TPGVVariable; overload;
+Function GlobVarRename(const OldIdentifier,NewIdentifier: String): TPGVVariable; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure GlobVarRename(Variable: TPGVVariable; NewIdentifier: TPGVIdentifier); overload;
+procedure GlobVarRename(Variable: TPGVVariable; NewIdentifier: String); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 {
   GlobVarIsValid
@@ -478,6 +503,18 @@ Function GlobVarGet(const Identifier: String; var Size: TMemSize; out Variable: 
   be pointing to a correct place (and you better make sure it does...).
 }
 Function GlobVarIsValid(Variable: TPGVVariable; CheckAddress: Boolean = True): Boolean;
+
+{
+  GlobVarIdentifier
+
+  Returns identifier of variable whose reference is given.
+
+  This is intended for situations where one needs an identifier of unknown
+  variable or of a variable that might have been renamed.
+
+  Raises an EPGVInvalidVariable exception if the reference is not valid.
+}
+Function GlobVarIdentifier(Variable: TPGVVariable): TPGVIdentifier;
 
 {
   GlobVarExists
@@ -531,6 +568,88 @@ Function GlobVarSize(Variable: TPGVVariable): TMemSize; overload;
 Function GlobVarHeapStored(Identifier: TPGVIdentifier): Boolean; overload;
 Function GlobVarHeapStored(const Identifier: String): Boolean; overload;
 Function GlobVarHeapStored(Variable: TPGVVariable): Boolean; overload;
+
+//------------------------------------------------------------------------------
+type
+{
+  TPGVVariableFlag
+  TPGVVariableFlags
+
+  Used when returning flags of selected variable. If the flag is set, then
+  the corresponding enum value will be included in the TPGVVariableFlags set,
+  otherwise it will be excluded from that set.
+
+    vfRealocated - variable was reallocated at least once during its life (only
+                   true reallocations set this flag, call to GlobVarRealloc(ate)
+                   might not actually perform it if not needed)
+
+    vfRenamed    - variable was renamed at least once (only true renamings
+                   count)
+}
+  TPGVVariableFlag = (vfReallocated,vfRenamed);
+
+  TPGVVariableFlags = set of TPGVVariableFlag;
+
+{
+  GlobVarGetFlags
+
+  Returns a set type indicating which flags are set in the internal state of
+  given variable. See types TPGVVariableFlag and TPGVVariableFlags for details.
+
+  If the requested variable does not exist, then an EPGVUnknownVariable
+  exception will be raised (overloads accepting indetifier).
+
+  Overload accepting variable reference can also raise an EPGVInvalidVariable
+  exception if the reference is not valid.
+}
+Function GlobVarGetFlags(Identifier: TPGVIdentifier): TPGVVariableFlags; overload;
+Function GlobVarGetFlags(const Identifier: String): TPGVVariableFlags; overload;
+Function GlobVarGetFlags(Variable: TPGVVariable): TPGVVariableFlags; overload;
+
+{
+  GlobVarSetFlags
+
+  Sets flags according to the passed Flags set parameter and returns previous
+  state of flags for the given variable.
+
+  If the requested variable does not exist, then an EPGVUnknownVariable
+  exception will be raised (overloads accepting indetifier). Overload
+  accepting variable reference will raise an EPGVInvalidVariable exception
+  if the reference is not valid.
+}
+Function GlobVarSetFlags(Identifier: TPGVIdentifier; Flags: TPGVVariableFlags): TPGVVariableFlags; overload;
+Function GlobVarSetFlags(const Identifier: String; Flags: TPGVVariableFlags): TPGVVariableFlags; overload;
+Function GlobVarSetFlags(Variable: TPGVVariable; Flags: TPGVVariableFlags): TPGVVariableFlags; overload;
+
+{
+  GlobVarGetFlag
+
+  Returns state of selected flag for given variable. True means the flag is
+  set (1), flase means it is clear (0).
+
+  If the requested variable does not exist, then an EPGVUnknownVariable
+  exception will be raised (overloads accepting indetifier). Overload
+  accepting variable reference will raise an EPGVInvalidVariable exception
+  if the reference is not valid.
+}
+Function GlobVarGetFlag(Identifier: TPGVIdentifier; Flag: TPGVVariableFlag): Boolean; overload;
+Function GlobVarGetFlag(const Identifier: String; Flag: TPGVVariableFlag): Boolean; overload;
+Function GlobVarGetFlag(Variable: TPGVVariable; Flag: TPGVVariableFlag): Boolean; overload;
+
+{
+  GlobVarSetFlag
+
+  Sets state of selected flag for given variable to Value and returns its
+  previous state.
+
+  If the requested variable does not exist, then an EPGVUnknownVariable
+  exception will be raised (overloads accepting indetifier). Overload
+  accepting variable reference will raise an EPGVInvalidVariable exception
+  if the reference is not valid.
+}
+Function GlobVarSetFlag(Identifier: TPGVIdentifier; Flag: TPGVVariableFlag; Value: Boolean): Boolean; overload;
+Function GlobVarSetFlag(const Identifier: String; Flag: TPGVVariableFlag; Value: Boolean): Boolean; overload;
+Function GlobVarSetFlag(Variable: TPGVVariable; Flag: TPGVVariableFlag; Value: Boolean): Boolean; overload;
 
 //------------------------------------------------------------------------------
 {
@@ -777,6 +896,10 @@ type
   end;
   PPGVHead = ^TPGVHead;
 
+var
+  // main global variable
+  VAR_HeadPtr:  PPGVHead = nil;
+
 //------------------------------------------------------------------------------
 type
   TPGVSegmentHead = packed record
@@ -797,14 +920,11 @@ type
 
 const
   // SEFLAG = segment entry flag
-  PGV_SEFLAG_USED        = UInt32($00000001);
-  PGV_SEFLAG_REALLOCATED = UInt32($00000002);
+  PGV_SEFLAG_USED        = UInt32($00000100);
+  PGV_SEFLAG_REALLOCATED = UInt32($00000200);
+  PGV_SEFLAG_RENAMED     = UInt32($00000400);
 
-  PGV_SEFLAG_SMLSIZE_MASK   = UInt32($F0000000);
-  // dunno, but FPC 3.2.2 cannot seem to grasp (X and not PGV_SEFLAG_SMLSIZE_MASK) :/
-  PGV_SEFLAG_SMLSIZE_MASK_N = UInt32($0FFFFFFF);
-  PGV_SEFLAG_SMLSIZE_SMASK  = UInt32($0000000F);
-  PGV_SEFLAG_SMLSIZE_SHIFT  = 28;
+  PGV_SEFLAG_SMLSIZE_MASK = UInt32($0000000F);
 
 //------------------------------------------------------------------------------
 const  
@@ -830,36 +950,18 @@ type
   {$MESSAGE FATAL 'Invalid size of type TPGVSegment.'}
 {$IFEND}
 
-//------------------------------------------------------------------------------
-var
-  // main global variable
-  VAR_HeadPtr:  PPGVHead = nil;
-
 {===============================================================================
-    PGV internal implementation - thread protection
+    PGV internal implementation - externals, system stuff
 ===============================================================================}
 {$IFDEF Windows}
+// Windows...
+const
+  HEAP_ZERO_MEMORY = $00000008;
 
-Function TryThreadLock: Boolean;
-begin
-Result := TryEnterCriticalSection(VAR_HeadPtr^.Lock);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure ThreadLock;
-begin
-EnterCriticalSection(VAR_HeadPtr^.Lock);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure ThreadUnlock;
-begin
-LeaveCriticalSection(VAR_HeadPtr^.Lock);
-end;
+Function EnumProcessModules(hProcess: THandle; lphModules: PHandle; cb: DWORD; lpcbNeeded: LPDWORD): BOOL; stdcall; external 'psapi.dll';
 
 {$ELSE}//=======================================================================
+// Linux...
 type
   pthread_mutexattr_p = ^pthread_mutexattr_t;
   pthread_mutex_p = ^pthread_mutex_t;
@@ -882,129 +984,6 @@ Function pthread_mutex_unlock(mutex: pthread_mutex_p): cint; cdecl; external;
 Function pthread_mutex_consistent(mutex: pthread_mutex_p): cint; cdecl; external;
 
 //------------------------------------------------------------------------------
-threadvar
-  ThrErrorCode: cInt;
-
-Function PThrResChk(RetVal: cInt): Boolean;
-begin
-Result := RetVal = 0;
-If Result then
-  ThrErrorCode := 0
-else
-  ThrErrorCode := RetVal;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure ThreadLockInit;
-var
-  MutexAttr:  pthread_mutexattr_t;
-begin
-If PThrResChk(pthread_mutexattr_init(@MutexAttr)) then
-  try
-    // make the mutex recursive and robust (it does not need to be process-shared)
-    If not PThrResChk(pthread_mutexattr_settype(@MutexAttr,PTHREAD_MUTEX_RECURSIVE)) then
-      raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to set mutex attribute type (%d).',[ThrErrorCode]);
-    If not PThrResChk(pthread_mutexattr_setrobust(@MutexAttr,PTHREAD_MUTEX_ROBUST)) then
-      raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to set mutex attribute robust (%d).',[ThrErrorCode]);
-    If not PThrResChk(pthread_mutex_init(@VAR_HeadPtr^.Lock,@MutexAttr)) then
-      raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to init mutex (%d).',[ThrErrorCode]);
-  finally
-    pthread_mutexattr_destroy(@MutexAttr);
-  end
-else raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to init mutex attributes (%d).',[ThrErrorCode]);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure ThreadLockFinal;
-begin
-If not PThrResChk(pthread_mutex_destroy(@VAR_HeadPtr^.Lock)) then
-  raise EPGVMutexError.CreateFmt('ThreadLockFinal: Failed to destroy mutex (%d).',[ThrErrorCode]);
-end;
-
-//------------------------------------------------------------------------------
-
-Function TryThreadLock: Boolean;
-var
-  RetVal: cInt;
-begin
-RetVal := pthread_mutex_trylock(@VAR_HeadPtr^.Lock);
-If RetVal = ESysEOWNERDEAD then
-  begin
-    If not PThrResChk(pthread_mutex_consistent(@VAR_HeadPtr^.Lock)) then
-      raise EPGVMutexError.CreateFmt('TryThreadLock: Failed to make mutex consistent (%d).',[ThrErrorCode]);
-    Result := True;
-  end
-else
-  begin
-    Result := PThrResChk(RetVal);
-    If not Result and (RetVal <> ESysEBUSY) then
-      raise EPGVMutexError.CreateFmt('TryThreadLock: Failed to try-lock mutex (%d).',[ThrErrorCode]);
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure ThreadLock;
-var
-  RetVal: cInt;
-begin
-RetVal := pthread_mutex_lock(@VAR_HeadPtr^.Lock);
-If RetVal = ESysEOWNERDEAD then
-  begin
-    If not PThrResChk(pthread_mutex_consistent(@VAR_HeadPtr^.Lock)) then
-      raise EPGVMutexError.CreateFmt('ThreadLock: Failed to make mutex consistent (%d).',[ThrErrorCode]);
-  end
-else If not PThrResChk(RetVal) then
-  raise EPGVMutexError.CreateFmt('ThreadLock: Failed to lock mutex (%d).',[ThrErrorCode]);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure ThreadUnlock;
-begin
-If not PThrResChk(pthread_mutex_unlock(@VAR_HeadPtr^.Lock)) then
-  raise EPGVMutexError.CreateFmt('ThreadUnlock: Failed to unlock mutex (%d).',[ThrErrorCode]);
-end;
-
-{$ENDIF}
-
-{===============================================================================
-    PGV internal implementation - global memory management
-===============================================================================}
-{$IFDEF Windows}
-const
-  HEAP_ZERO_MEMORY = $00000008;
-
-//------------------------------------------------------------------------------
-
-Function GlobalMemoryAllocate(Size: TMemSize): Pointer;
-begin
-Result := HeapAlloc(GetProcessHeap,HEAP_ZERO_MEMORY,Size);
-If not Assigned(Result) then
-  raise EPGVHeapAllocationError.Create('GlobalMemoryAllocate: Failed to allocate global memory.');
-end;
-
-//------------------------------------------------------------------------------
-
-procedure GlobalMemoryReallocate(var Address: Pointer; NewSize: TMemSize);
-begin
-Address := HeapRealloc(GetProcessHeap,HEAP_ZERO_MEMORY,Address,NewSize);
-If not Assigned(Address) then
-  raise EPGVHeapAllocationError.Create('GlobalMemoryReallocate: Failed to reallocate global memory.');
-end;
-
-//------------------------------------------------------------------------------
-
-procedure GlobalMemoryFree(var Address: Pointer);
-begin
-If not HeapFree(GetProcessHeap,0,Address) then
-  raise EPGVHeapAllocationError.CreateFmt('GlobalMemoryFree: Could not free global memory (%d).',[GetLastError]);
-Address := nil;
-end;
-
-{$ELSE}//=======================================================================
 const
   libc = 'libc.so.6';
 
@@ -1023,9 +1002,179 @@ Function dlsym(handle: Pointer; symbol: PChar): Pointer; cdecl; external;
 Function dlerror: PChar; cdecl; external;
 
 //------------------------------------------------------------------------------
+type
+  dl_phdr_info = record
+    dlpi_addr:      PtrUInt;
+    dlpi_name:      PChar;
+    dlpi_phdr:      Pointer;  // structure, but we do not need it
+    dlpi_phnum:     UInt16;
+    dlpi_adds:      cuLongLong;
+    dlpi_subs:      cuLongLong;
+    dlpi_tls_modid: size_t;
+    dlpi_tls_data:  Pointer;
+  end;
+  dl_phdr_info_p = ^dl_phdr_info;
+
+  TDLIterCallback = Function(info: dl_phdr_info_p; size: size_t; data: Pointer): cInt; cdecl;
+
+Function dl_iterate_phdr(callback: TDLIterCallback; data: Pointer): cInt; cdecl; external;
+
+//------------------------------------------------------------------------------
+threadvar
+  ThrErrorCode: cInt;
+
+Function PThrResChk(RetVal: cInt): Boolean;
+begin
+Result := RetVal = 0;
+If Result then
+  ThrErrorCode := 0
+else
+  ThrErrorCode := RetVal;
+end;
+
+{$ENDIF}
+
+{===============================================================================
+    PGV internal implementation - exports
+===============================================================================}
+type
+{
+  Type TPGVGetHeadFunc must EXACTLY match prototype of ProcessGlobalVarsGetHead
+  (or vice-versa, your choice). And do not ever change it - rather introduce
+  new function if different call is needed.
+}
+  TPGVGetHeadFunc = Function(Version: Int32): PPGVHead;{$IFDEF Windows} stdcall;{$ELSE} cdecl;{$ENDIF}
+
+const
+  PGV_EXPORTNAME_GETHEAD = 'ProcessGlobalVarsGetHead';
+
+  PGV_VERSION_CURRENT = Int32(1){$IFDEF CPU64bit} or Int32(UInt32(1) shl 31){$ENDIF};
+
+//------------------------------------------------------------------------------
+
+Function ProcessGlobalVarsGetHead(Version: Int32): PPGVHead;{$IFDEF Windows} stdcall;{$ELSE} cdecl;{$ENDIF}{$IFDEF FPC} public;{$ENDIF}
+begin
+If Version = PGV_VERSION_CURRENT then
+  Result := VAR_HeadPtr
+else
+  Result := nil;
+end;
+
+//------------------------------------------------------------------------------
+exports
+  ProcessGlobalVarsGetHead name PGV_EXPORTNAME_GETHEAD;
+
+{===============================================================================
+    PGV internal implementation - thread protection
+===============================================================================}
+
+procedure ThreadLockInit;
+{$IFDEF Windows}
+begin
+InitializeCriticalSection(VAR_HeadPtr^.Lock);
+end;
+{$ELSE}
+var
+  MutexAttr:  pthread_mutexattr_t;
+begin
+If PThrResChk(pthread_mutexattr_init(@MutexAttr)) then
+  try
+    // make the mutex recursive and robust (it does not need to be process-shared)
+    If not PThrResChk(pthread_mutexattr_settype(@MutexAttr,PTHREAD_MUTEX_RECURSIVE)) then
+      raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to set mutex attribute type (%d).',[ThrErrorCode]);
+    If not PThrResChk(pthread_mutexattr_setrobust(@MutexAttr,PTHREAD_MUTEX_ROBUST)) then
+      raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to set mutex attribute robust (%d).',[ThrErrorCode]);
+    If not PThrResChk(pthread_mutex_init(@VAR_HeadPtr^.Lock,@MutexAttr)) then
+      raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to init mutex (%d).',[ThrErrorCode]);
+  finally
+    pthread_mutexattr_destroy(@MutexAttr);
+  end
+else raise EPGVMutexError.CreateFmt('ThreadLockInit: Failed to init mutex attributes (%d).',[ThrErrorCode]);
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure ThreadLockFinal;
+begin
+{$IFDEF Windows}
+DeleteCriticalSection(VAR_HeadPtr^.Lock);
+{$ELSE}
+If not PThrResChk(pthread_mutex_destroy(@VAR_HeadPtr^.Lock)) then
+  raise EPGVMutexError.CreateFmt('ThreadLockFinal: Failed to destroy mutex (%d).',[ThrErrorCode]);
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function TryThreadLock: Boolean;
+{$IFDEF Windows}
+begin
+Result := TryEnterCriticalSection(VAR_HeadPtr^.Lock);
+end;
+{$ELSE}
+var
+  RetVal: cInt;
+begin
+RetVal := pthread_mutex_trylock(@VAR_HeadPtr^.Lock);
+If RetVal = ESysEOWNERDEAD then
+  begin
+    If not PThrResChk(pthread_mutex_consistent(@VAR_HeadPtr^.Lock)) then
+      raise EPGVMutexError.CreateFmt('TryThreadLock: Failed to make mutex consistent (%d).',[ThrErrorCode]);
+    Result := True;
+  end
+else
+  begin
+    Result := PThrResChk(RetVal);
+    If not Result and (RetVal <> ESysEBUSY) then
+      raise EPGVMutexError.CreateFmt('TryThreadLock: Failed to try-lock mutex (%d).',[ThrErrorCode]);
+  end;
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure ThreadLock;
+{$IFDEF Windows}
+begin
+EnterCriticalSection(VAR_HeadPtr^.Lock);
+end;
+{$ELSE}
+var
+  RetVal: cInt;
+begin
+RetVal := pthread_mutex_lock(@VAR_HeadPtr^.Lock);
+If RetVal = ESysEOWNERDEAD then
+  begin
+    If not PThrResChk(pthread_mutex_consistent(@VAR_HeadPtr^.Lock)) then
+      raise EPGVMutexError.CreateFmt('ThreadLock: Failed to make mutex consistent (%d).',[ThrErrorCode]);
+  end
+else If not PThrResChk(RetVal) then
+  raise EPGVMutexError.CreateFmt('ThreadLock: Failed to lock mutex (%d).',[ThrErrorCode]);
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure ThreadUnlock;
+begin
+{$IFDEF Windows}
+LeaveCriticalSection(VAR_HeadPtr^.Lock);
+{$ELSE}
+If not PThrResChk(pthread_mutex_unlock(@VAR_HeadPtr^.Lock)) then
+  raise EPGVMutexError.CreateFmt('ThreadUnlock: Failed to unlock mutex (%d).',[ThrErrorCode]);
+{$ENDIF}
+end;
+
+{===============================================================================
+    PGV internal implementation - global memory management
+===============================================================================}
 
 procedure GlobalMemoryInit;
 begin
+{$IFDEF Windows}
+// nothing to do here
+{$ELSE}
 {
   Unlike in Windows, where the memory manager is provided by the system, in
   Linux it is from glibc (a library). To ensure that everyone is using the
@@ -1045,48 +1194,342 @@ with VAR_HeadPtr^.Allocator do
     ReallocFunc := @lin_realloc;
     FreeFunc := @lin_free;
   end;
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 procedure GlobalMemoryFinal;
 begin
+{$IFDEF Windows}
+// nothing to do here
+{$ELSE}
 If dlclose(VAR_HeadPtr^.Allocator.LibHandle) <> 0 then
   raise EPGVSystemError.CreateFmt('GlobalMemoryFinal: Failed to close allocating library (%s).',[dlerror]);
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function GlobalMemoryAllocate(Size: TMemSize): Pointer;
 begin
+{$IFDEF Windows}
+Result := HeapAlloc(GetProcessHeap,HEAP_ZERO_MEMORY,Size);
+If not Assigned(Result) then
+  raise EPGVHeapAllocationError.Create('GlobalMemoryAllocate: Failed to allocate global memory.');
+{$ELSE}
 Result := VAR_HeadPtr^.Allocator.AllocFunc(size_t(Size));
 If Assigned(Result) then
   FillChar(Result^,Size,0)
 else
   raise EPGVHeapAllocationError.CreateFmt('GlobalMemoryAllocate: Failed to allocate global memory (%d).',[errno_ptr^]);
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 procedure GlobalMemoryReallocate(var Address: Pointer; NewSize: TMemSize);
 begin
+{$IFDEF Windows}
+Address := HeapRealloc(GetProcessHeap,HEAP_ZERO_MEMORY,Address,NewSize);
+If not Assigned(Address) then
+  raise EPGVHeapAllocationError.Create('GlobalMemoryReallocate: Failed to reallocate global memory.');
+{$ELSE}
 Address := VAR_HeadPtr^.Allocator.ReallocFunc(Address,size_t(NewSize));
 If not Assigned(Address) then
   raise EPGVHeapAllocationError.CreateFmt('GlobalMemoryReallocate: Failed to reallocate global memory (%d).',[errno_ptr^]);
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 procedure GlobalMemoryFree(var Address: Pointer);
 begin
+{$IFDEF Windows}
+If not HeapFree(GetProcessHeap,0,Address) then
+  raise EPGVHeapAllocationError.CreateFmt('GlobalMemoryFree: Could not free global memory (%d).',[GetLastError]);
+Address := nil;
+{$ELSE}
 VAR_HeadPtr^.Allocator.FreeFunc(Address);
 Address := nil;
+{$ENDIF}
+end;
+
+{===============================================================================
+    PGV internal implementation - module initialization
+===============================================================================}
+type
+{$IFDEF Windows}
+  TPGVModuleArray = array of THandle;
+{$ELSE}
+  TPGVModuleArray = record
+    Arr:    array of String;
+    Count:  Integer;
+  end;
+  PPGVModuleArray = ^TPGVModuleArray;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+{$IFDEF Windows}
+{$IFNDEF FPC}
+var
+  PrevDllProc:  Pointer;
+  DLLParam:     PtrInt;
+
+//------------------------------------------------------------------------------
+{
+  Reserved should be a pointer, but meh - this thing is one giant mess in
+  existing compilers...
+
+    In old Delphi, Reserved is Integer. In new ones, it is Pointer.
+
+    FPC has global variable DLLParam, which holds value of Reserved. And it is
+    declared as PtrInt.
+
+    bla bla bla... >:/
+
+  This should work everywhere, if the compiler (and RTL code) is sane. If not,
+  please let me know.
+}
+procedure ProcessGlobalVarsDllProc(Reason: Integer; Reserved: PtrInt);
+type
+  TLocalDLLProc = procedure(Reason: Integer; Reserved: PtrInt);
+begin
+DLLParam := Reserved;
+If Assigned(PrevDllProc) then
+  TLocalDLLProc(PrevDllProc)(Reason,Reserved);
+end;
+{$ENDIF}
+
+{$ELSE}//-linux-----------------------------------------------------------------
+
+Function ModuleEnumCallback(info: dl_phdr_info_p; size: size_t; data: Pointer): cInt; cdecl;
+begin
+If Assigned(info) and (size >= (2 * SizeOf(Pointer))) then
+  begin
+    If PPGVModuleArray(Data)^.Count <= Length(PPGVModuleArray(Data)^.Arr) then
+      SetLength(PPGVModuleArray(Data)^.Arr,Length(PPGVModuleArray(Data)^.Arr) + 16);
+    PPGVModuleArray(Data)^.Arr[PPGVModuleArray(Data)^.Count] := String(info^.dlpi_name);
+    Inc(PPGVModuleArray(Data)^.Count);
+  end;
+Result := 0;
 end;
 
 {$ENDIF}
+//------------------------------------------------------------------------------
+
+procedure EnumerateProcessModules(out Modules: TPGVModuleArray);
+{$IFDEF Windows}
+var
+  BytesNeeded:  DWORD;
+begin
+Modules := nil;
+BytesNeeded := 1024 * SizeOf(THandle);
+repeat
+  SetLength(Modules,BytesNeeded);
+  If not EnumProcessModules(GetCurrentProcess,Addr(Modules[Low(Modules)]),Length(Modules) * SizeOf(THandle),@BytesNeeded) then
+    raise EPGVModuleEnumerationError.CreateFmt('EnumerateProcessModules: Failed to enumerate process modules (%d).',[GetLastError]);
+until DWORD(Length(Modules) * SizeOf(THandle)) >= BytesNeeded;
+// limit length to what is really enumerated
+SetLength(Modules,BytesNeeded div SizeOf(THandle));
+end;
+{$ELSE}
+begin
+Modules.Arr := nil;
+Modules.Count := 0;
+dl_iterate_phdr(@ModuleEnumCallback,@Modules);
+SetLength(Modules.Arr,Modules.Count);
+end;
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure ModuleInitialization;
+var
+  Modules:      TPGVModuleArray;
+  i:            Integer;
+  GetHeadFunc:  Pointer;
+  HeadTemp:     PPGVHead;
+{$IFNDEF Windows}
+  ProbedMod:    Pointer;
+  LocalHead:    TPGVHead;
+{$ENDIF}
+begin
+{
+  NOTE - this function is called when a module is loaded - this loading is
+         serialized by the OS, so there is no need for synchronization.
+}
+{$IFDEF Windows}{$IFNDEF FPC}
+{
+  Setup dllmain hook to intercept lpvReserved parameter when dll is detached
+  (see ModuleFinalization for details).
+
+  Also note that the hook is called BEFORE finalization of all units, including
+  this one (at least that is the documented behaviour).
+}
+PrevDllProc := @SysInit.DllProcEx;
+SysInit.DllProcEx := TDLLProcEx(@ProcessGlobalVarsDllProc);
+{$ENDIF}{$ENDIF}
+// enumerate modules loaded within this process...
+EnumerateProcessModules(Modules);
+{
+  Traverse all loaded modules and look whether they export a properly named
+  function.
+
+  If this function is found, call it - when it returns nil, it means it is
+  incompatible with this implementation and continue searching.
+  When it returns non-nil pointer, use that for head pointer global variable,
+  increment its reference counter and exit.
+
+  If no function of that name is found or all exported functions return nil, do
+  full initialization (allocation) here.
+
+  Windows...
+
+    Note that the modules contain the current module - this is not a problem
+    since calling local *GetHead function will just return nil (as the global
+    variable is not yet initilized) and therefore it will be ignored.
+}
+{$IFDEF Windows}
+For i := Low(Modules) to High(Modules) do
+  begin
+    GetHeadFunc := GetProcAddress(Modules[i],PGV_EXPORTNAME_GETHEAD);
+    If Assigned(GetHeadFunc) then
+      begin
+        HeadTemp := TPGVGetHeadFunc(GetHeadFunc)(PGV_VERSION_CURRENT);
+        If Assigned(HeadTemp) then
+          begin
+            Inc(HeadTemp^.RefCount);
+            VAR_HeadPtr := HeadTemp;
+            // we have everything we need, do not continue this function
+            Exit;
+          end;
+      end;
+  end;
+{$ELSE}
+For i := Low(Modules.Arr) to Pred(Modules.Count) do
+  begin
+    ProbedMod := dlopen(PChar(Modules.Arr[i]),RTLD_NOW);
+    If Assigned(ProbedMod) then
+      try
+        GetHeadFunc := dlsym(ProbedMod,PGV_EXPORTNAME_GETHEAD);
+        If Assigned(GetHeadFunc) then
+          begin
+            HeadTemp := TPGVGetHeadFunc(GetHeadFunc)(PGV_VERSION_CURRENT);
+            If Assigned(HeadTemp) then
+              begin
+                Inc(HeadTemp^.RefCount);
+                VAR_HeadPtr := HeadTemp;
+                Exit;
+              end;
+          end;
+      finally
+        If dlclose(ProbedMod) <> 0 then
+          raise EPGVSystemError.CreateFmt('ModuleInitialization: Failed to close probed module (%s).',[dlerror]);
+      end
+    else raise EPGVSystemError.CreateFmt('ModuleInitialization: Failed to open probed module (%s).',[dlerror]);
+  end;
+{$ENDIF}
+{
+  If we are here it means no currently loaded module provides usable PGV, we
+  need to allocete it ourselves.
+
+  Linux...
+
+    The head is allocated using global memory allocation routines, but these
+    require that the head is already prepared - catch 22. We use local variable
+    to provide what the allocation rutine require.
+}
+{$IFNDEF Windows}
+LocalHead.Allocator.AllocFunc := @lin_malloc;
+VAR_HeadPtr := @LocalHead;
+{$ENDIF}
+VAR_HeadPtr := GlobalMemoryAllocate(SizeOf(TPGVHead));
+// initialize head fields (fields not explicitly touched here are zeroed)
+VAR_HeadPtr^.RefCount := 1;
+GlobalMemoryInit;
+ThreadLockInit;
+end;
 
 {===============================================================================
-    PGV internal implementation - main implementation (variables management)
+    PGV internal implementation - module finalization
+===============================================================================}
+
+procedure FreeAllVariablesAndSegments;
+var
+  CurrentSegment: PPGVSegment;
+  NextSegment:    PPGVSegment;
+  i:              Integer;
+begin
+{
+  We are last module using current VAR_HeadPtr, there should be no other threads
+  able to access it by this point, but we still enter critical section to be
+  sure. But, since this call is serialized by OS, we cannot block - that could
+  create deadlock - instead non blocking try-enter is used here.
+
+  If we cannot acquire the lock, just leave - its better to leak memory than
+  raising an exception during library detach.
+}
+If TryThreadLock then
+  try
+    CurrentSegment := VAR_HeadPtr^.FirstSegment;
+    VAR_HeadPtr^.FirstSegment := nil;
+    while Assigned(CurrentSegment) do
+      begin
+      {
+        Free individual entries (variables) - note there is no need to clear
+        individual entries as the entire segment will be freed.
+      }
+        For i := Low(CurrentSegment^.Entries) to High(CurrentSegment^.Entries) do
+          If ((CurrentSegment^.Entries[i].Flags and PGV_SEFLAG_USED) <> 0) and
+             ((CurrentSegment^.Entries[i].Flags and PGV_SEFLAG_SMLSIZE_MASK) = 0) then
+            GlobalMemoryFree(CurrentSegment^.Entries[i].Address);
+        // free the segment
+        NextSegment := CurrentSegment^.Head.NextSegment;
+        GlobalMemoryFree(Pointer(CurrentSegment));
+        CurrentSegment := NextSegment;
+      end;
+  finally
+    ThreadUnlock;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure ModuleFinalization;
+var
+  LocalHead:  TPGVHead;
+begin
+{
+  NOTE - this function is called when a module is unloaded, which is serialized
+  on a process-wide basis by the OS, so there is no need for synchronization.
+
+  Windows...
+
+    Only call cleanup when a library is explicitly unloaded (parameter Reserved
+    (here stored in DLLParam) in DLLMain is null/nil), do not call it when the
+    process is terminating - freeing the heap then would cause an error
+    (DbgBreakPoint is called by kernel).
+}
+If Assigned(VAR_HeadPtr){$IFDEF Windows} and (DLLParam = 0){$ENDIF} then
+  begin
+    Dec(VAR_HeadPtr^.RefCount);
+    If VAR_HeadPtr^.RefCount <= 0 then
+      begin
+        FreeAllVariablesAndSegments;
+        ThreadLockFinal;
+        VAR_HeadPtr^.RefCount := 0;
+        LocalHead := VAR_HeadPtr^;
+        GlobalMemoryFree(Pointer(VAR_HeadPtr));
+        VAR_HeadPtr := @LocalHead;
+        GlobalMemoryFinal;
+        VAR_HeadPtr := nil;
+      end;
+  end;
+end;
+
+{===============================================================================
+    PGV internal implementation - segments management
 ===============================================================================}
 
 Function SegmentAdd: PPGVSegment;
@@ -1122,10 +1565,12 @@ If VAR_HeadPtr^.FirstSegment = Segment then
 If VAR_HeadPtr^.LastSegment = Segment then
   VAR_HeadPtr^.LastSegment := Segment^.Head.PrevSegment;
 Temp := Pointer(Segment);
-GlobalMemoryFree(TEmp);
+GlobalMemoryFree(Temp);
 end;
 
-//==============================================================================
+{===============================================================================
+    PGV internal implementation - entries management and utility
+===============================================================================}
 
 Function EntryFromVar(Variable: TPGVVariable): PPGVSegmentEntry;
 begin
@@ -1136,15 +1581,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function EntrySize(Entry: PPGVSegmentEntry): TMemSize;
-begin
-If (Entry^.Flags and PGV_SEFLAG_SMLSIZE_MASK) <> 0 then
-  Result := TMemSize((Entry^.Flags shr PGV_SEFLAG_SMLSIZE_SHIFT) and PGV_SEFLAG_SMLSIZE_SMASK)
-else
-  Result := Entry^.Size;
-end;
-
-//------------------------------------------------------------------------------
+// I just don't want to put EntrySize before EntryIsValid, ok?!
+Function EntrySize(Entry: PPGVSegmentEntry): TMemSize; forward;
 
 Function EntryIsValid(Entry: PPGVSegmentEntry): Boolean;
 begin
@@ -1170,12 +1608,65 @@ while Assigned(CurrentSegment) do
           Index := (PtrUInt(Entry) - PtrUInt(Addr(Entries[Low(Entries)]))) div SizeOf(TPGVSegmentEntry);
           If (Index >= Low(Entries)) and (Index <= High(Entries)) then
             Result := Entry = Addr(Entries[Index]);
-          // it the entry is here, it cannot be in any other segment  
+          // it the entry is here, it cannot be in any other segment
           Break{while};
         end;
   {$IFDEF FPCDWM}{$POP}{$ENDIF}
     CurrentSegment := CurrentSegment^.Head.NextSegment;
   end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function EntryDecodeFlags(Entry: PPGVSegmentEntry): TPGVVariableFlags;
+begin
+Result := [];
+If (Entry^.Flags and PGV_SEFLAG_REALLOCATED) <> 0 then
+  Include(Result,vfReallocated);
+If (Entry^.Flags and PGV_SEFLAG_RENAMED) <> 0 then
+  Include(Result,vfRenamed);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure EntryEncodeFlags(Entry: PPGVSegmentEntry; Flags: TPGVVariableFlags);
+
+  procedure SetFlagValue(FlagMask: UInt32; Value: Boolean);
+  begin
+    If Value then
+      Entry^.Flags := Entry^.Flags or FlagMask
+    else
+      Entry^.Flags := Entry^.Flags and not FlagMask;
+  end;
+
+begin
+SetFlagValue(PGV_SEFLAG_REALLOCATED,vfReallocated in Flags);
+SetFlagValue(PGV_SEFLAG_RENAMED,vfRenamed in Flags);
+end;
+
+//------------------------------------------------------------------------------
+
+Function EntrySetFlag(Entry: PPGVSegmentEntry; Flag: TPGVVariableFlag; Value: Boolean): Boolean;
+var
+  Flags:  TPGVVariableFlags;
+begin
+Flags := EntryDecodeFlags(Entry);
+Result := Flag in Flags;
+If Value then
+  Include(Flags,Flag)
+else
+  Exclude(Flags,Flag);
+EntryEncodeFlags(Entry,Flags);
+end;
+
+//------------------------------------------------------------------------------
+
+Function EntrySize(Entry: PPGVSegmentEntry): TMemSize;
+begin
+If (Entry^.Flags and PGV_SEFLAG_SMLSIZE_MASK) <> 0 then
+  Result := TMemSize(Entry^.Flags and PGV_SEFLAG_SMLSIZE_MASK)
+else
+  Result := Entry^.Size;
 end;
 
 //------------------------------------------------------------------------------
@@ -1204,6 +1695,25 @@ while Assigned(CurrentSegment) and not (Assigned(Segment) and Assigned(Entry)) d
     CurrentSegment := CurrentSegment^.Head.NextSegment;
   end;
 Result := Assigned(Segment) and Assigned(Entry);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure EntryRename(Entry: PPGVSegmentEntry; NewIdentifier: TPGVIdentifier);
+var
+  CheckSegment: PPGVSegment;
+  CheckEntry:   PPGVSegmentEntry;
+begin
+If EntryFind(NewIdentifier,CheckSegment,CheckEntry) then
+  begin
+    If CheckEntry = Entry then
+      Exit  // given variable already has the requested identifier
+    else
+      raise EPGVDuplicateVariable.CreateFmt('EntryRename: Variable 0x%.8x already exists.',[NewIdentifier]);
+  end;
+// entry of given new identifier does not exist, do the renaming
+Entry^.Identifier := NewIdentifier;
+Entry^.Flags := Entry^.Flags or PGV_SEFLAG_RENAMED;
 end;
 
 //------------------------------------------------------------------------------
@@ -1250,7 +1760,7 @@ Entry^.RefCount := 0;
 If Size <= SizeOf(TMemSize) then
   begin
     // do not allocate on heap, the variable can fit into entry's Size field
-    Entry^.Flags := Entry^.Flags or ((UInt32(Size) and PGV_SEFLAG_SMLSIZE_SMASK) shl PGV_SEFLAG_SMLSIZE_SHIFT);
+    Entry^.Flags := Entry^.Flags or UInt32(Size and PGV_SEFLAG_SMLSIZE_MASK);
     Entry^.Address := Addr(Entry^.Size);
     Entry^.Size := 0;
   end
@@ -1291,13 +1801,12 @@ If (PtrUInt(Entry) > PtrUInt(Segment)) and ((PtrUInt(Entry) < (PtrUInt(Segment) 
                 {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
                   FillChar(Pointer(PtrUInt(Addr(Entry^.Size)) + PtrUInt(OldSize))^,NewSize - OldSize,0);
                 {$IFDEF FPCDWM}{$POP}{$ENDIF}
-                Entry^.Flags := (Entry^.Flags and PGV_SEFLAG_SMLSIZE_MASK_N) or
-                  ((UInt32(NewSize) and PGV_SEFLAG_SMLSIZE_SMASK) shl PGV_SEFLAG_SMLSIZE_SHIFT);
+                Entry^.Flags := (Entry^.Flags and not PGV_SEFLAG_SMLSIZE_MASK) or UInt32(NewSize and PGV_SEFLAG_SMLSIZE_MASK);
               end
             else
               begin
                 // data will be move to heap
-                Entry^.Flags := Entry^.Flags and PGV_SEFLAG_SMLSIZE_MASK_N;
+                Entry^.Flags := Entry^.Flags and not PGV_SEFLAG_SMLSIZE_MASK;
                 Entry^.Address := GlobalMemoryAllocate(NewSize);
                 Move(Entry^.Size,Entry^.Address^,OldSize);
                 Entry^.Size := NewSize;
@@ -1312,8 +1821,7 @@ If (PtrUInt(Entry) > PtrUInt(Segment)) and ((PtrUInt(Entry) < (PtrUInt(Segment) 
                 Move(Entry^.Address^,Entry^.Size,NewSize);
                 GlobalMemoryFree(Entry^.Address);
                 Entry^.Address := Addr(Entry^.Size);
-                Entry^.Flags := (Entry^.Flags and PGV_SEFLAG_SMLSIZE_MASK_N) or
-                  ((UInt32(NewSize) and PGV_SEFLAG_SMLSIZE_SMASK) shl PGV_SEFLAG_SMLSIZE_SHIFT);
+                Entry^.Flags := (Entry^.Flags and not PGV_SEFLAG_SMLSIZE_MASK) or UInt32(NewSize and PGV_SEFLAG_SMLSIZE_MASK);
               end
             else
               begin
@@ -1346,7 +1854,7 @@ If (PtrUInt(Entry) > PtrUInt(Segment)) and ((PtrUInt(Entry) < (PtrUInt(Segment) 
     // free the entry
     Entry^.Size := 0;
     // free memory only if the variable is allocated on the heap
-    If (Entry^.Flags or PGV_SEFLAG_SMLSIZE_MASK) = 0 then
+    If (Entry^.Flags and PGV_SEFLAG_SMLSIZE_MASK) = 0 then
       GlobalMemoryFree(Entry^.Address); // sets the address to nil
     Entry^.Flags := 0;
     Entry^.RefCount := 0;
@@ -1358,356 +1866,6 @@ If (PtrUInt(Entry) > PtrUInt(Segment)) and ((PtrUInt(Entry) < (PtrUInt(Segment) 
   end
 else raise EPGVInvalidValue.Create('EntryFree: Given entry does not belong to given segment.');
 end;
-  
-{===============================================================================
-    PGV internal implementation - exports
-===============================================================================}
-type
-{
-  Type TGetHeadFunc must EXACTLY match prototype of ProcessGlobalVarsGetHead
-  (or vice-versa, your choice). And do not ever change it - rather introduce
-  new function if different call is needed.
-}
-  TGetHeadFunc = Function(Version: Int32): PPGVHead;{$IFDEF Windows} stdcall;{$ELSE} cdecl;{$ENDIF}
-
-const
-  PGV_EXPORTNAME_GETHEAD = 'ProcessGlobalVarsGetHead';
-
-  PGV_VERSION_CURRENT = Int32(0){$IFDEF CPU64bit} or Int32(UInt32(1) shl 31){$ENDIF};
-
-//------------------------------------------------------------------------------
-
-Function ProcessGlobalVarsGetHead(Version: Int32): PPGVHead;{$IFDEF Windows} stdcall;{$ELSE} cdecl;{$ENDIF}{$IFDEF FPC} public;{$ENDIF}
-begin
-If Version = PGV_VERSION_CURRENT then
-  Result := VAR_HeadPtr
-else
-  Result := nil;
-end;
-
-//------------------------------------------------------------------------------
-exports
-  ProcessGlobalVarsGetHead name PGV_EXPORTNAME_GETHEAD;
-
-{===============================================================================
-    PGV internal implementation - module initialization
-===============================================================================}
-{$IFDEF Windows}
-type
-  TModuleArray = array of THandle;
-
-Function EnumProcessModules(hProcess: THandle; lphModules: PHandle; cb: DWORD; lpcbNeeded: LPDWORD): BOOL; stdcall; external 'psapi.dll';
-
-//------------------------------------------------------------------------------
-
-Function EnumerateProcessModules: TModuleArray;
-var
-  BytesNeeded:  DWORD;
-begin
-Result := nil;
-BytesNeeded := 1024 * SizeOf(THandle);
-repeat
-  SetLength(Result,BytesNeeded);
-  If not EnumProcessModules(GetCurrentProcess,Addr(Result[Low(Result)]),Length(Result) * SizeOf(THandle),@BytesNeeded) then
-    raise EPGVModuleEnumerationError.CreateFmt('EnumProcessModules: Failed to enumerate process modules (%d).',[GetLastError]);
-until DWORD(Length(Result) * SizeOf(THandle)) >= BytesNeeded;
-// limit length to what is really enumerated
-SetLength(Result,BytesNeeded div SizeOf(THandle));
-end;
-
-{$IFNDEF FPC}
-//------------------------------------------------------------------------------
-var
-  PrevDllProc:  Pointer;
-  DLLParam:     PtrInt;
-
-//------------------------------------------------------------------------------
-{
-  Reserved should be a pointer, but meh - this thing is one giant mess in
-  existing compilers...
-
-    In old Delphi, Reserved is Integer. In new ones, it is Pointer.
-
-    FPC has global variable DLLParam, which holds value of Reserved. And it is
-    declared as PtrInt.
-
-    bla bla bla... >:/
-
-  This should work everywhere, if the compiler (and RTL code) is sane. If not,
-  please let me know.
-}
-procedure ProcessGlobalVarsDllProc(Reason: Integer; Reserved: PtrInt);
-type
-  TLocalDLLProc = procedure(Reason: Integer; Reserved: PtrInt);
-begin
-DLLParam := Reserved;
-If Assigned(PrevDllProc) then
-  TLocalDLLProc(PrevDllProc)(Reason,Reserved);
-end;
-{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-procedure ModuleInitialization;
-var
-  Modules:      TModuleArray;
-  i:            Integer;
-  GetHeadFunc:  Pointer;
-  HeadTemp:     PPGVHead;
-begin
-{
-  NOTE - this function is called when a module is loaded - this loading is
-         serialized by the OS, so there is no need for synchronization.
-}
-{$IFNDEF FPC}
-{
-  Setup dllmain hook to intercept lpvReserved parameter when dll is detached
-  (see ModuleFinalization for details).
-
-  Also note that the hook is called BEFORE finalization of all units, including
-  this one (at least that is the documented behaviour).
-}
-PrevDllProc := @SysInit.DllProcEx;
-SysInit.DllProcEx := TDLLProcEx(@ProcessGlobalVarsDllProc);
-{$ENDIF}
-// enumerate modules loaded within this process...
-Modules := EnumerateProcessModules;
-{
-  Traverse all loaded modules and look whether they export a properly named
-  function.
-
-  If this function is found, call it - when it returns nil, it means it is
-  incompatible with this implementation and continue searching.
-  When it returns non-nil pointer, use that for head pointer global variable,
-  increment its reference counter and exit.
-
-  If no function of that name is found or all exported functions return nil, do
-  full initialization (allocation) here.
-
-  Note that the modules contain the current module - this is not a problem since
-  calling local *GetHead function will just return nil (as the global variable
-  is not yet initilized) and therefore it will be ignored.
-}
-For i := Low(Modules) to High(Modules) do
-  begin
-    GetHeadFunc := GetProcAddress(Modules[i],PGV_EXPORTNAME_GETHEAD);
-    If Assigned(GetHeadFunc) then
-      begin
-        HeadTemp := TGetHeadFunc(GetHeadFunc)(PGV_VERSION_CURRENT);
-        If Assigned(HeadTemp) then
-          begin
-            Inc(HeadTemp^.RefCount);
-            VAR_HeadPtr := HeadTemp;
-            // we have everything we need, do not continue this function
-            Exit;
-          end;
-      end;
-  end;
-{
-  If we are here it means no currently loaded module provides usable PGV, we
-  need to allocete it ourselves.
-}
-VAR_HeadPtr := GlobalMemoryAllocate(SizeOf(TPGVHead));
-// initialize head fields (fields not explicitly touched here are zeroed)
-VAR_HeadPtr^.RefCount := 1;
-InitializeCriticalSection(VAR_HeadPtr^.Lock);
-end;
-
-{$ELSE}//=======================================================================
-type
-  dl_phdr_info = record
-    dlpi_addr:      PtrUInt;
-    dlpi_name:      PChar;
-    dlpi_phdr:      Pointer;  // structure, but we do not need it
-    dlpi_phnum:     UInt16;
-    dlpi_adds:      cuLongLong;
-    dlpi_subs:      cuLongLong;
-    dlpi_tls_modid: size_t;
-    dlpi_tls_data:  Pointer;
-  end;
-  dl_phdr_info_p = ^dl_phdr_info;
-
-  TDLIterCallback = Function(info: dl_phdr_info_p; size: size_t; data: Pointer): cInt; cdecl;
-
-Function dl_iterate_phdr(callback: TDLIterCallback; data: Pointer): cInt; cdecl; external;
-
-type
-  TModulesArray = record
-    Arr:    array of String;
-    Count:  Integer;
-  end;
-  PModulesArray = ^TModulesArray;
-
-//------------------------------------------------------------------------------
-
-Function ModuleEnumCallback(info: dl_phdr_info_p; size: size_t; data: Pointer): cInt; cdecl;
-begin
-If Assigned(info) and (size >= (2 * SizeOf(Pointer))) then
-  begin
-    If PModulesArray(Data)^.Count <= Length(PModulesArray(Data)^.Arr) then
-      SetLength(PModulesArray(Data)^.Arr,Length(PModulesArray(Data)^.Arr) + 16);
-    PModulesArray(Data)^.Arr[PModulesArray(Data)^.Count] := String(info^.dlpi_name);
-    Inc(PModulesArray(Data)^.Count);
-  end;
-Result := 0;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure EnumerateProcessModules(out Modules: TModulesArray);
-begin
-Modules.Arr := nil;
-Modules.Count := 0;
-dl_iterate_phdr(@ModuleEnumCallback,@Modules);
-SetLength(Modules.Arr,Modules.Count);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure ModuleInitialization;
-var
-  Modules:      TModulesArray;
-  i:            Integer;
-  ProbedMod:    Pointer;
-  GetHeadFunc:  Pointer;
-  HeadTemp:     PPGVHead;
-  LocalHead:    TPGVHead;
-begin
-// enumerate modules
-EnumerateProcessModules(Modules);
-// traverse modules to find the one containing gethead function
-For i := Low(Modules.Arr) to Pred(Modules.Count) do
-  begin
-    ProbedMod := dlopen(PChar(Modules.Arr[i]),RTLD_NOW);
-    If Assigned(ProbedMod) then
-      try
-        GetHeadFunc := dlsym(ProbedMod,PGV_EXPORTNAME_GETHEAD);
-        If Assigned(GetHeadFunc) then
-          begin
-            HeadTemp := TGetHeadFunc(GetHeadFunc)(PGV_VERSION_CURRENT);
-            If Assigned(HeadTemp) then
-              begin
-                Inc(HeadTemp^.RefCount);
-                VAR_HeadPtr := HeadTemp;
-                Exit;
-              end;
-          end;
-      finally
-        If dlclose(ProbedMod) <> 0 then
-          raise EPGVSystemError.CreateFmt('ModuleInitialization: Failed to close probed module (%s).',[dlerror]);
-      end
-    else raise EPGVSystemError.CreateFmt('ModuleInitialization: Failed to open probed module (%s).',[dlerror]);
-  end;
-{
-  No module with prepared head found.
-
-  The head is allocated using global memory allocation routines, but these
-  require that the head is already prepared - catch 22. We use local variable
-  to provide what the allocation rutine require.
-}
-LocalHead.Allocator.AllocFunc := @lin_malloc;
-VAR_HeadPtr := @LocalHead;
-VAR_HeadPtr := GlobalMemoryAllocate(SizeOf(TPGVHead));
-VAR_HeadPtr^.RefCount := 1;
-GlobalMemoryInit;
-ThreadLockInit;
-end;
-
-{$ENDIF}
-
-{===============================================================================
-    PGV internal implementation - module finalization
-===============================================================================}
-
-procedure FreeAllVariablesAndSegments;
-var
-  CurrentSegment: PPGVSegment;
-  NextSegment:    PPGVSegment;
-  i:              Integer;
-begin
-{
-  We are last module using current VAR_HeadPtr, there should be no other threads
-  able to access it by this point, but we still enter critical section to be
-  sure. But, since this call is serialized by OS, we cannot block - that could
-  create deadlock - instead non blocking try-enter is used here.
-}
-If TryThreadLock then
-  try
-    CurrentSegment := VAR_HeadPtr^.FirstSegment;
-    VAR_HeadPtr^.FirstSegment := nil;
-    while Assigned(CurrentSegment) do
-      begin
-      {
-        Free individual entries (variables) - note there is no need to clear
-        individual entries as the entire segment will be freed.
-      }
-        For i := Low(CurrentSegment^.Entries) to High(CurrentSegment^.Entries) do
-          If ((CurrentSegment^.Entries[i].Flags and PGV_SEFLAG_USED) <> 0) and
-             ((CurrentSegment^.Entries[i].Flags and PGV_SEFLAG_SMLSIZE_MASK) = 0) then
-            GlobalMemoryFree(CurrentSegment^.Entries[i].Address);
-        // free the segment
-        NextSegment := CurrentSegment^.Head.NextSegment;
-        GlobalMemoryFree(Pointer(CurrentSegment));
-        CurrentSegment := NextSegment;
-      end;
-  finally
-    ThreadUnlock;
-  end
-else raise EPGVModuleCleanupError.Create('FreeAllVariablesAndSegments: Unable to acquire lock.');
-end;
-
-//------------------------------------------------------------------------------
-{$IFDEF Windows}
-
-procedure ModuleFinalization;
-begin
-{
-  NOTE - this function is called when a module is unloaded, which is serialized
-  on a process-wide basis by the OS, so there is no need for synchronization.
-
-  Only call cleanup when a library is explicitly unloaded (parameter Reserved
-  (here stored in DLLParam) in DLLMain is null/nil), do not call it when the
-  process is terminating - freeing the heap then would cause an error
-  (DbgBreakPoint is called by kernel).
-}
-If Assigned(VAR_HeadPtr) and (DLLParam = 0) then
-  begin
-    Dec(VAR_HeadPtr^.RefCount);
-    If VAR_HeadPtr^.RefCount <= 0 then
-      begin
-        FreeAllVariablesAndSegments;
-        DeleteCriticalSection(VAR_HeadPtr^.Lock);
-        VAR_HeadPtr^.RefCount := 0;
-        GlobalMemoryFree(Pointer(VAR_HeadPtr));
-        VAR_HeadPtr := nil;
-      end;
-  end;
-end;
-
-{$ELSE}//=======================================================================
-
-procedure ModuleFinalization;
-var
-  LocalHead:  TPGVHead;
-begin
-If Assigned(VAR_HeadPtr) then
-  begin
-    Dec(VAR_HeadPtr^.RefCount);
-    If VAR_HeadPtr^.RefCount <= 0 then
-      begin
-        FreeAllVariablesAndSegments;
-        ThreadLockFinal;
-        VAR_HeadPtr^.RefCount := 0;
-        LocalHead := VAR_HeadPtr^;
-        GlobalMemoryFree(Pointer(VAR_HeadPtr));
-        VAR_HeadPtr := @LocalHead;
-        GlobalMemoryFinal;
-        VAR_HeadPtr := nil;
-      end;
-  end;
-end;
-
-{$ENDIF}
 
 
 {===============================================================================
@@ -1946,18 +2104,15 @@ GlobVarLock;
 try
   If EntryFind(Identifier,Segment,Entry) then
     begin
+      Variable := Addr(Entry^.Address);
       // entry exists, check its size and act accordingly
       CurrSize := EntrySize(Entry);
-      If Size = CurrSize then
-        begin
-          Variable := Addr(Entry^.Address);
-          Result := vgrOpened;
-        end
-      else
+      If Size <> CurrSize then
         begin
           Size := CurrSize;
           Result := vgrSizeMismatch;
-        end;
+        end
+      else Result := vgrOpened;
     end
   else
     begin
@@ -1982,6 +2137,97 @@ begin
 Result := GlobVarGet(GlobVarTranslateIdentifier(Identifier),Size,Variable);
 end;
 
+//------------------------------------------------------------------------------
+
+Function GlobVarRename(OldIdentifier,NewIdentifier: TPGVIdentifier): TPGVVariable;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := nil;
+GlobVarLock;
+try
+  If EntryFind(OldIdentifier,Segment,Entry) then
+    begin
+      // if new identifier is the same as old, do nothing
+      If NewIdentifier <> OldIdentifier then
+        EntryRename(Entry,NewIdentifier);
+      Result := Addr(Entry^.Address);        
+    end
+  else raise EPGVUnknownVariable.CreateFmt('GlobVarRename: Unknown variable 0x%.8x.',[OldIdentifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarRename(OldIdentifier: TPGVIdentifier; const NewIdentifier: String): TPGVVariable;
+begin
+Result := GlobVarRename(OldIdentifier,GlobVarTranslateIdentifier(NewIdentifier));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarRename(const OldIdentifier: String; NewIdentifier: TPGVIdentifier): TPGVVariable;
+var
+  OldIdentNum:  TPGVIDentifier;
+  Segment:      PPGVSegment;
+  Entry:        PPGVSegmentEntry;
+begin
+Result := nil;
+GlobVarLock;
+try
+  OldIdentNum := GlobVarTranslateIdentifier(OldIdentifier);
+  If EntryFind(OldIdentNum,Segment,Entry) then
+    begin
+      // if new identifier is the same as old, do nothing
+      If NewIdentifier <> OldIdentNum then
+        EntryRename(Entry,NewIdentifier);
+      Result := Addr(Entry^.Address);
+    end
+  else raise EPGVUnknownVariable.CreateFmt('GlobVarRename: Unknown variable "%s".',[OldIdentifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarRename(const OldIdentifier,NewIdentifier: String): TPGVVariable;
+begin
+Result := GlobVarRename(OldIdentifier,GlobVarTranslateIdentifier(NewIdentifier));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure GlobVarRename(Variable: TPGVVariable; NewIdentifier: TPGVIdentifier);
+var
+  Entry:  PPGVSegmentEntry;
+begin
+If Assigned(Variable) then
+  begin
+    GlobVarLock;
+    try
+      Entry := EntryFromVar(Variable);
+      If EntryIsValid(Entry) then
+        EntryRename(Entry,NewIdentifier)
+      else
+        raise EPGVInvalidVariable.Create('GlobVarRename: Invalid variable entry.');
+    finally
+      GlobVarUnlock;
+    end;
+  end
+else raise EPGVInvalidValue.Create('GlobVarRename: Nil variable reference.');
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure GlobVarRename(Variable: TPGVVariable; NewIdentifier: String);
+begin
+GlobVarRename(Variable,GlobVarTranslateIdentifier(NewIdentifier));
+end;
+
 //==============================================================================
 
 Function GlobVarIsValid(Variable: TPGVVariable; CheckAddress: Boolean = True): Boolean;
@@ -2004,6 +2250,29 @@ If Assigned(Variable) then
       GlobVarUnlock;
     end;
   end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function GlobVarIdentifier(Variable: TPGVVariable): TPGVIdentifier;
+var
+  Entry:  PPGVSegmentEntry;
+begin
+Result := 0;
+If Assigned(Variable) then
+  begin
+    GlobVarLock;
+    try
+      Entry := EntryFromVar(Variable);
+      If EntryIsValid(Entry) then
+        Result := Entry^.Identifier
+      else
+        raise EPGVInvalidVariable.Create('GlobVarIdentifier: Invalid variable entry.');
+    finally
+      GlobVarUnlock;
+    end;
+  end
+else raise EPGVInvalidValue.Create('GlobVarIdentifier: Nil variable reference.');
 end;
 
 //------------------------------------------------------------------------------
@@ -2148,6 +2417,256 @@ If Assigned(Variable) then
     end;
   end
 else raise EPGVInvalidValue.Create('GlobVarHeapStored: Nil variable reference.');
+end;
+
+//==============================================================================
+
+Function GlobVarGetFlags(Identifier: TPGVIdentifier): TPGVVariableFlags;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := [];
+GlobVarLock;
+try
+  If EntryFind(Identifier,Segment,Entry) then
+    Result := EntryDecodeFlags(Entry)
+  else
+    raise EPGVUnknownVariable.CreateFmt('GlobVarGetFlags: Unknown variable 0x%.8x.',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarGetFlags(const Identifier: String): TPGVVariableFlags;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := [];
+GlobVarLock;
+try
+  If EntryFind(GlobVarTranslateIdentifier(Identifier),Segment,Entry) then
+    Result := EntryDecodeFlags(Entry)
+  else
+    raise EPGVUnknownVariable.CreateFmt('GlobVarGetFlags: Unknown variable "%s".',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarGetFlags(Variable: TPGVVariable): TPGVVariableFlags;
+var
+  Entry:  PPGVSegmentEntry;
+begin
+Result := [];
+If Assigned(Variable) then
+  begin
+    GlobVarLock;
+    try
+      Entry := EntryFromVar(Variable);
+      If EntryIsValid(Entry) then
+        Result := EntryDecodeFlags(Entry)
+      else
+        raise EPGVInvalidVariable.Create('GlobVarGetFlags: Invalid variable entry.');
+    finally
+      GlobVarUnlock;
+    end;
+  end
+else raise EPGVInvalidValue.Create('GlobVarGetFlags: Nil variable reference.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function GlobVarSetFlags(Identifier: TPGVIdentifier; Flags: TPGVVariableFlags): TPGVVariableFlags;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := [];
+GlobVarLock;
+try
+  If EntryFind(Identifier,Segment,Entry) then
+    begin
+      Result := EntryDecodeFlags(Entry);
+      EntryEncodeFlags(Entry,Flags);
+    end
+  else raise EPGVUnknownVariable.CreateFmt('GlobVarSetFlags: Unknown variable 0x%.8x.',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarSetFlags(const Identifier: String; Flags: TPGVVariableFlags): TPGVVariableFlags;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := [];
+GlobVarLock;
+try
+  If EntryFind(GlobVarTranslateIdentifier(Identifier),Segment,Entry) then
+    begin
+      Result := EntryDecodeFlags(Entry);
+      EntryEncodeFlags(Entry,Flags);
+    end
+  else raise EPGVUnknownVariable.CreateFmt('GlobVarSetFlags: Unknown variable "%s".',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarSetFlags(Variable: TPGVVariable; Flags: TPGVVariableFlags): TPGVVariableFlags;
+var
+  Entry:  PPGVSegmentEntry;
+begin
+Result := [];
+If Assigned(Variable) then
+  begin
+    GlobVarLock;
+    try
+      Entry := EntryFromVar(Variable);
+      If EntryIsValid(Entry) then
+        begin
+          Result := EntryDecodeFlags(Entry);
+          EntryEncodeFlags(Entry,Flags);
+        end
+      else raise EPGVInvalidVariable.Create('GlobVarSetFlags: Invalid variable entry.');
+    finally
+      GlobVarUnlock;
+    end;
+  end
+else raise EPGVInvalidValue.Create('GlobVarSetFlags: Nil variable reference.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function GlobVarGetFlag(Identifier: TPGVIdentifier; Flag: TPGVVariableFlag): Boolean;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := False;
+GlobVarLock;
+try
+  If EntryFind(Identifier,Segment,Entry) then
+    Result := Flag in EntryDecodeFlags(Entry)
+  else
+    raise EPGVUnknownVariable.CreateFmt('GlobVarGetFlag: Unknown variable 0x%.8x.',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarGetFlag(const Identifier: String; Flag: TPGVVariableFlag): Boolean;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := False;
+GlobVarLock;
+try
+  If EntryFind(GlobVarTranslateIdentifier(Identifier),Segment,Entry) then
+    Result := Flag in EntryDecodeFlags(Entry)
+  else
+    raise EPGVUnknownVariable.CreateFmt('GlobVarGetFlag: Unknown variable "%s".',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarGetFlag(Variable: TPGVVariable; Flag: TPGVVariableFlag): Boolean;
+var
+  Entry:  PPGVSegmentEntry;
+begin
+Result := False;
+If Assigned(Variable) then
+  begin
+    GlobVarLock;
+    try
+      Entry := EntryFromVar(Variable);
+      If EntryIsValid(Entry) then
+        Result := Flag in EntryDecodeFlags(Entry)
+      else
+        raise EPGVInvalidVariable.Create('GlobVarGetFlag: Invalid variable entry.');
+    finally
+      GlobVarUnlock;
+    end;
+  end
+else raise EPGVInvalidValue.Create('GlobVarGetFlag: Nil variable reference.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function GlobVarSetFlag(Identifier: TPGVIdentifier; Flag: TPGVVariableFlag; Value: Boolean): Boolean;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := False;
+GlobVarLock;
+try
+  If EntryFind(Identifier,Segment,Entry) then
+    EntrySetFlag(Entry,Flag,Value)
+  else
+    raise EPGVUnknownVariable.CreateFmt('GlobVarSetFlag: Unknown variable 0x%.8x.',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarSetFlag(const Identifier: String; Flag: TPGVVariableFlag; Value: Boolean): Boolean;
+var
+  Segment:  PPGVSegment;
+  Entry:    PPGVSegmentEntry;
+begin
+Result := False;
+GlobVarLock;
+try
+  If EntryFind(GlobVarTranslateIdentifier(Identifier),Segment,Entry) then
+    EntrySetFlag(Entry,Flag,Value)
+  else
+    raise EPGVUnknownVariable.CreateFmt('GlobVarSetFlag: Unknown variable "%s".',[Identifier]);
+finally
+  GlobVarUnlock;
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GlobVarSetFlag(Variable: TPGVVariable; Flag: TPGVVariableFlag; Value: Boolean): Boolean;
+var
+  Entry:  PPGVSegmentEntry;
+begin
+Result := False;
+If Assigned(Variable) then
+  begin
+    GlobVarLock;
+    try
+      Entry := EntryFromVar(Variable);
+      If EntryIsValid(Entry) then
+        EntrySetFlag(Entry,Flag,Value)
+      else
+        raise EPGVInvalidVariable.Create('GlobVarSetFlag: Invalid variable entry.');
+    finally
+      GlobVarUnlock;
+    end;
+  end
+else raise EPGVInvalidValue.Create('GlobVarGetFlag: Nil variable reference.');
 end;
 
 //==============================================================================
@@ -2638,3 +3157,4 @@ finalization
   ModuleFinalization;
 
 end.
+

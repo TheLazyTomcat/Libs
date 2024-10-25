@@ -14,9 +14,9 @@
 
   Version 1.4.1 (2021-12-12)
 
-  Last change 2023-12-29
+  Last change 2024-10-15
 
-  ©2015-2023 František Milt
+  ©2015-2024 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -43,6 +43,7 @@
   Indirect dependencies:
     AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
     DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
+    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
     WindowsVersion - github.com/TheLazyTomcat/Lib.WindowsVersion
