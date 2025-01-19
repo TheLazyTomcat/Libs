@@ -12,11 +12,11 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.22 (2024-05-31)
+  Version 1.23 (2025-01-12)
 
-  Last change 2024-05-31
+  Last change 2025-01-12
 
-  ©2014-2024 František Milt
+  ©2014-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -727,18 +727,37 @@ procedure SwapEndian(var Buffer; Size: TMemSize); overload;
   Argument Arr should point to the first element/item in the array.
 
   Count gives number of items in the array (NOT its size in bytes).
+
+  Stride is a linear distance betveen two items (NOT a space between them,
+  distance from one item to another). Usually it equals to item size - it is
+  here for situations when manipulating an array of records and only one
+  field of each record needs to be swapped.
 }
-procedure EndianSwapItems16(var Arr; Count: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-procedure EndianSwapItems32(var Arr; Count: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-procedure EndianSwapItems64(var Arr; Count: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+procedure EndianSwapItems16(var Arr; Count,Stride: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF} overload;
+procedure EndianSwapItems32(var Arr; Count,Stride: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF} overload;
+procedure EndianSwapItems64(var Arr; Count,Stride: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF} overload;
 
-procedure EndianSwapItems(var Arr; ItemSize,Count: TMemSize);
+procedure EndianSwapItems(var Arr; ItemSize,Count,Stride: TMemSize); overload;
 
-procedure SwapEndianItems16(var Arr; Count: TMemSize);
-procedure SwapEndianItems32(var Arr; Count: TMemSize);
-procedure SwapEndianItems64(var Arr; Count: TMemSize);
+procedure EndianSwapItems16(var Arr; Count: TMemSize); overload;
+procedure EndianSwapItems32(var Arr; Count: TMemSize); overload;
+procedure EndianSwapItems64(var Arr; Count: TMemSize); overload;
 
-procedure SwapEndianItems(var Arr; ItemSize,Count: TMemSize);
+procedure EndianSwapItems(var Arr; ItemSize,Count: TMemSize); overload;
+
+//------------------------------------------------------------------------------
+
+procedure SwapEndianItems16(var Arr; Count,Stride: TMemSize); overload;
+procedure SwapEndianItems32(var Arr; Count,Stride: TMemSize); overload;
+procedure SwapEndianItems64(var Arr; Count,Stride: TMemSize); overload;
+
+procedure SwapEndianItems(var Arr; ItemSize,Count,Stride: TMemSize); overload;
+
+procedure SwapEndianItems16(var Arr; Count: TMemSize); overload;
+procedure SwapEndianItems32(var Arr; Count: TMemSize); overload;
+procedure SwapEndianItems64(var Arr; Count: TMemSize); overload;
+
+procedure SwapEndianItems(var Arr; ItemSize,Count: TMemSize); overload;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -4876,13 +4895,14 @@ end;
 
 //==============================================================================
 
-procedure EndianSwapItems16(var Arr; Count: TMemSize);
+procedure EndianSwapItems16(var Arr; Count,Stride: TMemSize);
 {$IFNDEF PurePascal}
 asm
 {
                     win32 & lin32         win64             lin64
        @Arr              EAX               RCX               RDI
       Count              EDX               RDX               RSI
+     Stride              ECX               R8                RDX
 }
 {$IFDEF x64}
   {$IFDEF Windows}
@@ -4896,7 +4916,7 @@ asm
     XCHG  AL, AH
     MOV   word ptr [RCX], AX
 
-    ADD   RCX, 2
+    ADD   RCX, R8
     DEC   RDX
     JNZ   @MainLoop
 
@@ -4911,7 +4931,7 @@ asm
     XCHG  AL, AH
     MOV   word ptr [RDI], AX
 
-    ADD   RDI, 2
+    ADD   RDI, RDX
     DEC   RSI
     JNZ   @MainLoop
 
@@ -4921,18 +4941,22 @@ asm
     CMP   EDX, 0
     JNA   @RoutineEnd
 
+    PUSH  EBX
+
 @MainLoop:
   {
     Using string instructions (LODS, STOS) does not seem to provide any
     performance benefit here.
   }
-    MOV   CX, word ptr [EAX]
-    XCHG  CL, CH
-    MOV   word ptr [EAX], CX
+    MOV   BX, word ptr [EAX]
+    XCHG  BL, BH
+    MOV   word ptr [EAX], BX
 
-    ADD   EAX, 2 
+    ADD   EAX, ECX 
     DEC   EDX
     JNZ   @MainLoop
+
+    POP   EBX
 
 {$ENDIF}
 
@@ -4949,7 +4973,7 @@ If Count > 0 then
     For i := 0 to Pred(Count) do
       begin
         EndianSwapValue(BuffPtr^);
-        Inc(BuffPtr);
+        Inc(PByte(BuffPtr),Stride);
       end;
   end;
 end;
@@ -4957,7 +4981,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure EndianSwapItems32(var Arr; Count: TMemSize);
+procedure EndianSwapItems32(var Arr; Count,Stride: TMemSize);
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -4972,7 +4996,7 @@ asm
     BSWAP EAX
     MOV   dword ptr [RCX], EAX
 
-    ADD   RCX, 4
+    ADD   RCX, R8
     DEC   RDX
     JNZ   @MainLoop
 
@@ -4987,7 +5011,7 @@ asm
     BSWAP EAX
     MOV   dword ptr [RDI], EAX
 
-    ADD   RDI, 4
+    ADD   RDI, RDX
     DEC   RSI
     JNZ   @MainLoop
 
@@ -4997,19 +5021,23 @@ asm
     CMP   EDX, 0
     JNA   @RoutineEnd
 
+    PUSH  EBX
+
 @MainLoop:
   {
     I know about MOVBE instruction, but it is a relatively recent (~2013)
     addition to the instruction set, therefore I am using more backward
     compatible solution of load-bswap-save.
   }
-    MOV   ECX, dword ptr [EAX]
-    BSWAP ECX
-    MOV   dword ptr [EAX], ECX
+    MOV   EBX, dword ptr [EAX]
+    BSWAP EBX
+    MOV   dword ptr [EAX], EBX
 
-    ADD   EAX, 4 
+    ADD   EAX, ECX
     DEC   EDX
     JNZ   @MainLoop
+
+    POP   EBX
 
 {$ENDIF}
 
@@ -5026,7 +5054,7 @@ If Count > 0 then
     For i := 0 to Pred(Count) do
       begin
         EndianSwapValue(BuffPtr^);
-        Inc(BuffPtr);
+        Inc(PByte(BuffPtr),Stride);
       end;
   end;
 end;
@@ -5034,7 +5062,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure EndianSwapItems64(var Arr; Count: TMemSize);
+procedure EndianSwapItems64(var Arr; Count,Stride: TMemSize);
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -5049,11 +5077,9 @@ asm
     BSWAP RAX
     MOV   qword ptr [RCX], RAX
 
-    ADD   RCX, 8
+    ADD   RCX, R8
     DEC   RDX
     JNZ   @MainLoop
-
-@RoutineEnd:
 
   {$ELSE}
 
@@ -5066,36 +5092,38 @@ asm
     BSWAP RAX
     MOV   qword ptr [RDI], RAX
 
-    ADD   RDI, 8
+    ADD   RDI, RDX
     DEC   RSI
     JNZ   @MainLoop
-
-@RoutineEnd:
 
   {$ENDIF}
 {$ELSE}
 
-    PUSH  EBX
     CMP   EDX, 0
     JNA   @RoutineEnd
 
+    PUSH  ESI
+    PUSH  EDI
+
 @MainLoop:
 
-    MOV   EBX, dword ptr [EAX]
-    MOV   ECX, dword ptr [EAX + 4]
-    BSWAP EBX
-    BSWAP ECX
-    MOV   dword ptr [EAX], ECX
-    MOV   dword ptr [EAX + 4], EBX
+    MOV   ESI, dword ptr [EAX]
+    MOV   EDI, dword ptr [EAX + 4]
+    BSWAP ESI
+    BSWAP EDI
+    MOV   dword ptr [EAX], EDI
+    MOV   dword ptr [EAX + 4], ESI
 
-    ADD   EAX, 8
+    ADD   EAX, ECX
     DEC   EDX
     JNZ   @MainLoop
 
-@RoutineEnd:
-    POP   EBX
+    POP   EDI
+    POP   ESI
 
 {$ENDIF}
+
+@RoutineEnd:
 end;
 {$ELSE}
 var
@@ -5108,7 +5136,7 @@ If Count > 0 then
     For i := 0 to Pred(Count) do
       begin
         EndianSwapValue(BuffPtr^);
-        Inc(BuffPtr);
+        Inc(PByte(BuffPtr),Stride);
       end;
   end;
 end;
@@ -5116,7 +5144,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure EndianSwapItems(var Arr; ItemSize,Count: TMemSize);
+procedure EndianSwapItems(var Arr; ItemSize,Count,Stride: TMemSize);
 var
   BuffPtr:  Pointer;
   i:        TMemSize;
@@ -5124,9 +5152,9 @@ begin
 If (ItemSize > 1) and (Count > 0) then
   begin
     case ItemSize of
-      2:  EndianSwapItems16(Arr,Count);
-      4:  EndianSwapItems32(Arr,Count);
-      8:  EndianSwapItems64(Arr,Count);
+      2:  EndianSwapItems16(Arr,Count,Stride);
+      4:  EndianSwapItems32(Arr,Count,Stride);
+      8:  EndianSwapItems64(Arr,Count,Stride);
     else
       BuffPtr := @Arr;
       For i := 0 to Pred(Count) do
@@ -5134,7 +5162,7 @@ If (ItemSize > 1) and (Count > 0) then
           EndianSwap(BuffPtr^,ItemSize);
           // PtrAdvanceVar cannot be inlined here, because it is not yet
           // implemented at this point of compilation
-          BuffPtr := PtrAdvance(BuffPtr,ItemSize);
+          BuffPtr := PtrAdvance(BuffPtr,Stride);
         end;
     end;
   end;
@@ -5142,30 +5170,86 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure EndianSwapItems16(var Arr; Count: TMemSize);
+begin
+EndianSwapItems16(Arr,Count,2);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure EndianSwapItems32(var Arr; Count: TMemSize);
+begin
+EndianSwapItems32(Arr,Count,4);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure EndianSwapItems64(var Arr; Count: TMemSize);
+begin
+EndianSwapItems64(Arr,Count,8);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure EndianSwapItems(var Arr; ItemSize,Count: TMemSize);
+begin
+EndianSwapItems(Arr,ItemSize,Count,ItemSize);
+end;
+
+//==============================================================================
+
+procedure SwapEndianItems16(var Arr; Count,Stride: TMemSize);
+begin
+EndianSwapItems16(Arr,Count,Stride);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SwapEndianItems32(var Arr; Count,Stride: TMemSize);
+begin
+EndianSwapItems32(Arr,Count,Stride);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SwapEndianItems64(var Arr; Count,Stride: TMemSize);
+begin
+EndianSwapItems64(Arr,Count,Stride);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SwapEndianItems(var Arr; ItemSize,Count,Stride: TMemSize);
+begin
+EndianSwapItems(Arr,ItemSize,Count,Stride);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure SwapEndianItems16(var Arr; Count: TMemSize);
 begin
-EndianSwapItems16(Arr,Count);
+EndianSwapItems16(Arr,Count,2);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure SwapEndianItems32(var Arr; Count: TMemSize);
 begin
-EndianSwapItems32(Arr,Count);
+EndianSwapItems32(Arr,Count,4);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure SwapEndianItems64(var Arr; Count: TMemSize);
 begin
-EndianSwapItems64(Arr,Count);
+EndianSwapItems64(Arr,Count,8);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure SwapEndianItems(var Arr; ItemSize,Count: TMemSize);
 begin
-EndianSwapItems(Arr,ItemSize,Count);
+EndianSwapItems(Arr,ItemSize,Count,ItemSize);
 end;
 
 {-------------------------------------------------------------------------------

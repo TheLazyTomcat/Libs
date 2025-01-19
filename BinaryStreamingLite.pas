@@ -19,7 +19,7 @@
 
     It provides functions for streaming of almost all basic types to memory
     (Ptr_* functions) and to TStream descendants (Stream_* functions), with
-    exception being variants - they are not supported.
+    exception being variants and small/tiny strings - they are not supported.
     In provided functions, selection of endianness was removed - everything is
     done in little endian.
     And lastly, streamer objects were also completely removed.
@@ -31,13 +31,13 @@
              specialized program, it was not manually written. The code was
              copied, so if BS contains some error, it might appear here too.
 
-  Build from BinaryStreaming of version 2.0.3 (2024-04-14)             
+  Build from BinaryStreaming of version 2.1 (2025-01-19)             
 
-  Version 1.0.1 (2024-04-14)
+  Version 1.0.2 (2025-01-19)
 
-  Last change 2024-04-14
+  Last change 2025-01-19
 
-  ©2024 František Milt
+  ©2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -934,7 +934,8 @@ uses
     Internal variables
 ===============================================================================}
 var
-  ByteOpenArrayIsPacked: Boolean = False;
+  OpenByteArrayPacked:  Boolean = True;
+  OpenByteArrayStride:  TMemSize = 1;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -2014,7 +2015,7 @@ If Length(Value) > 0 then
       TrueLen := Length(Value);
     If TrueLen > 0 then
       begin
-        Result := Ptr_WriteInt32(WorkPtr,TrueLen,True);
+        Result := Ptr_WriteInt32(WorkPtr,Int32(TrueLen),True);
       {$IFDEF ENDIAN_BIG}
         Inc(Result,Ptr_WriteUInt32Arr_SwapEndian(PUInt32(WorkPtr),PUInt32(Addr(Value[Low(Value)])),TrueLen));
       {$ELSE}
@@ -2080,7 +2081,7 @@ var
   WorkPtr:  PUInt8;
   i:        Integer;
 begin
-If ByteOpenArrayIsPacked then
+If OpenByteArrayPacked then
   begin
     // write whole array
     If Length(Value) > 0 then
@@ -3614,7 +3615,7 @@ If Length(Value) > 0 then
       TrueLen := Length(Value);
     If TrueLen > 0 then
       begin
-        Result := Stream_WriteInt32(Stream,TrueLen,True);
+        Result := Stream_WriteInt32(Stream,Int32(TrueLen),True);
       {$IFDEF ENDIAN_BIG}
         Inc(Result,Stream_WriteUInt32Arr_SwapEndian(Stream,PUInt32(Addr(Value[Low(Value)])),TrueLen));
       {$ELSE}
@@ -3655,7 +3656,7 @@ var
   CopyCnt:  Integer;
   i:        Integer;
 begin
-If not ByteOpenArrayIsPacked then
+If not OpenByteArrayPacked then
   begin
     Remain := Length(Value);
     Offset := 0;
@@ -4289,7 +4290,7 @@ end;
 
 procedure UnitInitialize;
 
-  Function GetBOAStride(const Arr: array of UInt8): Integer;
+  Function GetOBAStride(const Arr: array of UInt8): Integer;
   begin
     If Length(Arr) >= 2 then
     {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
@@ -4300,8 +4301,9 @@ procedure UnitInitialize;
   end;
 
 begin
+OpenByteArrayStride := GetOBAStride([0,0]);
 // following should be always true, but the paranoia needs feeding...
-ByteOpenArrayIsPacked := GetBOAStride([0,0]) = 1;
+OpenByteArrayPacked := OpenByteArrayStride = 1;
 end;
 
 //==============================================================================

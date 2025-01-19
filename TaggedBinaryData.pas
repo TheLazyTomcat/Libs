@@ -33,8 +33,8 @@
             ContextGroup[]        - array of context groups
             ClosingSequence       - bytes $FF, $80 (see further for details)
 
-      There can be no context group written, in which case the entire structure
-      consists only of signature and closing sequence.
+      There can be no context group written, in which case absolutely nothing
+      is written in the stream (not even signature or closing sequence).
 
       The closing sequence consinsts of context tag ($FF), which marks a context
       change, followed by context flags without an actual new context ID. In the
@@ -63,9 +63,9 @@
 
       All metadata (signature, context ID) are written with little endianess.
 
-  Version 1.0.2 (2024-05-03)
+  Version 1.0.3 (2024-11-15)
 
-  Last change 2024-05-03
+  Last change 2024-11-15
 
   ©2022-2024 František Milt
 
@@ -168,21 +168,22 @@ const
 
   Seeking is directly passed to destination stream.
 
+  All writes of metadata (context changes, tags and a signature) are deferred
+  to a first call to Write method. Meaning no matter how many times you call
+  SetContext or SetTag, nothing will be written into destination stream until
+  you write some actual data, at which point only the last set context and tag
+  will be written (and possibly the signature).
+
   At the start, no context is written into destination, unless you explicitly
   set it (first, implicit, context has ID of 0) - first written thing after
   signature will be tag of the first data. If you do not set the tag before
   writing data, it will be 0.
 
-  Writing of context and tag is deferred to next call of method Write. So no
-  matter how many times you call SetContext and SetTag, nothing will be written
-  into destination stream until you write some actual data, at which point only
-  the last set context and tag will be written.
+  If you do not write any data, nothing is stored in the destination, not even
+  the signature or closing sequence will be written.
 
   It is possible to store compound data via multiple calls to write, only the
-  first write after SetTag will actually write the tag.
-
-  Even if you do not write any data, the signature and closing sequence will be
-  written.
+  first write after SetTag will actually write the tag (and other metadata).
 
   An example on how to use the writer could be something like this (uses
   BinaryStreaming library):
@@ -234,7 +235,7 @@ const
 }
 
 type
-  TTBDWriterAction = (waWriteContext,waWriteTag);
+  TTBDWriterAction = (waWriteSignature,waWriteContext,waWriteTag);
 
   TTBDWriterActions = set of TTBDWriterAction;
 
@@ -301,7 +302,7 @@ type
   behavior of the reader is completely undefined).
 
   When it returns false, it indicates either end of source stream or end of
-  tagged binary data stream pseudostructure (this is also indicated by property
+  tagged binary data stream pseudostructure (also indicated by property
   EndOfDataReached). In any case, you should stop reading any further data
   points. Also, in this situation, values stored in properties CurrentContext
   and CurrentTag are undefined.
@@ -342,7 +343,7 @@ type
     fEndOfDataReached:      Boolean;
     fCurrentContext:        TTBDContextID;
     fCurrentTag:            TTBDTag;
-    fIsDefaultContext:      Boolean;
+    fDefaultContext:        Boolean;
     fContextChangeEvent:    TNotifyEvent;
     fContextChangeCallback: TNotifyCallback;
     fTagChangeEvent:        TNotifyEvent;
@@ -400,10 +401,9 @@ If Assigned(Destination) then
   fDestination := Destination
 else
   raise ETBDInvalidValue.Create('TTaggedBinaryDataWriter.Initialize: Destination stream not assigned.');
-fActions := [waWriteTag];
+fActions := [waWriteSignature,waWriteTag];
 fCurrentContext := 0;
 fCurrentTag := 0;
-WriteSignature;
 end;
 
 //------------------------------------------------------------------------------
@@ -421,6 +421,7 @@ end;
 procedure TTaggedBinaryDataWriter.WriteSignature;
 begin
 Stream_WriteUInt32(fDestination,TBD_SIGNATURE);
+Exclude(fActions,waWriteSignature);
 end;
 
 //------------------------------------------------------------------------------
@@ -451,10 +452,14 @@ end;
 
 procedure TTaggedBinaryDataWriter.WriteClose;
 begin
-// write closing tag
-Stream_WriteUInt8(fDestination,TBD_TAG_CONTEXT);
-// write terminating context flags without context id
-Stream_WriteUInt8(fDestination,TBD_CTXFLAGS_FLAG_CLOSE);
+// write closing sequence only if something was written to the stream
+If not(waWriteSignature in fActions) then
+  begin
+    // write closing tag
+    Stream_WriteUInt8(fDestination,TBD_TAG_CONTEXT);
+    // write terminating context flags without context id
+    Stream_WriteUInt8(fDestination,TBD_CTXFLAGS_FLAG_CLOSE);
+  end;
 end;
 
 {-------------------------------------------------------------------------------
@@ -491,6 +496,8 @@ end;
 
 Function TTaggedBinaryDataWriter.Write(const Buffer; Count: LongInt): LongInt;
 begin
+If waWritesignature in fActions then
+  WriteSignature;
 If waWriteContext in fActions then
   WriteContext;
 If waWriteTag in fActions then
@@ -523,8 +530,9 @@ If Tag <> TBD_TAG_CONTEXT then
     fCurrentTag := Tag;
     Result := Self;
   end
-else raise ETBDInvalidValue.CreateFmt('TTaggedBinaryDataWriter.SetNewTag: Invalid tag (0x%.2x).',[Tag]);
+else raise ETBDInvalidValue.CreateFmt('TTaggedBinaryDataWriter.SetTag: Invalid tag (0x%.2x).',[Tag]);
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -557,8 +565,8 @@ If (fSource.Size - fSource.Position) >= 6 {4B signature, 2B closing sequence} th
     If fEndOfDataReached then
       fSource.Seek(-SizeOf(UInt32),soCurrent);
   end
-else fEndOfDataReached := False;
-fIsDefaultContext := True;
+else fEndOfDataReached := True;
+fDefaultContext := True;
 // init other fields
 fCurrentContext := 0;
 fCurrentTag := 0;
@@ -586,7 +594,7 @@ If Assigned(fContextChangeEvent) then
   fContextChangeEvent(Self)
 else If Assigned(fContextChangeCallback) then
   fContextChangeCallback(Self);
-fIsDefaultContext := False;
+fDefaultContext := False;
 end;
 
 //------------------------------------------------------------------------------
@@ -678,7 +686,7 @@ If not fEndOfDataReached then
         else
           begin
             // non-context tag read
-            If fIsDefaultContext then
+            If fDefaultContext then
               DoContextChange;
             DoTagChange;
             Result := True;
