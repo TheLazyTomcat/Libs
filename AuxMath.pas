@@ -44,11 +44,11 @@
       about which types and what functions are affected, refer to "Overloading
       information symbols" further down.
 
-  Version 1.2.1 (2024-04-14)
+  Version 1.3 (2025-01-24)
 
-  Last change (2024-04-14)
+  Last change (2025-01-24)
 
-  ©2024 František Milt
+  ©2024-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -3108,6 +3108,103 @@ Function CvtU2I(const N: UInt8): Int8; overload;{$IFDEF CanInline} inline;{$ENDI
 Function CvtU2I(const N: UInt16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function CvtU2I(const N: UInt32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function CvtU2I(const N: UInt64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                 Controlled conversion to variable-size integers                                  
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Because pascal does not support overloading based on type of the result, it
+  might be problematic to select proper version of conversion routine from the
+  ones above when converting to a type that does not always have fixed size on
+  all platforms and compilers. Following funtions are here for that purpose.
+
+  Few words on the provided return types...
+
+    LongInt and LongWord do not have fixed sizes in Delphi. They are 32bit wide
+    on most platforms, but in 64bit iOS they are both 64bits wide.
+
+    Type Integer has variable size in FPC - it can be 2 or 4 bytes, depending
+    on selected compiler mode (it is 2bytes (16bits) in Free Pascal mode).
+
+    Type Cardinal does not change anywhere, but as it is a logical counterpart
+    for type Integer it is still included here for the sake of completeness.
+
+    PtrInt and PtrUInt are both pointer-sized - ie. have the same width as
+    pointer, which obviously changes between 32bit and 64bit platfroms.
+}
+
+Function CvtI2LI(const N: Int8): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2LI(const N: Int16): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2LI(const N: Int32): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2LI(const N: Int64): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtU2LI(const N: UInt8): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2LI(const N: UInt16): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2LI(const N: UInt32): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2LI(const N: UInt64): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function CvtU2LU(const N: UInt8): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2LU(const N: UInt16): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2LU(const N: UInt32): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2LU(const N: UInt64): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtI2LU(const N: Int8): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2LU(const N: Int16): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2LU(const N: Int32): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2LU(const N: Int64): LongWord; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function CvtI2Int(const N: Int8): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2Int(const N: Int16): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2Int(const N: Int32): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2Int(const N: Int64): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtU2Int(const N: UInt8): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2Int(const N: UInt16): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2Int(const N: UInt32): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2Int(const N: UInt64): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function CvtU2UInt(const N: UInt8): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2UInt(const N: UInt16): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2UInt(const N: UInt32): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2UInt(const N: UInt64): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtI2UInt(const N: Int8): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2UInt(const N: Int16): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2UInt(const N: Int32): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2UInt(const N: Int64): Cardinal; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function CvtI2PI(const N: Int8): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2PI(const N: Int16): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2PI(const N: Int32): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2PI(const N: Int64): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtU2PI(const N: UInt8): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2PI(const N: UInt16): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2PI(const N: UInt32): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2PI(const N: UInt64): PtrInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function CvtU2PU(const N: UInt8): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2PU(const N: UInt16): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2PU(const N: UInt32): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2PU(const N: UInt64): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtI2PU(const N: Int8): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2PU(const N: Int16): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2PU(const N: Int32): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2PU(const N: Int64): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 
 {===============================================================================
@@ -17946,6 +18043,520 @@ end;
 Function CvtU2I(const N: UInt64): Int64;
 begin
 Result := CvtU2I64(N);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                 Controlled conversion to variable-size integers                                  
+--------------------------------------------------------------------------------
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Cvt*2LI - conversion to LongInt
+-------------------------------------------------------------------------------}
+
+Function CvtI2LI(const N: Int8): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := CvtI2I64(N);
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2LI(const N: Int16): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := CvtI2I64(N);
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2LI(const N: Int32): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := CvtI2I64(N);
+{$ELSE}
+Result := N;
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2LI(const N: Int64): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := N;
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtU2LI(const N: UInt8): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2LI(const N: UInt16): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2LI(const N: UInt32): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2LI(const N: UInt64): LongInt;
+begin
+{$IF SizeOf(LongInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+{-------------------------------------------------------------------------------
+    Cvt*2LU - conversion to LongWord
+-------------------------------------------------------------------------------}
+
+Function CvtU2LU(const N: UInt8): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := CvtU2U64(N);
+{$ELSE}
+Result := CvtU2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2LU(const N: UInt16): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := CvtU2U64(N);
+{$ELSE}
+Result := CvtU2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2LU(const N: UInt32): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := CvtU2U64(N);
+{$ELSE}
+Result := N;
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2LU(const N: UInt64): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := N;
+{$ELSE}
+Result := CvtU2U32(N);
+{$IFEND}
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtI2LU(const N: Int8): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2LU(const N: Int16): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2LU(const N: Int32): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2LU(const N: Int64): LongWord;
+begin
+{$IF SizeOf(LongWord) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
+end;
+
+{-------------------------------------------------------------------------------
+    Cvt*2Int - conversion to Integer
+-------------------------------------------------------------------------------}
+
+Function CvtI2Int(const N: Int8): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := CvtI2I16(N);
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2Int(const N: Int16): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := N;
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2Int(const N: Int32): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := CvtI2I16(N);
+{$ELSE}
+Result := N;
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2Int(const N: Int64): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := CvtI2I16(N);
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtU2Int(const N: UInt8): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := CvtU2I16(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2Int(const N: UInt16): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := CvtU2I16(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2Int(const N: UInt32): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := CvtU2I16(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2Int(const N: UInt64): Integer;
+begin
+{$IF SizeOf(Integer) = 2}
+Result := CvtU2I16(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+{-------------------------------------------------------------------------------
+    Cvt*2UInt - conversion to Cardinal
+-------------------------------------------------------------------------------}
+
+Function CvtU2UInt(const N: UInt8): Cardinal;
+begin
+Result := CvtU2U32(N);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2UInt(const N: UInt16): Cardinal;
+begin
+Result := CvtU2U32(N);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2UInt(const N: UInt32): Cardinal;
+begin
+Result := N;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2UInt(const N: UInt64): Cardinal;
+begin
+Result := CvtU2U32(N);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtI2UInt(const N: Int8): Cardinal;
+begin
+Result := CvtI2U32(N);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2UInt(const N: Int16): Cardinal;
+begin
+Result := CvtI2U32(N);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2UInt(const N: Int32): Cardinal;
+begin
+Result := CvtI2U32(N);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2UInt(const N: Int64): Cardinal;
+begin
+Result := CvtI2U32(N);
+end;
+
+{-------------------------------------------------------------------------------
+    Cvt*2PI - conversion to PtrInt
+-------------------------------------------------------------------------------}
+
+Function CvtI2PI(const N: Int8): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := CvtI2I64(N);
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2PI(const N: Int16): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := CvtI2I64(N);
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2PI(const N: Int32): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := CvtI2I64(N);
+{$ELSE}
+Result := N;
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2PI(const N: Int64): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := N;
+{$ELSE}
+Result := CvtI2I32(N);
+{$IFEND}
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtU2PI(const N: UInt8): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2PI(const N: UInt16): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2PI(const N: UInt32): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2PI(const N: UInt64): PtrInt;
+begin
+{$IF SizeOf(PtrInt) = 8}
+Result := CvtU2I64(N);
+{$ELSE}
+Result := CvtU2I32(N);
+{$IFEND}
+end;
+
+{-------------------------------------------------------------------------------
+    Cvt*2PU - conversion to PtrUInt
+-------------------------------------------------------------------------------}
+
+Function CvtU2PU(const N: UInt8): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := CvtU2U64(N);
+{$ELSE}
+Result := CvtU2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2PU(const N: UInt16): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := CvtU2U64(N);
+{$ELSE}
+Result := CvtU2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2PU(const N: UInt32): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := CvtU2U64(N);
+{$ELSE}
+Result := N;
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2PU(const N: UInt64): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := N;
+{$ELSE}
+Result := CvtU2U32(N);
+{$IFEND}
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtI2PU(const N: Int8): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2PU(const N: Int16): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2PU(const N: Int32): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2PU(const N: Int64): PtrUInt;
+begin
+{$IF SizeOf(PtrUInt) = 8}
+Result := CvtI2U64(N);
+{$ELSE}
+Result := CvtI2U32(N);
+{$IFEND}
 end;
 
 

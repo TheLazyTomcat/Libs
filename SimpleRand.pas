@@ -9,42 +9,57 @@
 
   Simple pseudo-random number generator
 
-    Provided PRNG is based on Keccak/SHA-3 hash, or, more exactly, on a
-    sponge function that computes these hashes. The seed is processed as if it
-    was hashed, and the numbers are then obtained by squeezing the sponge.
+    This library is designed to provide a pseudo-random number generator that
+    is fully deterministic, meaning it will produce exactly the same numbers
+    given the same seed and sequence of subsequent generating calls.
+
+    The default RNG provided by RTL is also deterministic, but it is explicitly
+    stated in documentation that its implementation can change, and therefore
+    should not be used for purposes where invariant behavior is required
+    (encryption is specifically mentioned).
+
+    To use this library, just create an instance of TSimpleRand class and use
+    its methods to generate required numbers or data.
+
+    You can also select which algorithm will be used for data generation - the
+    TSimpleRand does not in itself do any generation, it internally manages a
+    generator object (a descendant of class TSimpleRandGenerator) which does
+    these calculations, and you can choose in the TSimpleRand constructor which
+    class will be used as this generator object.
+
+    Currently this library provides generators utilizing MD5 hash, Keccak/SHA-3
+    hash and also one emulating random number generator present in Delphi 7 RTL.
+    You can also implement your own generators if necessary (see the source or
+    contact the author if you need more information on how to implement a
+    generator).
+
+    If you do not choose any class, then generator using Keccak/SHA-3 hash (or,
+    more precisely, a sponge function that computes these hashes) will be used.
 
       WARNING - I have absolutely no idea how good this generator is in terms
                 of "randomness" or values distribution. You should consider
-                this fact before using it.  
+                this fact before using it.
 
-    It was created mainly as a deterministic PRNG, meaning it would produce
-    exactly the same numbers given the same seed and sequence of subsequent
-    generating calls. The default RNG provided by RTL is also deterministic,
-    but it is explicitly stated in documentation that its implementation can
-    change, and therefore should not be used for purposes where invariant
-    behavior is required (encryption is specifically mentioned).
+    The class TSimpleRand might be somewhat slow, especially in comparison with
+    default RNG provided by the RTL. This is mainly because complete calculation
+    round/cycle is perfomed for every single generated object/number.
 
-    The default implementation (class TSimpleRand) may be somewhat slow,
-    especially in comparison with default RNG provided in the RTL. It is
-    faster on 64bit system than on 32bit, but only marginally. This is mainly
-    because complete permutation is calculated for every single generated
-    object/number.
-    For situations, where better performance is required, or for general usage
+    For situations where better performance is required, or for general usage
     where presence of next generated number in memory is of no concern, use
     class TSimpleRandBuffered. This class buffers maximum number of bytes that
-    can be obtained from the sponge before next permutation, and requested
-    random numbers are copied from this buffer. The permutations are then
-    executed only when really needed. This can speed-up the generation of large
-    number of small objects up to 10-times.
-
+    can be obtained from the generator before next round calculation, and
+    requested random numbers are copied from this buffer. The calculations are
+    then executed only when really needed. This can mainly speed-up generation
+    of large number of small objects.
+    
       NOTE - TSimpleRandBuffered returns DIFFERENT numbers than TSimpleRand for
              the same seed and call sequence.
 
-  Version 1.0.1 (2024-05-03)
+  Version 1.1 (2025-02-01)
 
-  Last change 2024-05-03
+  Last change 2025-02-01
 
-  ©2023-2024 František Milt
+  ©2023-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -63,8 +78,10 @@
   Dependencies:
     AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+  * AuxMath       - github.com/TheLazyTomcat/Lib.AuxMath
     AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
     BitOps        - github.com/TheLazyTomcat/Lib.BitOps
+    MD5           - github.com/TheLazyTomcat/Lib.MD5
     SHA3          - github.com/TheLazyTomcat/Lib.SHA3
     StrRect       - github.com/TheLazyTomcat/Lib.StrRect
   * UInt64Utils   - github.com/TheLazyTomcat/Lib.UInt64Utils
@@ -72,8 +89,8 @@
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol SimpleRand_UseAuxExceptions for details).
 
-  UInt64Utils is required only in compilers that do not have full support for
-  unsigned 64 bits wide integers (UInt64, QWord).
+  AuxMath and UInt64Utils are required only in compilers that do not have full
+  support for unsigned 64 bits wide integers (UInt64, QWord).
 
   Libraries AuxExceptions and UInt64Utils might also be required as an indirect
   dependencies.
@@ -125,7 +142,7 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, AuxClasses, SHA3{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
+  AuxTypes, AuxClasses, SHA3, MD5{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
@@ -139,6 +156,44 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
+                              TSimpleRandGenerator
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRandGenerator - class declaration
+===============================================================================}
+type
+  TSimpleRandGenerator = class(TCustomObject)
+  protected
+  {
+    (f)RoundOutputSize
+
+    Set this to a number of bytes the generator can produce in one round - ie.
+    after seeding and before any subsequent calculations are required. This is
+    usually size of hash for hashing algorithms or size of block in block
+    ciphers.
+
+    This variable must be set in method Initialize and must NOT change during
+    the entire lifetime of the generator object.
+
+    It is used in TSimpleRandBuffered to establish the internal buffer. Values
+    below 16 are disabling the buffering.
+  }
+    fRoundOutputSize: TMemSize;
+    procedure Initialize; virtual; abstract;
+    procedure Finalize; virtual; abstract;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Generate(out Buff; Size: TMemSize); virtual; abstract;
+    procedure Seed(const Buff; Size: TMemSize); virtual; abstract;
+    property RoundOutputSize: TMemSize read fRoundOutputSize;
+  end;
+
+  TSimpleRandGeneratorClass = class of TSimpleRandGenerator;
+
+{===============================================================================
+--------------------------------------------------------------------------------
                                    TSimpleRand
 --------------------------------------------------------------------------------
 ===============================================================================}
@@ -148,10 +203,9 @@ type
 type
   TSimpleRand = class(TCustomObject)
   protected
-    fGenerator: TKeccak0Hash;
-    procedure Initialize; virtual;
+    fGenerator: TSimpleRandGenerator;
+    procedure Initialize(GeneratorClass: TSimpleRandGeneratorClass); virtual;
     procedure Finalize; virtual;
-    procedure Generate(out Buff; Size: TMemSize); virtual;
     procedure SetSeed(const Buff; Size: TMemSize); virtual;
     procedure GetRand(out Buff; Size: TMemSize); virtual;
   public
@@ -160,6 +214,7 @@ type
 
     Note that the generator is seeded during creation using method Seed.
   }
+    constructor Create(GeneratorClass: TSimpleRandGeneratorClass); overload;
     constructor Create; overload;
     destructor Destroy; override;
   {
@@ -266,13 +321,85 @@ type
 type
   TSimpleRandBuffered = class(TSimpleRand)
   protected
-    fBufferSize:  TMemSize;
-    fBuffer:      Pointer;
-    fBufferCount: TMemSize; // number of unconsumed bytes in the buffer
-    procedure Initialize; override;
+    fBufferSize:    TMemSize;
+    fBufferEnabled: Boolean;
+    fBuffer:        Pointer;
+    fBufferCount:   TMemSize; // number of unconsumed bytes in the buffer
+    procedure Initialize(GeneratorClass: TSimpleRandGeneratorClass); override;
     procedure Finalize; override;
     procedure SetSeed(const Buff; Size: TMemSize); override;
     procedure GetRand(out Buff; Size: TMemSize); override;
+    property BufferingEnabled: Boolean read fBufferEnabled;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                            TSimpleRandGenerator_SHA3
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRandGenerator_SHA3 - class declaration
+===============================================================================}
+type
+  TSimpleRandGenerator_SHA3 = class(TSimpleRandGenerator)
+  protected
+    fGenerator: TKeccak0Hash;
+    procedure Initialize; override;
+    procedure Finalize; override;
+  public
+    procedure Generate(out Buff; Size: TMemSize); override;
+    procedure Seed(const Buff; Size: TMemSize); override;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                            TSimpleRandGenerator_MD5                             
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRandGenerator_MD5 - class declaration
+===============================================================================}
+type
+  TSimpleRandGenerator_MD5 = class(TSimpleRandGenerator)
+  protected
+    fGenerator: TMD5Hash;
+    procedure Initialize; override;
+    procedure Finalize; override;
+  public
+    procedure Generate(out Buff; Size: TMemSize); override;
+    procedure Seed(const Buff; Size: TMemSize); override;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                             TSimpleRandGenerator_D7
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  TSimpleRandGenerator_D7
+
+  This class implements the same algorithm generating pseudo-random data as
+  generator provided in Delphi 7 RTL (System unit), but note that this does not
+  mean TSimpleRand will always generate the same numbers.
+
+  That being said, the TSimpleRand will provide the same results as RTL
+  generator if you seed it using method SeedInt while providing the same
+  integer seed that is loaded in System.RandSeed global variable, but only
+  when you then limit generation to routines TSimpleRand.RandomInt(Range)
+  (System.Random(Range)) and TSimpleRand.RandomFloat(True) (System.Random).
+}
+{===============================================================================
+    TSimpleRandGenerator_D7 - class declaration
+===============================================================================}
+type
+  TSimpleRandGenerator_D7 = class(TSimpleRandGenerator)
+  protected
+    fRngState:  Int32;
+    procedure Initialize; override;
+    procedure Finalize; override;
+  public
+    procedure Generate(out Buff; Size: TMemSize); override;
+    procedure Seed(const Buff; Size: TMemSize); override;
   end;
 
 implementation
@@ -285,7 +412,7 @@ implementation
 
 uses
   {$IFDEF Windows}Windows,{$ELSE}baseunix, linux,{$ENDIF} Variants,
-  BitOps, StrRect {$IFNDEF SR_UInt64Supported},UInt64Utils{$ENDIF};
+  BitOps, StrRect {$IFNDEF SR_UInt64Supported}, AuxMath, UInt64Utils{$ENDIF};
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -339,6 +466,34 @@ end;
 
 {$ENDIF}
 
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              TSimpleRandGenerator
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRandGenerator - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TSimpleRandGenerator - public methods
+-------------------------------------------------------------------------------}
+
+constructor TSimpleRandGenerator.Create;
+begin
+inherited Create;
+Initialize;
+end;
+
+//------------------------------------------------------------------------------
+
+destructor TSimpleRandGenerator.Destroy;
+begin
+Finalize;
+inherited;
+end;
+
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                    TSimpleRand                                   
@@ -351,9 +506,9 @@ end;
     TSimpleRand - protected methods
 -------------------------------------------------------------------------------}
 
-procedure TSimpleRand.Initialize;
+procedure TSimpleRand.Initialize(GeneratorClass: TSimpleRandGeneratorClass);
 begin
-fGenerator := TKeccak0Hash.Create;
+fGenerator := GeneratorClass.Create;
 end;
 
 //------------------------------------------------------------------------------
@@ -365,35 +520,34 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleRand.Generate(out Buff; Size: TMemSize);
-begin
-fGenerator.Permute;
-fGenerator.Squeeze(Addr(Buff)^,Size);
-end;
-
-//------------------------------------------------------------------------------
-
 procedure TSimpleRand.SetSeed(const Buff; Size: TMemSize);
 begin
-fGenerator.HashBuffer(Buff,Size);
+fGenerator.Seed(Buff,Size);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleRand.GetRand(out Buff; Size: TMemSize);
 begin
-Generate(Buff,Size);
+fGenerator.Generate(Buff,Size);
 end;
 
 {-------------------------------------------------------------------------------
     TSimpleRand - public methods
 -------------------------------------------------------------------------------}
 
-constructor TSimpleRand.Create;
+constructor TSimpleRand.Create(GeneratorClass: TSimpleRandGeneratorClass);
 begin
 inherited Create;
-Initialize;
+Initialize(GeneratorClass);
 Seed;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+constructor TSimpleRand.Create;
+begin
+Create(TSimpleRandGenerator_SHA3);
 end;
 
 //------------------------------------------------------------------------------
@@ -596,7 +750,7 @@ If not Normalized then
 
     And at the end, select sign of the number.
   }
-    Exp := RandomInt($7FE);
+    Exp := RandomInt($7FF);
     If Exp <> 0 then
       Temp := (RandomUInt64() and F64_MASK_FRAC) or (UInt64(Exp) shl 52)
     else
@@ -658,63 +812,18 @@ end;
 Function TSimpleRand.RandomUInt64(Range: UInt64): UInt64;
 {$IFDEF SR_UInt64Supported}
 begin
-Result := RandomUInt64() mod Range;
+If Range <> 0 then
+  Result := RandomUInt64() mod Range
+else
+  Result := 0;
 {$ELSE}
 var
-  Temp:           UInt64;
-  ShiftRegister:  array[0..3] of UInt32;
-  i:              Integer;
-
-  procedure DoShift;
-  var
-    Carry:  Boolean;
-  begin
-    Carry := (ShiftRegister[0] and $80000000) <> 0;
-    ShiftRegister[0] := ShiftRegister[0] shl 1;
-    ShiftRegister[1] := RCLCarry(ShiftRegister[1],1,Carry);
-    ShiftRegister[2] := RCLCarry(ShiftRegister[2],1,Carry);
-    ShiftRegister[3] := RCLCarry(ShiftRegister[3],1,Carry);
-  end;
-
-  procedure DoSubtract;
-  var
-    Borrow: Boolean;
-  begin
-    Borrow := ShiftRegister[2] < Int64Rec(Range).Lo;
-    ShiftRegister[2] := UInt32(Int64(ShiftRegister[2]) - Int64(Int64Rec(Range).Lo));
-    If Borrow then
-      ShiftRegister[3] := UInt32(Int64(ShiftRegister[3]) - Int64(Int64Rec(Range).Hi) - Int64(1))
-    else
-      ShiftRegister[3] := UInt32(Int64(ShiftRegister[3]) - Int64(Int64Rec(Range).Hi));
-  end;
-  
+  Quotient: UInt64;
 begin
-// emulate unsigned 64bit integer division/modulo
 If Range <> 0 then
-  begin
-    Temp := RandomUInt64();
-    ShiftRegister[0] := Int64Rec(Temp).Lo;
-    ShiftRegister[1] := Int64Rec(Temp).Hi;
-    ShiftRegister[2] := 0;
-    ShiftRegister[3] := 0;
-    For i := 0 to 63 do
-      begin
-        DoShift;
-        If (ShiftRegister[3] > Int64Rec(Range).Hi) or
-          ((ShiftRegister[3] = Int64Rec(Range).Hi) and (ShiftRegister[2] >= Int64Rec(Range).Lo)) then
-          begin
-            DoSubtract;
-            Inc(ShiftRegister[0]);
-          end;
-      end;
-  {
-    ShiftRegister[0] and ShiftRegister[1] contain quotient
-    ShiftRegister[2] and ShiftRegister[3] contain remainder
-  }
-    Int64Rec(Result).Lo := ShiftRegister[2];
-    Int64Rec(Result).Hi := ShiftRegister[3];
-  end
-else Result := 0;
+  uDivMod(RandomUInt64(),Range,Quotient,Result)
+else
+  Result := 0;
 {$ENDIF}
 end;
 
@@ -900,19 +1009,24 @@ end;
     TSimpleRandBuffered - class declaration
 ===============================================================================}
 
-procedure TSimpleRandBuffered.Initialize;
+procedure TSimpleRandBuffered.Initialize(GeneratorClass: TSimpleRandGeneratorClass);
 begin
 inherited;  // fGenerator is created here
-fBufferSize := fGenerator.BlockSize;  // this should be 128 bytes
-fBuffer := AllocMem(fBufferSize);
-fBufferCount := 0;
+fBufferSize := fGenerator.RoundOutputSize;
+fBufferEnabled := fBufferSize >= (2 * SizeOf(UInt64){16 bytes});
+If fBufferEnabled then
+  begin
+    fBuffer := AllocMem(fBufferSize);
+    fBufferCount := 0;
+  end;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleRandBuffered.Finalize;
 begin
-FreeMem(fBuffer,fBufferSize);
+If fBufferEnabled then
+  FreeMem(fBuffer,fBufferSize);
 inherited;
 end;
 
@@ -938,34 +1052,223 @@ var
   end;
 
 begin
-// do not call inherited!
-If Size > fBufferCount then
+If fBufferEnabled then
   begin
-    Ptr := @Buff;
-    // consume what is left in the buffer
-    If fBufferCount > 0 then
+    If Size > fBufferCount then
       begin
-        Move(PtrAdvance(fBuffer,PtrInt(fBufferSize - fBufferCount))^,Ptr^,fBufferCount);
-        Inc(Ptr,fBufferCount);
-        Dec(Size,fBufferCount);
-        fBufferCount := 0;
-      end;
-    // generate and consume new random data  
-    while Size > 0 do
+        Ptr := @Buff;
+        // consume what is left in the buffer
+        If fBufferCount > 0 then
+          begin
+            Move(PtrAdvance(fBuffer,PtrInt(fBufferSize - fBufferCount))^,Ptr^,fBufferCount);
+            Inc(Ptr,fBufferCount);
+            Dec(Size,fBufferCount);
+            fBufferCount := 0;
+          end;
+        // generate and consume new random data
+        while Size > 0 do
+          begin
+            fGenerator.Generate(fBuffer^,fBufferSize);
+            fBufferCount := fBufferSize;
+            Transfer := Min(Size,fBufferCount);
+            Move(fBuffer^,Ptr^,Transfer);
+            Inc(Ptr,Transfer);
+            Dec(fBufferCount,Transfer);
+            Dec(Size,Transfer);
+          end;
+      end
+    else
       begin
-        Generate(fBuffer^,fBufferSize);
-        fBufferCount := fBufferSize;
-        Transfer := Min(Size,fBufferCount);
-        Move(fBuffer^,Ptr^,Transfer);
-        Inc(Ptr,Transfer);
-        Dec(fBufferCount,Transfer);        
-        Dec(Size,Transfer);
+        Move(PtrAdvance(fBuffer,PtrInt(fBufferSize - fBufferCount))^,Addr(Buff)^,Size);
+        Dec(fBufferCount,Size);
       end;
   end
-else
+else inherited GetRand(Buff,Size);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                            TSimpleRandGenerator_SHA3
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRandGenerator_SHA3 - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TSimpleRandGenerator_SHA3 - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRandGenerator_SHA3.Initialize;
+begin
+fGenerator := TKeccak0Hash.Create;
+fRoundOutputSize := fGenerator.BlockSize; // this should be 128 bytes
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRandGenerator_SHA3.Finalize;
+begin
+FreeAndNil(fGenerator);
+end;
+
+{-------------------------------------------------------------------------------
+    TSimpleRandGenerator_SHA3 - public methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRandGenerator_SHA3.Generate(out Buff; Size: TMemSize);
+begin
+{
+  Following two lines should be reversed, but for the sake of backward
+  compatibility let's leave it this way.
+}
+fGenerator.Permute;
+fGenerator.Squeeze(Addr(Buff)^,Size);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRandGenerator_SHA3.Seed(const Buff; Size: TMemSize);
+begin
+fGenerator.HashBuffer(Buff,Size);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                            TSimpleRandGenerator_MD5                            
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRandGenerator_MD5 - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TSimpleRandGenerator_MD5 - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRandGenerator_MD5.Initialize;
+begin
+fGenerator := TMD5Hash.Create;
+fRoundOutputSize := SizeOf(TMD5); // 16 bytes (128bits)
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRandGenerator_MD5.Finalize;
+begin
+FreeAndNil(fGenerator);
+end;
+
+{-------------------------------------------------------------------------------
+    TSimpleRandGenerator_MD5 - public methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRandGenerator_MD5.Generate(out Buff; Size: TMemSize);
+var
+  WorkPtr:  PMD5;
+  TempMD5:  TMD5;
+begin
+WorkPtr := @Buff;
+while Size >= TMemSize(SizeOf(TMD5)) do
   begin
-    Move(PtrAdvance(fBuffer,PtrInt(fBufferSize - fBufferCount))^,Addr(Buff)^,Size);
-    Dec(fBufferCount,Size);
+    TempMD5 := fGenerator.MD5;
+    fGenerator.HashBuffer(TempMD5,SizeOf(TMD5));
+    WorkPtr^ := TempMD5;
+    Inc(WorkPtr);
+    Dec(Size,TMemSize(SizeOf(TMD5)));
+   end;
+If Size > 0 then
+  begin
+    TempMD5 := fGenerator.MD5;
+    fGenerator.HashBuffer(TempMD5,SizeOf(TMD5));
+    WorkPtr^ := TempMD5;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRandGenerator_MD5.Seed(const Buff; Size: TMemSize);
+begin
+fGenerator.HashBuffer(Buff,Size);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                             TSimpleRandGenerator_D7
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TSimpleRandGenerator_D7 - class declaration
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TSimpleRandGenerator_D7 - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRandGenerator_D7.Initialize;
+begin
+fRngState := 0;
+fRoundOutputSize := SizeOf(Int32);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRandGenerator_D7.Finalize;
+begin
+// nothing to do here
+end;
+
+{-------------------------------------------------------------------------------
+    TSimpleRandGenerator_D7 - public methods
+-------------------------------------------------------------------------------}
+
+procedure TSimpleRandGenerator_D7.Generate(out Buff; Size: TMemSize);
+var
+  WorkPtr:  PInt32;
+  TempWord: Int32;
+begin
+WorkPtr := @Buff;
+while Size >= TMemSize(SizeOf(Int32)) do
+  begin
+    fRngState := Int32((Int64(fRngState) * $08088405) + 1);
+    WorkPtr^ := Int32({$IFNDEF ENDIAN_BIG}SwapEndian{$ENDIF}(UInt32(fRngState)));
+    Inc(WorkPtr);
+    Dec(Size,SizeOf(Int32));
+   end;
+If Size > 0 then
+  begin
+    fRngState := Int32((Int64(fRngState) * $08088405) + 1);
+    TempWord := fRngState;
+  {$IFNDEF ENDIAN_BIG}
+    SwapEndianValue(UInt32(TempWord));
+  {$ENDIF}
+    Move(TempWord,WorkPtr^,Size);    
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleRandGenerator_D7.Seed(const Buff; Size: TMemSize);
+var
+  WorkPtr:  PInt32;
+  TempWord: Int32;
+begin
+fRngState := 0;
+WorkPtr := @Buff;
+while Size >= TMemSize(SizeOf(Int32)) do
+  begin
+    fRngState := fRngState xor Int32({$IFNDEF ENDIAN_BIG}SwapEndian{$ENDIF}(UInt32(WorkPtr^)));
+    Inc(WorkPtr);
+    Dec(Size,SizeOf(Int32));
+  end;
+If Size > 0 then
+  begin
+    TempWord := 0;
+    Move(WorkPtr^,TempWord,Size);
+  {$IFNDEF ENDIAN_BIG}
+    SwapEndianValue(UInt32(TempWord));
+  {$ENDIF}
+    fRngState := fRngState xor TempWord;
   end;
 end;
 

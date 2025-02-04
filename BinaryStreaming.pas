@@ -109,7 +109,7 @@
 
   Version 2.1 (2025-01-19)
 
-  Last change 2025-01-19
+  Last change 2025-01-27
 
   ©2015-2025 František Milt
 
@@ -310,21 +310,21 @@ Function StreamedSize_String(const Value: String): TMemSize;{$IFDEF CanInline} i
 
 //------------------------------------------------------------------------------
 {<lite-end-ln>}
-Function StreamedSize_SmallAnsiString(const Value: AnsiString): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
-Function StreamedSize_SmallUTF8String(const Value: UTF8String): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
-Function StreamedSize_SmallWideString(const Value: WideString): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
-Function StreamedSize_SmallUnicodeString(const Value: UnicodeString): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+Function StreamedSize_SmallAnsiString(const Value: AnsiString): TMemSize;
+Function StreamedSize_SmallUTF8String(const Value: UTF8String): TMemSize;
+Function StreamedSize_SmallWideString(const Value: WideString): TMemSize;
+Function StreamedSize_SmallUnicodeString(const Value: UnicodeString): TMemSize;
 Function StreamedSize_SmallUCS4String(const Value: UCS4String): TMemSize;
-Function StreamedSize_SmallString(const Value: String): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+Function StreamedSize_SmallString(const Value: String): TMemSize;
 
 //------------------------------------------------------------------------------
 
-Function StreamedSize_TinyAnsiString(const Value: AnsiString): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
-Function StreamedSize_TinyUTF8String(const Value: UTF8String): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
-Function StreamedSize_TinyWideString(const Value: WideString): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
-Function StreamedSize_TinyUnicodeString(const Value: UnicodeString): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+Function StreamedSize_TinyAnsiString(const Value: AnsiString): TMemSize;
+Function StreamedSize_TinyUTF8String(const Value: UTF8String): TMemSize;
+Function StreamedSize_TinyWideString(const Value: WideString): TMemSize;
+Function StreamedSize_TinyUnicodeString(const Value: UnicodeString): TMemSize;
 Function StreamedSize_TinyUCS4String(const Value: UCS4String): TMemSize;
-Function StreamedSize_TinyString(const Value: String): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+Function StreamedSize_TinyString(const Value: String): TMemSize;
 
 //------------------------------------------------------------------------------
 {<lite-begin>}
@@ -4995,7 +4995,7 @@ begin
 If Length(Value) <= High(Int16) then
   Result := StreamedSize_Int16 + TMemSize(Length(Value) * SizeOf(AnsiChar))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallAnsiString: String is too long (%d) to small storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallAnsiString: String is too long (%d) for small storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5005,7 +5005,7 @@ begin
 If Length(Value) <= High(Int16) then
   Result := StreamedSize_Int16 + TMemSize(Length(Value) * SizeOf(UTF8Char))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallUTF8String: String is too long (%d) to small storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallUTF8String: String is too long (%d) for small storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5015,7 +5015,7 @@ begin
 If Length(Value) <= High(Int16) then
   Result := StreamedSize_Int16 + TMemSize(Length(Value) * SizeOf(WideChar))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallWideString: String is too long (%d) to small storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallWideString: String is too long (%d) for small storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5025,7 +5025,7 @@ begin
 If Length(Value) <= High(Int16) then
   Result := StreamedSize_Int16 + TMemSize(Length(Value) * SizeOf(UnicodeChar))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallUnicodeString: String is too long (%d) to small storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallUnicodeString: String is too long (%d) for small storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5040,7 +5040,7 @@ If Length(Value) > 0 then
     If TrueLen <= High(Int16) then
       Result := StreamedSize_Int16 + TMemSize(TrueLen * SizeOf(UCS4Char))
     else
-      raise EBSStringTooLong.CreateFmt('StreamedSize_SmallUCS4String: String is too long (%d) to small storage.',[TrueLen]);
+      raise EBSStringTooLong.CreateFmt('StreamedSize_SmallUCS4String: String is too long (%d) for small storage.',[TrueLen]);
   end
 else Result := StreamedSize_Int16;
 end;
@@ -5055,7 +5055,7 @@ TrueLen := Length(StrToUTF8(Value));
 If TrueLen <= High(Int16) then
   Result := StreamedSize_Int16 + TMemSize(TrueLen * SizeOf(UTF8Char))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallString: String is too long (%d) to small storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_SmallString: String is too long (%d) for small storage.',[Length(Value)]);
 end;
 
 //==============================================================================
@@ -5065,7 +5065,7 @@ begin
 If Length(Value) <= High(UInt8) then
   Result := StreamedSize_UInt8 + TMemSize(Length(Value) * SizeOf(AnsiChar))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyAnsiString: String is too long (%d) to tiny storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyAnsiString: String is too long (%d) for tiny storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5075,7 +5075,7 @@ begin
 If Length(Value) <= High(UInt8) then
   Result := StreamedSize_UInt8 + TMemSize(Length(Value) * SizeOf(UTF8Char))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyUTF8String: String is too long (%d) to tiny storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyUTF8String: String is too long (%d) for tiny storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5085,7 +5085,7 @@ begin
 If Length(Value) <= High(UInt8) then
   Result := StreamedSize_UInt8 + TMemSize(Length(Value) * SizeOf(WideChar))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyWideString: String is too long (%d) to tiny storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyWideString: String is too long (%d) for tiny storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5095,7 +5095,7 @@ begin
 If Length(Value) <= High(UInt8) then
   Result := StreamedSize_UInt8 + TMemSize(Length(Value) * SizeOf(UnicodeChar))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyUnicodeString: String is too long (%d) to tiny storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyUnicodeString: String is too long (%d) for tiny storage.',[Length(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -5110,7 +5110,7 @@ If Length(Value) > 0 then
     If TrueLen <= High(UInt8) then
       Result := StreamedSize_UInt8 + TMemSize(TrueLen * SizeOf(UCS4Char))
     else
-      raise EBSStringTooLong.CreateFmt('StreamedSize_TinyUCS4String: String is too long (%d) to tiny storage.',[TrueLen]);
+      raise EBSStringTooLong.CreateFmt('StreamedSize_TinyUCS4String: String is too long (%d) for tiny storage.',[TrueLen]);
   end
 else Result := StreamedSize_UInt8;
 end;
@@ -5125,7 +5125,7 @@ TrueLen := Length(StrToUTF8(Value));
 If TrueLen <= High(UInt8) then
   Result := StreamedSize_UInt8 + TMemSize(TrueLen * SizeOf(UTF8Char))
 else
-  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyString: String is too long (%d) to tiny storage.',[Length(Value)]);
+  raise EBSStringTooLong.CreateFmt('StreamedSize_TinyString: String is too long (%d) for tiny storage.',[Length(Value)]);
 end;
 
 {<lite-begin>}

@@ -18,19 +18,23 @@
     classes with items of type Integer are provided (you can refer to them for
     more details).
 
-    Note that any of the vectors can be created as invariant-size circular/ring
-    buffer (if vector is full, its oldest item is replaced by any newly added
-    one). You only need to set constructor's CircularCapacity parameter to
-    desired capacity of the buffer (a number larger than zero).
+    Note that the vectors have property MaxCount (maximum count, can be set
+    only in constructors) which limits amount of items each vector can hold.
+    Normally, when adding new items, the vector is grown as needed. But when
+    the vector already contains number of items equal to MaxCount, then it is
+    no longer grown and new items are not added to it - instead, the vector
+    changes behaviout to a circular buffer, meaning newly added items are not
+    added, they rewrite the oldest ones and current count is kept.
 
-      WARNING - if the vector is created in this mode, you cannot change its
-                capacity allocated during creation.
+      NOTE - When setting MaxCount to zero or lower, then it is instead
+             converted to a value of High(Integer), as maximum count of
+             zero or less has no meaning.
 
-  Version 1.0 (2024-07-15)
+  Version 1.1 (2025-02-05)
 
-  Last change (2024-07-15)
+  Last change (2025-02-05)
 
-  ©2024 František Milt
+  ©2024-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -91,7 +95,9 @@
   protected
     Function GetItem(Index: Integer): @Type@; reintroduce;
     procedure SetItem(Index: Integer; NewValue: @Type@); reintroduce;
+  //procedure ItemInit(Item: Pointer); override;
   //procedure ItemFinal(Item: Pointer); override;
+  //procedure ItemDrop(Item: Pointer); override;
   //procedure ItemAssign(SrcItem,DstItem: Pointer); override;
     Function ItemCompare(Item1,Item2: Pointer): Integer; override;
   //Function ItemEquals(Item1,Item2: Pointer): Boolean; override;
@@ -99,7 +105,7 @@
   //procedure ItemRead(Item: Pointer; Stream: TStream); override;
   //class Function ManagedItemStreaming: Boolean; override;
   public
-    constructor Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
+    constructor Create(OperationMode: TSVOperationMode; MaxCount: Integer = -1);
     Function IndexOf(Item: @Type@): Integer; reintroduce;
     Function Find(Item: @Type@; out Index: Integer): Boolean; reintroduce;
     procedure Push(Item: @Type@); reintroduce;
@@ -111,12 +117,12 @@
 
   @FIFOClassName@ = class(@ClassName@)
   public
-    constructor Create(CircularCapacity: Integer = -1);
+    constructor Create(MaxCount: Integer = -1);
   end;
 
   @LIFOClassName@ = class(@ClassName@)
   public
-    constructor Create(CircularCapacity: Integer = -1);
+    constructor Create(MaxCount: Integer = -1);
   end;
 
 ==  Implementation  ============================================================
@@ -136,6 +142,18 @@ end;
 
 //------------------------------------------------------------------------------
 
+//  ItemInit is called whenever a new item is implicitly (without explicit
+//  action of the used) added to the vector. This can be eg. when changing
+//  Count property to a higher number - new empty items are added and this
+//  method is called for each of them.
+//  Default implementation fills the item memory with zeroes.
+
+//procedure @ClassName@.ItemInit(Item: Pointer); virtual;
+//begin
+//end;
+
+//------------------------------------------------------------------------------
+
 //  Itemfinal is called whenever any item is implicitly (without explicit
 //  action of the user) removed from the vector - this includes actions such as
 //  clearing, freeing non-empty list or loading the list (where existing items
@@ -146,6 +164,18 @@ end;
 //  arrays, strings, etc.).
 
 //procedure @ClassName@.ItemFinal(Item: Pointer);
+//begin
+//end;
+
+//------------------------------------------------------------------------------
+
+//  ItemDrop is called when existing item is being replaced by a new one (note
+//  it is called for the existing item). This happens only when vector reached
+//  its max count and is now operating in circular mode where each push will,
+//  instead of growing the vector, just replace the oldest item.
+//  Default implementation calls ItemFinal for the given item.
+
+//procedure @ClassName@.ItemDrop(Item: Pointer);
 //begin
 //end;
 
@@ -225,9 +255,9 @@ end;
 
 //==============================================================================
 
-constructor @ClassName@.Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
+constructor @ClassName@.Create(OperationMode: TSVOperationMode; MaxCount: Integer = -1);
 begin
-inherited Create(OperationMode,SizeOf(@Type@),CircularCapacity);
+inherited Create(OperationMode,SizeOf(@Type@),MaxCount);
 end;
 
 //------------------------------------------------------------------------------
@@ -274,16 +304,16 @@ end;
 
 //==============================================================================
 
-constructor @FIFOClassName@.Create(CircularCapacity: Integer = -1);
+constructor @FIFOClassName@.Create(MaxCount: Integer = -1);
 begin
-inherited Create(omFIFO,CircularCapacity);
+inherited Create(omFIFO,MaxCount);
 end;
 
 //==============================================================================
 
-constructor @LIFOClassName@.Create(CircularCapacity: Integer = -1);
+constructor @LIFOClassName@.Create(MaxCount: Integer = -1);
 begin
-inherited Create(omLIFO,CircularCapacity);
+inherited Create(omLIFO,MaxCount);
 end;
 
 *******************************************************************************)
@@ -306,8 +336,6 @@ unit SequentialVectors;
   {$MODE ObjFPC}
   {$MODESWITCH DuplicateLocals+}
   {$MODESWITCH ClassicProcVars+}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -350,14 +378,17 @@ type
     fMemorySize:        TMemSize;
     fCapacity:          Integer;
     fCount:             Integer;
-    fHighMemory:        Pointer;
+    fHighMemory:        Pointer;  // fMemory + fMemorySize
     fFirstItemPosition: Integer;
-    fCircularCapacity:  Integer;
+    fMaxCount:          Integer;
     fUpdateCounter:     Integer;
     fChanged:           Boolean;
     fOnChangeEvent:     TNotifyEvent;
     fOnChangeCallback:  TNotifyCallback;
     // getters, setters
+  {$IFDEF Debug}
+    Function GetPositionPtr(Index: Integer): Pointer; virtual;
+  {$ENDIF}  
     Function GetItemPtr(Index: Integer): Pointer; virtual;
     procedure GetItem(Index: Integer; DstPtr: Pointer); virtual;
     procedure SetItem(Index: Integer; SrcPtr: Pointer); virtual;
@@ -367,14 +398,16 @@ type
     Function GetCount: Integer; override;
     procedure SetCount(Value: Integer); override;
     // items management
+    procedure ItemInit(Item: Pointer); virtual;
     procedure ItemFinal(Item: Pointer); virtual;
+    procedure ItemDrop(Item: Pointer); virtual;
     procedure ItemAssign(SrcItem,DstItem: Pointer); virtual;
     Function ItemCompare(Item1,Item2: Pointer): Integer; virtual; abstract;
     Function ItemEquals(Item1,Item2: Pointer): Boolean; virtual;
     procedure ItemWrite(Item: Pointer; Stream: TStream); virtual;
     procedure ItemRead(Item: Pointer; Stream: TStream); virtual;
     // init/final
-    procedure Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer); virtual;
+    procedure Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize; MaxCount: Integer); virtual;
     procedure Finalize; virtual;
     // internals
     Function ItemsMemorySize(Count: Integer): TMemSize; virtual;
@@ -388,7 +421,7 @@ type
     procedure PopLast(ItemPtr: Pointer); virtual;
     procedure InternalReadFromStream(Stream: TStream); virtual;
   public
-    constructor Create(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer = -1);
+    constructor Create(OperationMode: TSVOperationMode; ItemSize: TMemSize; MaxCount: Integer = -1);
     destructor Destroy; override;
     procedure BeginUpdate; virtual;
     procedure EndUpdate; virtual;
@@ -411,14 +444,16 @@ type
     procedure ReadFromFile(const FileName: String); virtual;
     procedure SaveToFile(const FileName: String); virtual;
     procedure LoadFromFile(const FileName: String); virtual;
+  {$IFDEF Debug}
+    Function IsItemAtPosition(Index: Integer): Boolean; virtual;
+    property FirstItemPosition: Integer read fFirstItemPosition;
+    property PositionPtrs[Index: Integer]: Pointer read GetPositionPtr; // 0..Pred(Capacity)
+  {$ENDIF}
     // properties
-    // change inherited list RW properties to read-only
-    property Capacity read GetCapacity;
-    property Count read GetCount;
     property ItemSize: TMemSize read fItemSize;
     property Memory: Pointer read fMemory;
     property MemorySize: TMemSize read fMemorySize;
-    property CircularCapacity: Integer read fCircularCapacity;
+    property MaxCount: Integer read fMaxCount;
     property Pointers[Index: Integer]: Pointer read GetItemPtr;
     property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
     property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
@@ -441,6 +476,8 @@ type
   protected
     Function GetItem(Index: Integer): Integer; reintroduce;
     procedure SetItem(Index: Integer; NewValue: Integer); reintroduce;
+    procedure ItemInit(Item: Pointer); override;
+    procedure ItemFinal(Item: Pointer); override;
     procedure ItemAssign(SrcItem,DstItem: Pointer); override;
     Function ItemCompare(Item1,Item2: Pointer): Integer; override;
     Function ItemEquals(Item1,Item2: Pointer): Boolean; override;
@@ -448,7 +485,7 @@ type
     procedure ItemRead(Item: Pointer; Stream: TStream); override;
     class Function ManagedItemStreaming: Boolean; override;
   public
-    constructor Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
+    constructor Create(OperationMode: TSVOperationMode; MaxCount: Integer = -1);
     Function IndexOf(Item: Integer): Integer; reintroduce;
     Function Find(Item: Integer; out Index: Integer): Boolean; reintroduce;
     procedure Push(Item: Integer); reintroduce;
@@ -469,7 +506,7 @@ type
 type
   TIntegerFIFOVector = class(TIntegerSequentialVector)
   public
-    constructor Create(CircularCapacity: Integer = -1);
+    constructor Create(MaxCount: Integer = -1);
   end;
 
   // aliasses
@@ -487,7 +524,7 @@ type
 type
   TIntegerLIFOVector = class(TIntegerSequentialVector)
   public
-    constructor Create(CircularCapacity: Integer = -1);
+    constructor Create(MaxCount: Integer = -1);
   end;
 
   // aliasses
@@ -499,11 +536,39 @@ implementation
 uses
   StrRect, BinaryStreamingLite;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+{$IFOPT Q+}
+  {$DEFINE OverflowChecks}
+{$ELSE}
+  {$UNDEF OverflowChecks}
 {$ENDIF}
+
+{===============================================================================
+    Auxiliary functions
+===============================================================================}
+
+{$IFDEF OverflowChecks}{$Q-}{$ENDIF}
+Function PtrAdvance(Ptr: Pointer; Offset: TMemSize): Pointer;
+begin
+{$IFDEF FPC}{$PUSH}{$WARN 4055 OFF}{$ENDIF} // Conversion between ordinals and pointers is not portable
+Result := Pointer(PtrUInt(Ptr) + PtrUInt(Offset));
+{$IFDEF FPC}{$POP}{$ENDIF}
+end;
+{$IFDEF OverflowChecks}{$Q+}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function PtrCompare(A,B: Pointer): Integer;
+begin
+{$IFDEF FPC}{$PUSH}{$WARN 4055 OFF}{$ENDIF}
+If PtrUInt(A) < PtrUInt(B) then
+  Result := -1
+else If PtrUInt(A) > PtrUInt(B) then
+  Result := +1
+else
+  Result := 0;
+{$IFDEF FPC}{$POP}{$ENDIF}
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -516,6 +581,17 @@ uses
 {-------------------------------------------------------------------------------
     TSequentialVector - protected methods
 -------------------------------------------------------------------------------}
+{$IFDEF Debug}
+Function TSequentialVector.GetPositionPtr(Index: Integer): Pointer;
+begin
+If (Index >= 0) and (Index < fCapacity) then
+  Result := PtrAdvance(fMemory,PtrInt(ItemsMemorySize(Index)))
+else
+  raise ESVIndexOutOfBounds.CreateFmt('TSequentialVector.GetPositionPtr: Index (%d) out of bounds.',[Index]);
+end;
+
+//------------------------------------------------------------------------------
+{$ENDIF}
 
 Function TSequentialVector.GetItemPtr(Index: Integer): Pointer;
 begin
@@ -523,11 +599,9 @@ If CheckIndex(Index) then
   begin
     // convert item index to item position and then to its address
     If Index >= (fCapacity - fFirstItemPosition) then
-    {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-      Result := Pointer(PtrUInt(fMemory) + (PtrUInt(ItemsMemorySize(Index - (fCapacity - fFirstItemPosition)))))
+      Result := PtrAdvance(fMemory,ItemsMemorySize(Index - (fCapacity - fFirstItemPosition)))
     else
-      Result := Pointer(PtrUInt(fMemory) + (PtrUInt(ItemsMemorySize(fFirstItemPosition + Index))));
-    {$IFDEF FPCDWM}{$POP}{$ENDIF}
+      Result := PtrAdvance(fMemory,ItemsMemorySize(fFirstItemPosition + Index));
   end
 else raise ESVIndexOutOfBounds.CreateFmt('TSequentialVector.GetItemPtr: Index (%d) out of bounds.',[Index]);
 end;
@@ -567,14 +641,40 @@ var
   ItemsToMove:  Integer;
 begin
 If Value < 0 then
-  raise ESVInvalidValue.CreateFmt('TSequentialVector.SetCapacity: Invalid new capacity (%d).',[Value]);
-If Value < fCount then
-  raise ESVInvalidOperation.CreateFmt('TSequentialVector.SetCapacity: Cannot lower capacity (%d) below count (%d).',[Value,fCount]);
-If (Value <> fCapacity) and (fCircularCapacity <= 0) then
+  raise ESVInvalidValue.CreateFmt('TSequentialVector.SetCapacity: Invalid new capacity (%d).',[Value])
+else If Value > fMaxCount then
+  Value := fMaxCount;
+If (Value <> fCapacity) then
   begin
-    If fCount > 0 then
+    If Value <= 0 then
       begin
-        // there are some items, we need to copy them to newly allocated memory
+        // new capacity will be zero, just clear everything
+        FinalizeAllItems;
+        FreeMem(fMemory,fMemorySize);
+        fMemorySize := 0;
+        fMemory := nil;
+        fCapacity := 0;
+        fCount := 0;
+        fHighMemory := nil;
+        fFirstItemPosition := 0;
+      end
+    else If fCount <= 0 then
+      begin
+        // there are no items, do not use realloc to prevent copying
+        FreeMem(fMemory,fMemorySize);
+        fMemorySize := ItemsMemorySize(Value);
+        fMemory := AllocMem(fMemorySize);
+        fCapacity := Value;
+        fHighMemory := PtrAdvance(fMemory,fMemorySize);
+        fFirstItemPosition := 0;
+      end
+    else If Value > fCapacity then
+      begin
+      {
+        We are adding the capacity - simple case, just reallocate and if items
+        are split on high address, move the block that touches the high address
+        so that it is again touching it in the new memory space.
+      }
         If fCount > (fCapacity - fFirstItemPosition) then
           ItemsToMove := fCapacity - fFirstItemPosition
         else
@@ -582,27 +682,51 @@ If (Value <> fCapacity) and (fCircularCapacity <= 0) then
         fMemorySize := ItemsMemorySize(Value);
         ReallocMem(fMemory,fMemorySize);
         fCapacity := Value;
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        fHighMemory := Pointer(PtrUInt(fMemory) + fMemorySize);
+        fHighMemory := PtrAdvance(fMemory,fMemorySize);
         If ItemsToMove > 0 then
-          Move(Pointer(PtrUInt(fMemory) + ItemsMemorySize(fFirstItemPosition))^,
-               Pointer(PtrUInt(PtrUInt(fHighMemory) - PtrUInt(ItemsMemorySize(ItemsToMove))))^,
-               ItemsMemorySize(ItemsToMove));
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
-        fFirstItemPosition := fCapacity - ItemsToMove;
+          begin
+            Move(PtrAdvance(fMemory,ItemsMemorySize(fFirstItemPosition))^,
+                 PtrAdvance(fMemory,ItemsMemorySize(fCapacity - ItemsToMove))^,
+                 ItemsMemorySize(ItemsToMove));
+            fFirstItemPosition := fCapacity - ItemsToMove;
+          end;
+        // first item position is not changed if no item is moved
       end
     else
       begin
-        // do not make copy if there is no item
-        FreeMem(fMemory,fMemorySize);
+        // lowering the capacity while there are some items stored
+        If Value < fCount then
+          SetCount(Value);  // we need to remove some items (changes fCount)
+        If fCount > (fCapacity - fFirstItemPosition) then
+          begin
+          {
+            Item are split into two blocks, move the one at end so that it will
+            fit into new capacity.
+          }
+            ItemsToMove := fCapacity - fFirstItemPosition;
+            Move(PtrAdvance(fMemory,ItemsMemorySize(fFirstItemPosition))^,
+                 PtrAdvance(fMemory,ItemsMemorySize(Value - ItemsToMove))^,
+                 ItemsMemorySize(ItemsToMove));
+            fFirstItemPosition := Value - ItemsToMove;
+          end
+        else If fCount > (Value - fFirstItemPosition) then
+          begin
+          {
+            All items are in one contiguous block but it will not fit into new
+            space (it would overflow high memory), move them to the memory base.
+          }
+            Move(PtrAdvance(fMemory,ItemsMemorySize(fFirstItemPosition))^,fMemory^,ItemsMemorySize(fCount));
+            fFirstItemPosition := 0;
+          end;
+        // items position is rectified, now just reallocate
         fMemorySize := ItemsMemorySize(Value);
-        fMemory := AllocMem(fMemorySize);
+        ReallocMem(fMemory,fMemorySize);
         fCapacity := Value;
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        fHighMemory := Pointer(PtrUInt(fMemory) + fMemorySize);
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
-        fFirstItemPosition := 0;
+        fHighMemory := PtrAdvance(fMemory,fMemorySize);
       end;
+  {$IFDEF Debug}
+    DoChange;
+  {$ENDIF}
   end;
 end;
 
@@ -615,21 +739,92 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TSequentialVector.SetCount(Value: Integer);
+var
+  WorkPtr:  Pointer;
+  i:        Integer;
 begin
-raise ESVInvalidOperation.Create('TSequentialVector.SetCount: Explicitly setting count is not allowed.');
+If Value < 0 then
+  raise ESVInvalidValue.CreateFmt('TSequentialVector.SetCount: Invalid new count (%d).',[Value])
+else If Value > fMaxCount then
+  Value := fMaxCount;
+If Value <> fCount then
+  begin
+    If Value > fCapacity then
+      SetCapacity(Value);
+    If Value < fCount then
+      begin
+        // removing existing items (note that fCount cannot be 0 here)
+        case fOperationMode of
+          omFIFO: begin
+                    WorkPtr := GetItemPtr(LowIndex);
+                    For i := 0 to Pred(fCount - Value) do
+                      begin
+                        ItemFinal(WorkPtr);
+                        WorkPtr := NextItemPtr(WorkPtr);
+                      end;
+                    Inc(fFirstItemPosition,fCount - Value);
+                    If fFirstItemPosition >= fCapacity then
+                      fFirstItemPosition := fFirstItemPosition - fCapacity;
+                    fCount := Value;
+                  end;
+          omLIFO: begin
+                    WorkPtr := GetItemPtr(Value);
+                    For i := 0 to Pred(fCount - Value) do
+                      begin
+                        ItemFinal(WorkPtr);
+                        WorkPtr := NextItemPtr(WorkPtr);
+                      end;
+                    fCount := Value;
+                  end;
+        else
+          raise ESVInvalidValue.CreateFmt('TSequentialVector.SetCount: Invalid operation mode (%d).',[Ord(fOperationMode)]);
+        end;
+        If fCount <= 0 then
+          fFirstItemPosition := 0;
+      end
+    else
+      begin
+        // adding new empty items
+        If fCount > 0 then
+          WorkPtr := NextItemPtr(GetItemPtr(HighIndex))
+        else
+          WorkPtr := fMemory;
+        repeat
+        {
+          Inc must be up here so that the initialized item is already validly
+          in the list.
+        }
+          Inc(fCount);
+          ItemInit(WorkPtr);
+          WorkPtr := NextItemPtr(WorkPtr);
+        until fCount >= Value;
+      end;
+    DoChange;
+  end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+procedure TSequentialVector.ItemInit(Item: Pointer);
+begin
+FillChar(Item^,fItemSize,0);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TSequentialVector.ItemFinal(Item: Pointer);
 begin
-// do nothing
+// item cannot have zero size, so following is secure (and I know it is a no-op)
+PByte(Item)^ := PByte(Item)^;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+procedure TSequentialVector.ItemDrop(Item: Pointer);
+begin
+ItemFinal(Item);
+end;
 
 //------------------------------------------------------------------------------
 
@@ -661,7 +856,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSequentialVector.Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer);
+procedure TSequentialVector.Initialize(OperationMode: TSVOperationMode; ItemSize: TMemSize; MaxCount: Integer);
 begin
 fOperationMode := OperationMode;
 case fOperationMode of
@@ -677,16 +872,18 @@ else
   raise ESVInvalidValue.CreateFmt('TSequentialVector.Initialize: Invalid operation mode (%d).',[Ord(fOperationMode)]);
 end;
 fItemSize := ItemSize;
+If fItemSize <= 0 then
+  raise ESVInvalidValue.Create('TSequentialVector.Initialize: Item cannot have size of zero.');
 fMemory := nil;
 fMemorySize := 0;
 fCapacity := 0;
 fCount := 0;
 fHighMemory := fMemory;
 fFirstItemPosition := 0;
-fCircularCapacity := 0;
-If CircularCapacity > 0 then
-  SetCapacity(CircularCapacity);
-fCircularCapacity := CircularCapacity;
+If MaxCount <= 0 then
+  fMaxCount := High(Integer)
+else
+  fMaxCount := MaxCount;
 fUpdateCounter := 0;
 fChanged := False;
 fOnChangeEvent := nil;
@@ -712,11 +909,9 @@ end;
 
 Function TSequentialVector.NextItemPtr(ItemPtr: Pointer): Pointer;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := Pointer(PtrUInt(ItemPtr) + PtrUInt(fItemSize));
-If PtrUInt(Result) >= PtrUInt(fHighMemory) then
+Result := PtrAdvance(ItemPtr,fItemSize);
+If PtrCompare(Result,fHighMemory) >= 0 then
   Result := fMemory;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -743,7 +938,7 @@ begin
 If fCount > 0 then
   begin
     TempPtr := GetItemPtr(LowIndex);
-    For i := 1 to fCount do
+    For i := LowIndex to HighIndex do
       begin
         ItemFinal(TempPtr);
         TempPtr := NextItemPtr(TempPtr);
@@ -802,13 +997,13 @@ var
   i:        Integer;
   TempPtr:  Pointer;
 begin
-// there should be no valid item in the vector by now...
+// all items are finalized by this point, count > 0 and first item pos. is 0
 fFirstItemPosition := 0;
 If ManagedItemStreaming then
   begin
     // managed IO
     TempPtr := GetItemPtr(LowIndex);
-    For i := 1 to fCount do
+    For i := LowIndex to HighIndex do
       begin
         ItemRead(TempPtr,Stream);
         TempPtr := NextItemPtr(TempPtr);
@@ -823,10 +1018,10 @@ end;
     TSequentialVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TSequentialVector.Create(OperationMode: TSVOperationMode; ItemSize: TMemSize; CircularCapacity: Integer = -1);
+constructor TSequentialVector.Create(OperationMode: TSVOperationMode; ItemSize: TMemSize; MaxCount: Integer = -1);
 begin
 inherited Create;
-Initialize(OperationMode,ItemSize,CircularCapacity);
+Initialize(OperationMode,ItemSize,MaxCount);
 end;
 
 //------------------------------------------------------------------------------
@@ -888,7 +1083,7 @@ Result := -1;
 If fCount > 0 then
   begin
     TempPtr := GetItemPtr(LowIndex);
-    For i := 1 to fCount do
+    For i := LowIndex to HighIndex do
       If ItemEquals(ItemPtr,TempPtr) then
         begin
           Result := i;
@@ -913,19 +1108,15 @@ var
   ChangedItem:  Pointer;
 begin
 // push is the same for lifo and fifo
-If (fCircularCapacity > 0) and (fCount >= fCircularCapacity) and (fCircularCapacity = fCapacity) then
+If fCount >= fMaxCount then
   begin
-  {
-    Operating as circular buffer with limited size - remove oldest item and
-    replace it with the new one. Remember to do implicit item cleanup.
-  }
+    // operate as circular buffer - remove oldest item and replace it with a new one
     ChangedItem := GetItemPtr(LowIndex);
-    ItemFinal(ChangedItem);
+    ItemDrop(ChangedItem);
     ItemAssign(ItemPtr,ChangedItem);
     Inc(fFirstItemPosition);
     If fFirstItemPosition >= fCapacity then
-      fFirstItemPosition := 0;
-    DoChange;
+      fFirstItemPosition := 0;    
   end
 else
   begin
@@ -933,8 +1124,8 @@ else
     Grow;
     Inc(fCount);
     ItemAssign(ItemPtr,GetItemPtr(HighIndex));
-    DoChange;
   end;
+DoChange;
 end;
 
 //------------------------------------------------------------------------------
@@ -1004,7 +1195,7 @@ If fCount > 0 then
     fCount := 0;
     fFirstItemPosition := 0;
     Shrink;
-    DoChange;  
+    DoChange;
   end
 else fCount := 0;
 end;
@@ -1023,7 +1214,7 @@ If fCount > 0 then
       begin
         // managed IO, each item is written separately using ItemWrite method
         TempPtr := GetItemPtr(LowIndex);
-        For i := 1 to fCount do
+        For i := LowIndex to HighIndex do
           begin
             ItemWrite(TempPtr,Stream);
             TempPtr := NextItemPtr(TempPtr);
@@ -1034,7 +1225,7 @@ If fCount > 0 then
         // unmanaged IO, items are written in as large blocks as possible
         If fCount > (fCapacity - fFirstItemPosition) then
           begin
-            // the items are split into two blocks (possible only in FIFO)
+            // the items are split into two blocks
             ItemCount := fCapacity - fFirstItemPosition;
             Stream.WriteBuffer(GetItemPtr(LowIndex)^,ItemsMemorySize(ItemCount));
             Stream.WriteBuffer(fMemory^,ItemsMemorySize(fCount - ItemCount));
@@ -1052,6 +1243,7 @@ begin
 If fCount > 0 then
   begin
     FinalizeAllItems;
+    fFirstItemPosition := 0;
     InternalReadFromStream(Stream);
   end;
 end;
@@ -1068,12 +1260,17 @@ end;
 
 procedure TSequentialVector.LoadFromStream(Stream: TStream);
 begin
-FinalizeAllItems;
-fCount := 0;  // setting capacity below count would raise an exception
-SetCapacity(Stream_GetInt32(Stream));
-fCount := fCapacity;
-If fCount > 0 then
-  InternalReadFromStream(Stream);
+BeginUpdate;  // SetCapacity(0) might call DoUpdate
+try
+  // free current memory to prevent copying in reallocation
+  SetCapacity(0); // also finalizes all existing items
+  SetCapacity(Stream_GetInt32(Stream));
+  fCount := fCapacity;
+  If fCount > 0 then
+    InternalReadFromStream(Stream);
+finally
+  EndUpdate;
+end;
 end;
 
 //------------------------------------------------------------------------------
@@ -1136,6 +1333,23 @@ finally
 end;
 end;
 
+{$IFDEF Debug}
+//------------------------------------------------------------------------------
+
+Function TSequentialVector.IsItemAtPosition(Index: Integer): Boolean;
+begin
+If (Index >= 0) and (Index < fCapacity) then
+  begin
+    If fCount > (fCapacity - fFirstItemPosition) then
+      Result := ((Index >= fFirstItemPosition) and (Index < fCapacity)) or
+                ((Index >= 0) and (Index < (fCount - (fCapacity - fFirstItemPosition))))
+    else
+      Result := (Index >= fFirstItemPosition) and (Index < (fFirstItemPosition + fCount));
+  end
+else raise ESVIndexOutOfBounds.CreateFmt('TSequentialVector.IsItemAtPosition: Index (%d) out of bounds.',[Index]);
+end;  
+{$ENDIF}
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1159,6 +1373,20 @@ end;
 procedure TIntegerSequentialVector.SetItem(Index: Integer; NewValue: Integer);
 begin
 inherited SetItem(Index,@NewValue);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TIntegerSequentialVector.ItemInit(Item: Pointer); 
+begin
+Integer(Item^) := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TIntegerSequentialVector.ItemFinal(Item: Pointer);
+begin
+Integer(Item^) := 0;
 end;
 
 //------------------------------------------------------------------------------
@@ -1208,9 +1436,9 @@ end;
     TIntegerSequentialVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TIntegerSequentialVector.Create(OperationMode: TSVOperationMode; CircularCapacity: Integer = -1);
+constructor TIntegerSequentialVector.Create(OperationMode: TSVOperationMode; MaxCount: Integer = -1);
 begin
-inherited Create(OperationMode,SizeOf(Integer),CircularCapacity);
+inherited Create(OperationMode,SizeOf(Integer),MaxCount);
 end;
 
 //------------------------------------------------------------------------------
@@ -1268,9 +1496,9 @@ end;
     TIntegerFIFOVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TIntegerFIFOVector.Create(CircularCapacity: Integer = -1);
+constructor TIntegerFIFOVector.Create(MaxCount: Integer = -1);
 begin
-inherited Create(omFIFO,CircularCapacity);
+inherited Create(omFIFO,MaxCount);
 end;
 
 
@@ -1286,9 +1514,9 @@ end;
     TIntegerLIFOVector - public methods
 -------------------------------------------------------------------------------}
 
-constructor TIntegerLIFOVector.Create(CircularCapacity: Integer = -1);
+constructor TIntegerLIFOVector.Create(MaxCount: Integer = -1);
 begin
-inherited Create(omLIFO,CircularCapacity);
+inherited Create(omLIFO,MaxCount);
 end;
 
 

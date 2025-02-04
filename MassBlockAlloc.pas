@@ -9,7 +9,7 @@
 
   MassBlockAlloc
 
-    This library was designed for situation, where a large number of relatively
+    This library was designed for situation where a large number of relatively
     small blocks of equal size is rapidly allocated and deallocated in multi
     thread environment and where performance is important.
 
@@ -27,11 +27,11 @@
     possible to force the allocator to allocate all the blocks with specific
     address alignment (eg. for use in vector instructions such as SSE or AVX).
 
-  Version 1.0 (2024-04-14)
+  Version 1.0.1 (2025-01-31)
 
-  Last change 2024-10-04
+  Last change 2025-01-31
 
-  ©2024 František Milt
+  ©2024-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -159,7 +159,7 @@ const
 const
   // maximum size of segment (differs according to system and AllowLargeSegments symbol)
   MBA_MAX_SEG_SZ = TMemSize({$IFDEF AllowLargeSegments}4 * {$ENDIF}{$IFDEF CPU64bit}OneGiB{$ELSE}256 * OneMiB{$ENDIF});
-  // maximum size of one block
+  // maximum size of one block (128MiB)
   MBA_MAX_BLK_SZ = TMemSize(128 * OneMiB);
 
 {===============================================================================
@@ -404,8 +404,8 @@ type
     If given pointer does not point to a block withing this segment, then an
     exception of class EMBAInvalidAddress is raised.
 
-    If freeing buffer that is not allocated, then an EMBAInvalidState exception
-    is raised.
+    If the selected block was not previously allocated (ie. is not marked as
+    such), then an EMBAInvalidState exception is raised.
   }
     procedure FreeBlock(var Block: Pointer); virtual;
   {
@@ -447,8 +447,8 @@ type
     BufferSize must be larger than zero, otherwise an EMBAInvalidValue exception
     is raised.
 
-    If the buffer size is not a valid number (eg. it is not the same number as
-    was used during allocation), then an EMBAInvalidValue or EMBAInvalidState
+    If the buffer size is not a correct number (eg. it is not the same number
+    as was used during allocation), then an EMBAInvalidValue or EMBAInvalidState
     exception can be raised.
   }
     procedure FreeBuffer(var Buffer: Pointer; BufferSize: TMemSize); virtual;
@@ -504,7 +504,7 @@ type
                           blocks), then this segment is immediately freed and
                           removed when this option is set to true.
                           When it is set to false, then the empty segment is
-                          kept for further use.
+                          kept for future use.
                           You should carefully consider whether to enable or
                           disable this option. It can significantly increase
                           performance, but at the cost of memory space - decide
@@ -588,7 +588,7 @@ type
                               undesirable, and for this an iterrupts are
                               implemented.
 
-                              When enabled - if an async. filling is in process
+                              When enabled - if an async. filling is in progress
                               and a de/allocating function is called, then this
                               call will set a flag that is constantly checked by
                               the filling.
@@ -859,7 +859,7 @@ type
 
     Allocates multiple blocks to fill the given array.
 
-    Init memory set to true ensures memory of all allocated blocks is zeroed.
+    InitMemory set to true ensures memory of all allocated blocks is zeroed.
 
     Note that it is more efficient (faster) to use this function instead of
     multiple calls to AllocateBlock.
@@ -1017,7 +1017,7 @@ type
 
       NOTE - the list has maximum length that cannot exceeded (currently 256
              items). If it becomes full and new exception is added to it, then
-             the oldest stored exception is freed and the one replaces it.
+             the oldest stored exception is freed and the new one replaces it.
   }
   {
     CacheExceptionsCount
@@ -1060,7 +1060,7 @@ type
 
     Takes pre-allocated block from cache and returns it.
 
-    If InitMemory is true, then the blcok memory is zeroed, otherwise it is
+    If InitMemory is true, then the block memory is zeroed, otherwise it is
     left as is and might contain bogus data.
 
     If the cache is disabled or is empty, then normal allocation is called
@@ -1078,7 +1078,7 @@ type
     is first checked for validity (eg. whether it belongs to any existing
     segments) - when this test fails, then an EMBAInvalidAddress exception is
     raised.
-    If mentioned settings is true (dafault), then the address is not checked.
+    If mentioned settings is true (default), then the address is not checked.
     Therefore be careful what you pass here if trusted returns are true, as you
     might create disgusting bugs when invalid addresses are passed to this
     function. Also note that the invalid addresses will eventually be caught
@@ -1126,7 +1126,7 @@ type
 
     Returns number of free blocks after the call. Note that in multi-threaded
     environment this number might be incorrect by the time the method returns.
-    Use thread locking abound the call if you want to work with returned value.
+    Use thread locking around the call if you want to work with returned value.
   }
     Function PrepareFor(Count: Integer): Integer; virtual;
   {
@@ -1271,8 +1271,9 @@ type
     Segments
 
       WARNING - while working on segment taken from this property, make sure
-                you thread-lock the allocator (BEFORE obtaining the object) and
-                do not call any allocating or deallocating methods.
+                you thread-lock the allocator (BEFORE obtaining the object),
+                and do not call any allocating or deallocating methods of the
+                returned segment.
   }
     property Segments[Index: Integer]: TMBASegment read GetSegment; default;
   end;
@@ -2072,6 +2073,20 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
+    TMassBlockAlloc - auxiliary routines
+===============================================================================}
+
+procedure PrepareValidationInfo(out ValidationInfo: TMBAValidationInfo; Address: Pointer);
+begin
+ValidationInfo.Address := Address;
+ValidationInfo.Owned := False;
+ValidationInfo.Allocated := False;
+ValidationInfo.SegmentIndex := -1;
+ValidationInfo.SegmentObject := nil;
+ValidationInfo.BlockIndex := -1;
+end;
+
+{===============================================================================
     TMassBlockAlloc - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
@@ -2446,7 +2461,6 @@ end;
 
 procedure TMassBlockAlloc.CacheExceptionsAdd(ExceptObject: TObject);
 begin
-      writeln( fCache.AsyncFill.Exceptions.start,' ', fCache.AsyncFill.Exceptions.count);
 // thread lock is expected to be already acquired
 with fCache.AsyncFill.Exceptions do
   If Count >= Length(Objects) then
@@ -2566,25 +2580,25 @@ var
   i,Index:  Integer;
 begin
 // init output
-ValidationInfo.Address := Block;
-ValidationInfo.Owned := False;
-ValidationInfo.Allocated := False;
-ValidationInfo.SegmentIndex := -1;
-ValidationInfo.SegmentObject := nil;
-ValidationInfo.BlockIndex := -1;
+PrepareValidationInfo(ValidationInfo,Block);
 // and now the fun part...
-For i := LowIndex to HighIndex do
-  begin
-    If fSegments[i].BlockFind(Block,Index) then
-      begin
-        ValidationInfo.Owned := True;
-        ValidationInfo.Allocated := fSegments[i].AllocationMap[Index];
-        ValidationInfo.SegmentIndex := i;
-        ValidationInfo.SegmentObject := fSegments[i];
-        ValidationInfo.BlockIndex := Index;
-        Break{For i};
-      end
-  end;
+ThreadLockAcquire;
+try
+  For i := LowIndex to HighIndex do
+    begin
+      If fSegments[i].BlockFind(Block,Index) then
+        begin
+          ValidationInfo.Owned := True;
+          ValidationInfo.Allocated := fSegments[i].AllocationMap[Index];
+          ValidationInfo.SegmentIndex := i;
+          ValidationInfo.SegmentObject := fSegments[i];
+          ValidationInfo.BlockIndex := Index;
+          Break{For i};
+        end
+    end;
+finally
+  ThreadLockRelease;
+end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2606,22 +2620,27 @@ var
 begin
 ValidationInfo := nil;
 SetLength(ValidationInfo,Length(Blocks));
-For i := Low(Blocks) to High(Blocks) do
-  begin
-    ValidationInfo[i].Address := Blocks[i];
-    For j := LowIndex to HighIndex do
-      begin
-        If fSegments[i].BlockFind(Blocks[i],Index) then
-          begin
-            ValidationInfo[i].Owned := True;
-            ValidationInfo[i].Allocated := fSegments[j].AllocationMap[Index];
-            ValidationInfo[i].SegmentIndex := j;
-            ValidationInfo[i].SegmentObject := fSegments[j];
-            ValidationInfo[i].BlockIndex := Index;
-            Break{For j};
-          end;
-      end;
-  end;
+ThreadLockAcquire;
+try
+  For i := Low(Blocks) to High(Blocks) do
+    begin
+      PrepareValidationInfo(ValidationInfo[i],Blocks[i]);
+      For j := LowIndex to HighIndex do
+        begin
+          If fSegments[i].BlockFind(Blocks[i],Index) then
+            begin
+              ValidationInfo[i].Owned := True;
+              ValidationInfo[i].Allocated := fSegments[j].AllocationMap[Index];
+              ValidationInfo[i].SegmentIndex := j;
+              ValidationInfo[i].SegmentObject := fSegments[j];
+              ValidationInfo[i].BlockIndex := Index;
+              Break{For j};
+            end;
+        end;
+    end;
+finally
+  ThreadLockRelease;
+end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

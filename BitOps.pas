@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.23 (2025-01-12)
+  Version 1.24 (2025-02-05)
 
-  Last change 2025-01-12
+  Last change 2025-02-05
 
   ©2014-2025 František Milt
 
@@ -1315,7 +1315,7 @@ Function BitParity(Value: UInt64): Boolean; overload;
 {
   Following functions are to be used in situations where a pointer needs to be
   incremented or decremented by an arbitrary offset and doing it in-situ is not
-  desirable or impossible.
+  desirable or possible.
 
   Overload accepting Count and Stride is for arrays/vectors. Here, the pointer
   is incremented by Count * Stride.
@@ -1326,6 +1326,24 @@ Function PtrAdvance(Ptr: Pointer; Count: Integer; Stride: TMemSize): Pointer; ov
 
 procedure PtrAdvanceVar(var Ptr: Pointer; Offset: PtrInt); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure PtrAdvanceVar(var Ptr: Pointer; Count: Integer; Stride: TMemSize); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+================================================================================
+                               Address comparison
+================================================================================
+-------------------------------------------------------------------------------}
+{
+  Compares addresses of two given pointers.
+
+  If pointer A is smaller (the address is lower) than B, then a negative value
+  is returned. If A is larger than B, then a positive value is returned. When
+  the two pointers point to the same address, then zero is returned.
+
+  If SignedCompare is set to false (default), then addresses of the two
+  pointers are compared using unsigned integer comparison (address number
+  is seen as unsigned), otherwise they are compared using signed integers.
+}
+Function PtrCompare(A,B: Pointer): Integer;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -8385,6 +8403,24 @@ end;
 procedure PtrAdvanceVar(var Ptr: Pointer; Count: Integer; Stride: TMemSize);
 begin
 Ptr := PtrAdvance(Ptr,Count,Stride);
+end;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                               Address comparison
+================================================================================
+-------------------------------------------------------------------------------}
+
+Function PtrCompare(A,B: Pointer): Integer;
+begin
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+If PtrUInt(A) < PtrUInt(B) then
+  Result := -1
+else If PtrUInt(A) > PtrUInt(B) then
+  Result := +1
+else
+  Result := 0;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 {-------------------------------------------------------------------------------
