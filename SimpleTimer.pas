@@ -18,20 +18,19 @@
     timer is created in non-main thread, the method ProcessMessages must be
     called to process timer message and fire the on-timer event. 
 
-    In Linux, it is based around POSIX interval timer (timer_create). The
-    timeout is handled using signals, but the on-timer event is NOT called
-    from signal handler. Instead, signal handler only sets a flag indicating
-    timeout, and event is called from ProcessMessages method.
-    In GUI application, if the timer is created in the main thread, method
-    ProcessMessages is called automatically from application's on-idle event.
-    In non-main thread, you are responsible to call this method - so the
-    behavior is technically the same as in Windows OS.
+    In Linux, it is based around POSIX interval timer (timer_create) and the
+    timeout is handled using signals via library UtilitySignal.
+    In GUI application, if the timer is created in the main thread, then
+    signals are dispatched automatically from application's on-idle event
+    (this is also managed by UtilitySignal library). In non-main thread, you
+    are responsible to call this method - so the behavior is technically the
+    same as in Windows OS.
 
-  Version 1.2.4 (2024-08-19)
+  Version 1.3 (2025-02-18)
 
-  Last change 2024-08-23
+  Last change 2025-02-18
 
-  ©2015-2024 František Milt
+  ©2015-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -64,13 +63,15 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
-    MulticastEvent - github.com/TheLazyTomcat/Lib.MulticastEvent
-    SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
-    StrRect        - github.com/TheLazyTomcat/Lib.StrRect
-    UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils
-    WinFileInfo    - github.com/TheLazyTomcat/Lib.WinFileInfo
-    WndAlloc       - github.com/TheLazyTomcat/Lib.WndAlloc
+    BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
+    MulticastEvent      - github.com/TheLazyTomcat/Lib.MulticastEvent
+    SequentialVectors   - github.com/TheLazyTomcat/Lib.SequentialVectors
+    SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StrRect             - github.com/TheLazyTomcat/Lib.StrRect
+    UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
+    WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
+    WndAlloc            - github.com/TheLazyTomcat/Lib.WndAlloc
 
 ===============================================================================}
 unit SimpleTimer;
@@ -108,8 +109,8 @@ interface
 
 uses
   {$IFDEF Windows}Windows, Messages,{$ENDIF} SysUtils,
-  AuxTypes, AuxClasses{$IFDEF Windows}, UtilityWindow{$ENDIF}
-  {$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
+  AuxTypes, AuxClasses,{$IFDEF UseAuxExceptions} AuxExceptions,{$ENDIF}
+  {$IFDEF Windows}UtilityWindow{$ELSE}UtilitySignal{$ENDIF};
 
 {===============================================================================
     Library-specific exceptions
@@ -118,10 +119,8 @@ type
   ESTException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
   ESTTimerSetupError    = class(ESTException);
-{$IFNDEF Windows}
-  ESTTimerCreationError = class(ESTException);
-  ESTTimerDeletionError = class(ESTException);
-{$ENDIF}
+  ESTTimerCreationError = class(ESTException);  // linux-only
+  ESTTimerDeletionError = class(ESTException);  // -||-
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -138,8 +137,8 @@ type
     fOwnsWindow:      Boolean;
     fWindow:          TUtilityWindow;
   {$ELSE}
-    fTimerExpired:    Integer;  // only for internal use
-    fInMainThread:    Boolean;  // -//-
+    fOwnsSignal:      Boolean;
+    fSignal:          TUtilitySignal;
     fTimerCreated:    Boolean;
   {$ENDIF}
     fTimerID:         PtrUInt;
@@ -153,28 +152,30 @@ type
   {$IFDEF Windows}
     procedure Initialize(Window: TUtilityWindow; TimerID: PtrUInt); virtual;
   {$ELSE}
-    procedure Initialize; virtual;
+    procedure Initialize(Signal: TUtilitySignal); virtual;
   {$ENDIF}
     procedure Finalize; virtual;
     procedure SetupTimer; virtual;
   {$IFDEF Windows}
-    procedure MessagesHandler(var Msg: TMessage; var Handled: Boolean; Sent: Boolean); virtual;
+    procedure MessageHandler(var Msg: TMessage; var Handled: Boolean; Sent: Boolean); virtual;
   {$ELSE}
-    procedure TimerExpired; virtual;
-    procedure OnAppIdleHandler(Sender: TObject; var Done: Boolean); virtual;
+    procedure SignalHandler(Sender: TObject; Code: Integer; var BreakProcessing: Boolean); virtual;
   {$ENDIF}
     procedure DoOnTimer; virtual;
   public
   {$IFDEF Windows}
     constructor Create(Window: TUtilityWindow = nil; TimerID: PtrUInt = 1);
   {$ELSE}
-    constructor Create;
+    constructor Create(Signal: TUtilitySignal = nil);
   {$ENDIF}
     destructor Destroy; override;
     procedure ProcessMessages; virtual;
   {$IFDEF Windows}
     property OwnsWindow: Boolean read fOwnsWindow;
     property Window: TUtilityWindow read fWindow;
+  {$ELSE}
+    property OwnsSignal: Boolean read fOwnsSignal;
+    property Signal: TUtilitySignal read fSignal;
   {$ENDIF}
     property TimerID: PtrUInt read fTimerID;
     property Interval: UInt32 read fInterval write SetInterval;
@@ -189,8 +190,7 @@ implementation
 
 {$IFNDEF Windows}
 uses
-  Classes, BaseUnix, Linux{$IFDEF LCL}, Forms{$ENDIF},
-  UtilitySignal;
+  Classes, BaseUnix, Linux;
 
 {$LINKLIB RT}
 {$ENDIF}
@@ -257,31 +257,6 @@ Function timer_settime(timerid: timer_t; flags: cint; new_value,old_value: pitim
 
 Function errno_ptr: pcint; cdecl; external name '__errno_location';
 
-{-------------------------------------------------------------------------------
-    TSimpleTimer - signal handler
--------------------------------------------------------------------------------}
-
-procedure SignalHandler(const Info: TUSSignalInfo; var BreakProcessing: Boolean);
-begin
-If Assigned(Info.Value.PtrValue) then
-  (TObject(Info.Value.PtrValue) as TSimpleTimer).TimerExpired;
-BreakProcessing := False;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure RegisterSignalHandler;
-begin
-UtilitySignal.RegisterHandler(SI_TIMER,SignalHandler);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure UnregisterSignalHandler;
-begin
-UtilitySignal.UnregisterHandler(SI_TIMER,SignalHandler);
-end;
-
 {$ENDIF}
 
 {===============================================================================
@@ -327,21 +302,30 @@ else
     fOwnsWindow := True;
     fWindow := TUtilityWindow.Create;
   end;
-fWindow.OnMessage.Add(MessagesHandler);
+fWindow.OnMessage.Add(MessageHandler);
 fTimerID := TimerID;
 {$ELSE}
-procedure TSimpleTimer.Initialize;
+procedure TSimpleTimer.Initialize(Signal: TUtilitySignal);
 var
   SignalEvent:  sigevent_t;
   NewTimerID:   timer_t;
 begin
-InterlockedExchange(fTimerExpired,0);
-fInMainThread := MainThreadID = GetCurrentThreadID;
+If Assigned(Signal) then
+  begin
+    fOwnsSignal := False;
+    fSignal := Signal;
+  end
+else
+  begin
+    fOwnsSignal := True;
+    fSignal:= TUtilitySignal.Create(True);
+  end;
+fSignal.OnSignal.Add(SignalHandler);
 fTimerCreated := False; // just to be sure
 // setup and create timer
 FillChar(Addr(SignalEvent)^,SizeOf(sigevent_t),0);
-SignalEvent.sigev_value.sigval_ptr := Pointer(Self);
-SignalEvent.sigev_signo := cint(UtilitySignal.SignalNumber);
+SignalEvent.sigev_value.sigval_ptr := Pointer(fSignal);
+SignalEvent.sigev_signo := cint(TUtilitySignal.Signal);
 SignalEvent.sigev_notify := SIGEV_SIGNAL;
 If timer_create(CLOCK_MONOTONIC,@SignalEvent,@NewTimerID) = 0 then
   begin
@@ -370,7 +354,7 @@ If Assigned(fWindow) then
     If fOwnsWindow then
       fWindow.Free
     else
-      fWindow.OnMessage.Remove(MessagesHandler);
+      fWindow.OnMessage.Remove(MessageHandler);
   end;
 {$ELSE}
 If fTimerCreated then
@@ -379,10 +363,13 @@ If fTimerCreated then
     If timer_delete(timer_t(fTimerID)) <> 0 then
       raise ESTTimerDeletionError.CreateFmt('Finalize.Initialize: Failed to delete timer (%d).',[errno_ptr^]);
   end;
-{
-  Note that signal handler stays assigned, but it should pose no problem as
-  the timer is destroyed and will not invoke the signal handler anymore.
-}
+If Assigned(fSignal) then
+  begin
+    If fOwnsSignal then
+      fSignal.Free
+    else
+      fSignal.OnSignal.Remove(SignalHandler);
+  end;
 {$ENDIF}
 end;
 
@@ -403,10 +390,7 @@ begin
 FillChar(Addr(TimerTime)^,SizeOf(itimerspec_t),0);
 If timer_settime(timer_t(fTimerID),0,@TimerTime,nil) <> 0 then
   raise ESTTimerSetupError.CreateFmt('TSimpleTimer.SetupTimer: Failed to disarm timer (%d).',[errno_ptr^]);
-{$IFDEF LCL}
-If fInMainThread then
-  Application.RemoveOnIdleHandler(OnAppIdleHandler);
-{$ENDIF}
+fSignal.UnregisterFromOnIdle;
 // arm timer
 If (fInterval > 0) and fEnabled then
   begin
@@ -416,19 +400,15 @@ If (fInterval > 0) and fEnabled then
     TimerTime.it_value.tv_nsec := TimerTime.it_interval.tv_nsec;
     If timer_settime(timer_t(fTimerID),0,@TimerTime,nil) <> 0 then
       raise ESTTimerSetupError.CreateFmt('TSimpleTimer.SetupTimer: Failed to arm timer (%d).',[errno_ptr^]);
-  {$IFDEF LCL}
-    If fInMainThread then
-      Application.AddOnIdleHandler(OnAppIdleHandler,False);
-  {$ENDIF}
+    fSignal.RegisterForOnIdle;
   end;
 {$ENDIF}
 end;
 
-{$IFDEF Windows}
 //------------------------------------------------------------------------------
-
+{$IFDEF Windows}
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TSimpleTimer.MessagesHandler(var Msg: TMessage; var Handled: Boolean; Sent: Boolean);
+procedure TSimpleTimer.MessageHandler(var Msg: TMessage; var Handled: Boolean; Sent: Boolean);
 begin
 If (Msg.Msg = WM_TIMER) and (PtrUInt(Msg.wParam) = fTimerID) then
   begin
@@ -440,20 +420,13 @@ else Handled := False;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
-{$ELSE}
-//------------------------------------------------------------------------------
-
-procedure TSimpleTimer.TimerExpired;
-begin
-InterlockedExchange(fTimerExpired,1);
-end;
-
-//------------------------------------------------------------------------------
+{$ELSE}//-----------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TSimpleTimer.OnAppIdleHandler(Sender: TObject; var Done: Boolean);
+procedure TSimpleTimer.SignalHandler(Sender: TObject; Code: Integer; var BreakProcessing: Boolean);
 begin
-ProcessMessages;
+If Code = SI_TIMER then
+  DoOnTimer;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 {$ENDIF}
@@ -475,11 +448,11 @@ end;
 {$IFDEF Windows}
 constructor TSimpleTimer.Create(Window: TUtilityWindow = nil; TimerID: PtrUInt = 1);
 {$ELSE}
-constructor TSimpleTimer.Create;
+constructor TSimpleTimer.Create(Signal: TUtilitySignal = nil);
 {$ENDIF}
 begin
 inherited Create;
-Initialize{$IFDEF Windows}(Window,TimerID){$ENDIF};
+Initialize{$IFDEF Windows}(Window,TimerID){$ELSE}(Signal){$ENDIF};
 end;
 
 //------------------------------------------------------------------------------
@@ -497,24 +470,8 @@ begin
 {$IFDEF Windows}
 fWindow.ProcessMessages(False);
 {$ELSE}
-If InterlockedExchange(fTimerExpired,0) <> 0 then
-  DoOnTimer;
+fSignal.ProcessSignals;
 {$ENDIF}
 end;
-
-
-{===============================================================================
---------------------------------------------------------------------------------
-                        Unit initialization/finalization
---------------------------------------------------------------------------------
-===============================================================================}
-
-{$IFNDEF Windows}
-initialization
-  RegisterSignalHandler;
-
-finalization
-  UnregisterSignalHandler;
-{$ENDIF}
 
 end.

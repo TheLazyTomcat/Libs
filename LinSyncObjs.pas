@@ -32,9 +32,9 @@
 
   Version 1.1 (2024-05-15)
 
-  Last change 2024-09-09
+  Last change 2025-02-15
 
-  ©2022-2024 František Milt
+  ©2022-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -105,6 +105,7 @@ unit LinSyncObjs;
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ENDIF}
+{$MINENUMSIZE 1}
 {$H+}
 
 {$IFOPT Q+}
@@ -2107,7 +2108,7 @@ type
     fSlotMap:     TBitVectorStatic32;
     fSlotMemory:  Pointer;
     Function GetSlot(SlotIndex: TLSOMultiWaitSlotIndex): PFutexWord; virtual;
-    procedure Initialize; override;
+    procedure Initialize(InitSize: TMemSize; const Name: String; CreationOptions: TCreationOptions); override;
     procedure Finalize; override;
   public
     constructor Create;
@@ -2136,9 +2137,9 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TLSOMultiWaitSlots.Initialize;
+procedure TLSOMultiWaitSlots.Initialize(InitSize: TMemSize; const Name: String; CreationOptions: TCreationOptions);
 begin
-inherited;
+inherited Initialize(InitSize,Name,CreationOptions);
 fSlotCount := 15 * 1024;  // 15360, *4 = 61440 bytes
 fSlotMap := TBitVectorStatic32.Create(fMemory,fSlotCount);
 {
