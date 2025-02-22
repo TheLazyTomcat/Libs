@@ -83,9 +83,9 @@
 
   Internal compatibility version 1
 
-  Last change 2024-10-25
+  Last change 2025-02-20
 
-  ©2024 František Milt
+  ©2024-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -149,6 +149,9 @@ unit ProcessGlobalVars;
   {$DEFINE Windows}
 {$ELSEIF Defined(LINUX) and Defined(FPC)}
   {$DEFINE Linux}
+  {$IFNDEf CompTest}
+    {$MESSAGE WARN 'Does not work in linux - required symbol is not exported.'}
+  {$ENDIF}
 {$ELSE}
   {$MESSAGE FATAL 'Unsupported operating system.'}
 {$IFEND}  

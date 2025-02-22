@@ -64,7 +64,7 @@
 
   Version 2.0 (2025-02-18)
 
-  Last change 2025-02-18
+  Last change 2025-02-20
 
   ©2024-2025 František Milt
 
@@ -85,19 +85,27 @@
   Dependencies:
     AuxClasses        - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions     - github.com/TheLazyTomcat/Lib.AuxExceptions
+    AuxTypes          - github.com/TheLazyTomcat/Lib.AuxTypes
     InterlockedOps    - github.com/TheLazyTomcat/Lib.InterlockedOps
     MulticastEvent    - github.com/TheLazyTomcat/Lib.MulticastEvent
+  * ProcessGlobalVars - github.com/TheLazyTomcat/Lib.ProcessGlobalVars
     SequentialVectors - github.com/TheLazyTomcat/Lib.SequentialVectors
 
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol UtilitySignal_UseAuxExceptions for details).
 
+  Library ProcessGlobalVars is required only when symbol ModuleShared is
+  defined.
+
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
-    AuxTypes            - github.com/TheLazyTomcat/Lib.AuxTypes
+    Adler32             - github.com/TheLazyTomcat/Lib.Adler32
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
     WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
@@ -187,6 +195,32 @@ unit UtilitySignal;
   {$DEFINE FailOnSignalDrop}
 {$ENDIF}
 
+{
+  ModuleShared
+
+  When defined, then this library will share global state with instances of
+  itself in other modules loaded within current process (note that it will
+  cooperate only with instances that were also compiled with this symbol).
+  If used correctly, this can prevent unnecessary allocation of multiple
+  signals for the same purpose in differing modules.
+
+  If not defined, then this library will operate only within a single module
+  into which it is compiled.
+
+  Not defined by default.
+
+  To enable/define this symbol in a project without changing this library,
+  define project-wide symbol UtilitySignal_ModuleShared_On.
+
+    WARNING - currently this feture does not work because of problem in library
+              ProcessGlobalVars. That also means it is completely untested.
+}
+{$UNDEF ModuleShared}
+{$IFDEF UtilitySignal_ModuleShared_On}
+  {$DEFINE ModuleShared}
+  {$MESSAGE WARN 'Do not use this feature, currently it does not work!'}
+{$ENDIF}
+
 interface
 
 uses
@@ -205,6 +239,11 @@ type
 
   EUSInvalidValue = class(EUSException);
 
+  EUSGlobalStateOpenError    = class(EUSException);
+  EUSGlobalStateCloseError   = class(EUSException);
+  EUSGlobalStateMutexError   = class(EUSException);
+  EUSGlobalStateModListError = class(EUSException);
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                 Utility functions
@@ -220,6 +259,21 @@ type
 {===============================================================================
     Utility functions - declaration
 ===============================================================================}
+{
+  IsPrimaryModule
+
+  When symbol ModuleShared is defined, then this function indicates whether
+  module into which it is compiled is a primary module - that is, it has signal
+  action handler installed and is responsible for incoming signals processing.
+
+  If ModuleShared is not defined, then this function always returns True.
+
+    NOTE - non-primary module can become primary if current primary module is
+           unloaded and selects this module as new primary. Therefore do not
+           assume that whatever this function returns is invariant.
+}
+Function IsPrimaryModule: Boolean;
+
 {
   AllocatedSignal
 
@@ -495,7 +549,9 @@ implementation
 
 uses
   UnixType, SysCall, Classes, {$IFDEF LCL}Forms,{$ENDIF}
-  InterlockedOps;
+  AuxTypes, InterlockedOps{$IFDEF ModuleShared}, ProcessGlobalVars{$ENDIF};
+
+{$LINKLIB pthread}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -562,6 +618,32 @@ Function sigaction(signum: cint; act: psigaction_t; oact: psigaction_t): cint; c
 Function sigqueue(pid: pid_t; sig: cint; value: sigval_t): cint; cdecl; external;
 
 //------------------------------------------------------------------------------
+{$IFDEF ModuleShared}
+const
+  PTHREAD_MUTEX_RECURSIVE = 1;
+  PTHREAD_MUTEX_ROBUST    = 1;
+
+type
+  pthread_mutexattr_p = ^pthread_mutexattr_t;
+  pthread_mutex_p = ^pthread_mutex_t;
+
+//------------------------------------------------------------------------------
+
+Function pthread_mutexattr_init(attr: pthread_mutexattr_p): cint; cdecl; external;
+Function pthread_mutexattr_destroy(attr: pthread_mutexattr_p): cint; cdecl; external;
+Function pthread_mutexattr_settype(attr: pthread_mutexattr_p; _type: cint): cint; cdecl; external;
+Function pthread_mutexattr_setrobust(attr: pthread_mutexattr_p; robustness: cint): cint; cdecl; external;
+
+Function pthread_mutex_init(mutex: pthread_mutex_p; attr: pthread_mutexattr_p): cint; cdecl; external;
+Function pthread_mutex_destroy(mutex: pthread_mutex_p): cint; cdecl; external;
+
+Function pthread_mutex_trylock(mutex: pthread_mutex_p): cint; cdecl; external;
+Function pthread_mutex_lock(mutex: pthread_mutex_p): cint; cdecl; external;
+Function pthread_mutex_unlock(mutex: pthread_mutex_p): cint; cdecl; external;
+Function pthread_mutex_consistent(mutex: pthread_mutex_p): cint; cdecl; external;
+
+//------------------------------------------------------------------------------
+{$ENDIF}
 threadvar
   ThrErrorCode: cInt;
 
@@ -614,7 +696,7 @@ type
 var
   // main global variable
   GVAR_ModuleState: record
-    SignalNumber:   cint;
+    Signal:         cint;
     SignalSet:      sigset_t;
     SignalBuffers:  record
       Lock:           Integer;
@@ -623,6 +705,12 @@ var
     end;
     ProcessingLock: TCriticalSection;
     Dispatcher:     TObject;  // TUSSignalDispatcher
+  {$IFDEF ModuleShared}
+    GlobalInfo:     record
+      IsPrimary:    Boolean;
+      HeadVariable: TPGVVariable;
+    end;
+  {$ENDIF}
   end;
 
 //------------------------------------------------------------------------------
@@ -919,6 +1007,7 @@ type
     Function UtilitySignalRegister(UtilitySignal: TUtilitySignal): Integer; virtual;
     Function UtilitySignalUnregister(UtilitySignal: TUtilitySignal): Integer; virtual;
     procedure DispatchFrom(var SignalBuffer: TUSSignalBuffer); virtual;
+    procedure ProcessOrphans(var SignalBuffer: TUSSignalBuffer); virtual;
     Function OrphanSignalsRegister(Callback: TUSSignalCallback): Integer; virtual;
     Function OrphanSignalsRegister(Event: TUSSignalEvent): Integer; virtual;
     Function OrphanSignalsUnregister(Callback: TUSSignalCallback): Integer; virtual;
@@ -1099,9 +1188,8 @@ procedure TUSSignalDispatcher.DispatchFrom(var SignalBuffer: TUSSignalBuffer);
   end;
 
 var
-  i,j:          Integer;
-  Index:        Integer;
-  TempSigInfo:  TUSSignalInfo;
+  i,j:    Integer;
+  Index:  Integer;
 begin
 {$IFDEF FailOnSignalDrop}
 If SignalBuffer.Head.DropCount > 0 then
@@ -1131,10 +1219,29 @@ try
         fUtilitySignals[i].ThreadUnlock;
       end;
     end;
-  // process orphaned signals
-  For j := 0 to Pred(SignalBuffer.Head.Count) do
+finally
+  fThreadLock.Leave;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TUSSignalDispatcher.ProcessOrphans(var SignalBuffer: TUSSignalBuffer);
+var
+  i:            Integer;
+  Index:        Integer;
+  TempSigInfo:  TUSSignalInfo;
+begin
+{$IFDEF FailOnSignalDrop}
+If SignalBuffer.Head.DropCount > 0 then
+  raise EUSSignalLost.CreateFmt('TUSSignalDispatcher.ProcessOrphans: %d signal%s lost due to full buffer.',
+    [SignalBuffer.Head.DropCount,StrIfThen(SignalBuffer.Head.DropCount <= 1,'','s')]);
+{$ENDIF}
+fThreadLock.Enter;
+try
+  For i := 0 to Pred(SignalBuffer.Head.Count) do
     begin
-      Index := (SignalBuffer.Head.First + j) mod Length(SignalBuffer.Signals);
+      Index := (SignalBuffer.Head.First + i) mod Length(SignalBuffer.Signals);
       If not SignalBuffer.Signals[Index].Taken then
         begin
           TempSigInfo.Signal := SignalBuffer.Signals[Index].Signal;
@@ -1222,6 +1329,7 @@ finally
 end;
 end;
 
+
 {===============================================================================
 --------------------------------------------------------------------------------
                             Signal handling and setup
@@ -1272,18 +1380,28 @@ end;
     Signal handling and setup - signal setup
 ===============================================================================}
 
-procedure SignalAllocate;
+procedure SignalAllocate(PreallocatedSignal: cint = -1);
 begin
-// get unused signal number
-GVAR_ModuleState.SignalNumber := allocate_rtsig(1);
-If GVAR_ModuleState.SignalNumber < 0 then
-  raise EUSSignalSetupError.CreateFmt('SignalAllocate: Failed to allocate unused signal number (%d).',[errno_ptr^]);
+If PreallocatedSignal < 0 then
+  begin
+    // get unused signal number
+    GVAR_ModuleState.Signal := allocate_rtsig(1);
+    If GVAR_ModuleState.Signal < 0 then
+      raise EUSSignalSetupError.CreateFmt('SignalAllocate: Failed to allocate unused signal number (%d).',[errno_ptr^]);
+  end
+else GVAR_ModuleState.Signal := PreallocatedSignal;
 // prepare signal set so we do not need to set it up everytime we need it
 If sigemptyset(@GVAR_ModuleState.SignalSet) <> 0 then
   raise EUSSignalSetupError.CreateFmt('SignalAllocate: Emptying signal set failed (%d).',[errno_ptr^]);
-If sigaddset(@GVAR_ModuleState.SignalSet,GVAR_ModuleState.SignalNumber) <> 0 then
+If sigaddset(@GVAR_ModuleState.SignalSet,GVAR_ModuleState.Signal) <> 0 then
   raise EUSSignalSetupError.CreateFmt('SignalAllocate: Failed to add to signal set (%d).',[errno_ptr^]);
-// prepare buffers and their lock
+end;
+
+//==============================================================================
+
+procedure SignalBuffersAllocate;
+begin
+// prepare not only buffers but also their lock
 GVAR_ModuleState.SignalBuffers.Lock := US_SIGRECVLOCK_UNLOCKED;
 GVAR_ModuleState.SignalBuffers.Primary := AllocMem(SizeOf(TUSSignalBuffer)); // memory is zeroed
 GVAR_ModuleState.SignalBuffers.Secondary := AllocMem(SizeOf(TUSSignalBuffer));
@@ -1291,13 +1409,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure SignalDeallocate;
+procedure SignalBuffersDeallocate;
 begin
-{
-  It is not possible to "return" allocated signal number, so only free buffers
-  (ignore lock, nobody should have it by this point). There is also no point
-  in emptying signal set.
-}
 FreeMem(GVAR_ModuleState.SignalBuffers.Primary,SizeOf(TUSSignalBuffer));
 FreeMem(GVAR_ModuleState.SignalBuffers.Secondary,SizeOf(TUSSignalBuffer));
 end;
@@ -1310,12 +1423,12 @@ var
 begin
 // check that the selected signal is really unused (does not have handler assigned)
 FillChar(Addr(SignalAction)^,SizeOf(sigaction_t),0);
-If sigaction(GVAR_ModuleState.SignalNumber,nil,@SignalAction) <> 0 then
+If sigaction(GVAR_ModuleState.Signal,nil,@SignalAction) <> 0 then
   raise EUSSignalSetupError.CreateFmt('SignalActionInstall: Failed to probe signal action (%d).',[errno_ptr^]);
 If (@SignalAction.handler.sa_sigaction <> ExpectedHandler) and
   (@SignalAction.handler.sa_handler <> Pointer(SIG_DFL)) and
   (@SignalAction.handler.sa_handler <> Pointer(SIG_IGN)) then
-  raise EUSSignalSetupError.CreateFmt('SignalActionInstall: Signal (#%d) handler has unexpected value.',[GVAR_ModuleState.SignalNumber]);
+  raise EUSSignalSetupError.CreateFmt('SignalActionInstall: Signal (#%d) handler has unexpected value.',[GVAR_ModuleState.Signal]);
 // setup signal handler
 FillChar(Addr(SignalAction)^,SizeOf(sigaction_t),0);
 SignalAction.handler.sa_sigaction := SignalHandler;
@@ -1323,8 +1436,9 @@ SignalAction.sa_flags := SA_SIGINFO or SA_RESTART;
 // do not block anything
 If sigemptyset(Addr(SignalAction.sa_mask)) <> 0 then
   raise EUSSignalSetupError.CreateFmt('SignalActionInstall: Emptying signal set failed (%d).',[errno_ptr^]);
-If sigaction(GVAR_ModuleState.SignalNumber,@SignalAction,nil) <> 0 then
-  raise EUSSignalSetupError.CreateFmt('SignalActionInstall: Failed to setup action for signal #%d (%d).',[GVAR_ModuleState.SignalNumber,errno_ptr^]);
+// install action
+If sigaction(GVAR_ModuleState.Signal,@SignalAction,nil) <> 0 then
+  raise EUSSignalSetupError.CreateFmt('SignalActionInstall: Failed to setup action for signal #%d (%d).',[GVAR_ModuleState.Signal,errno_ptr^]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1343,36 +1457,403 @@ SignalAction.handler.sa_sigaction := nil;
 @SignalAction.handler.sa_handler := Pointer(SIG_DFL); // default action (terminate)
 If sigemptyset(Addr(SignalAction.sa_mask)) <> 0 then
   raise EUSSignalSetupError.CreateFmt('SignalActionUninstall: Emptying signal set failed (%d).',[errno_ptr^]);
-If sigaction(GVAR_ModuleState.SignalNumber,@SignalAction,nil) <> 0 then
-  raise EUSSignalSetupError.CreateFmt('SignalActionUninstall: Failed to setup action for signal #%d (%d).',[GVAR_ModuleState.SignalNumber,errno_ptr^]);
+If sigaction(GVAR_ModuleState.Signal,@SignalAction,nil) <> 0 then
+  raise EUSSignalSetupError.CreateFmt('SignalActionUninstall: Failed to setup action for signal #%d (%d).',[GVAR_ModuleState.Signal,errno_ptr^]);
 end;
 
-//==============================================================================
 
-procedure LibraryInitialize;
+{$IFDEF ModuleShared}
+{===============================================================================
+--------------------------------------------------------------------------------
+                           Global (cross-module) state
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Global state - constants, types, variables
+===============================================================================}
+type
+  TUSGlobalStateModule = record
+    SignalFetchFrom:  procedure(SignalBuffer: PUSSignalBuffer); stdcall;
+    MakePrimary:      procedure(ExpectedHandler: Pointer); stdcall;
+  end;
+  PUSGlobalStateModule  = ^TUSGlobalStateModule;
+
+  TUSGlobalStateHead = record
+    Version:    Integer;  // only assigned in initialization, no need for PGV lock
+    Signal:     cint;
+    Lock:       pthread_mutex_t;
+  {
+    All following fields (and the entire module list) must be protected by the
+    preceding lock.
+  }
+    Capacity:   Integer;
+    Count:      Integer;
+    ModuleList: TPGVVariable;
+  end;
+  PUSGlobalStateHead = ^TUSGlobalStateHead;
+
+const
+  US_GLOBSTATE_HEAD_NAME = 'utilitysignal_shared_head';
+  US_GLOBSTATE_LIST_NAME = 'utilitysignal_shared_list';
+
+  US_GLOBSTATE_VERSION = 0;
+
+  US_GLOBSTATE_LIST_CAPDELTA = 8;
+
+{===============================================================================
+    Global state - implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Global state - auxiliary functions
+-------------------------------------------------------------------------------}
+
+Function GetModuleListSize(Capacity: Integer): TMemSize;
 begin
-GVAR_ModuleState.ProcessingLock := TCriticalSection.Create;
-GVAR_ModuleState.Dispatcher := TUSSignalDispatcher.Create;
-SignalAllocate;
-SignalActionInstall;
+If Capacity > 0 then
+  Result := TMemSize(Capacity * SizeOf(TUSGlobalStateModule))
+else
+  raise EUSInvalidValue.CreateFmt('GS_GetModuleListSize: Invalid list capacity (%d).',[Capacity]);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure LibraryFinalize;
+Function GetModuleListItem(BaseAddress: PUSGlobalStateModule; Index: Integer): PUSGlobalStateModule;
 begin
-SignalActionUninstall;
-SignalDeallocate;
-FreeAndNil(GVAR_ModuleState.Dispatcher);
-FreeandNil(GVAR_ModuleState.ProcessingLock);
+{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+If Index > 0 then
+  Result := PUSGlobalStateModule(PtrUInt(BaseAddress) + PtrUInt(Index * SizeOf(TUSGlobalStateModule)))
+else If Index = 0 then
+  Result := BaseAddress
+else
+  raise EUSInvalidValue.CreateFmt('GetModuleListItem: Invalid list index (%d).',[Index]);
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
+//------------------------------------------------------------------------------
+
+Function GetModuleListNext(ItemPtr: PUSGlobalStateModule): PUSGlobalStateModule;
+begin
+Result := ItemPtr;
+Inc(Result);
+end;
+
+{-------------------------------------------------------------------------------
+    Global state - exported functions
+-------------------------------------------------------------------------------}
+
+procedure SignalFetchFrom(SignalBuffer: PUSSignalBuffer); stdcall;
+begin
+GVAR_ModuleState.ProcessingLock.Enter;
+try
+  TUSSignalDispatcher(GVAR_ModuleState.Dispatcher).DispatchFrom(SignalBuffer^);
+finally
+  GVAR_ModuleState.ProcessingLock.Leave;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure MakePrimary(ExpectedHandler: Pointer); stdcall;
+begin
+// this needs to be locked to prevent races with SignalFetch
+GVAR_ModuleState.ProcessingLock.Enter;
+try
+  // no need to allocate signal, it was already done by first primary module
+  SignalBuffersAllocate;
+  SignalActionInstall(ExpectedHandler);
+  GVAR_ModuleState.GlobalInfo.IsPrimary := True;
+finally
+  GVAR_ModuleState.ProcessingLock.Leave;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Global state - operation functions
+-------------------------------------------------------------------------------}
+
+procedure GlobalStateLock;
+var
+  GSHeadPtr:  PUSGlobalStateHead;
+  RetVal:     cInt;
+begin
+// globals state head is never reallocated, so using its address directly is safe
+GSHeadPtr := GVAR_ModuleState.GlobalInfo.HeadVariable^;
+RetVal := pthread_mutex_lock(@GSHeadPtr^.Lock);
+If RetVal = ESysEOWNERDEAD then
+  begin
+    If not PThrResChk(pthread_mutex_consistent(@GSHeadPtr^.Lock)) then
+      raise EUSGlobalStateMutexError.CreateFmt('GlobalStateLock: Failed to make mutex consistent (%d).',[ThrErrorCode]);
+  end
+else If not PThrResChk(RetVal) then
+  raise EUSGlobalStateMutexError.CreateFmt('GlobalStateLock: Failed to lock mutex (%d).',[ThrErrorCode]);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure GlobalStateUnlock;
+var
+  GSHeadPtr:  PUSGlobalStateHead;
+begin
+GSHeadPtr := GVAR_ModuleState.GlobalInfo.HeadVariable^;
+If not PThrResChk(pthread_mutex_unlock(@GSHeadPtr^.Lock)) then
+  raise EUSGlobalStateMutexError.CreateFmt('GlobalStateUnlock: Failed to unlock mutex (%d).',[ThrErrorCode]);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure GlobalStateAdd;
+var
+  GSHeadPtr:  PUSGlobalStateHead;
+  GSListPtr:  PUSGlobalStateModule;
+begin
+GlobalStateLock;
+try
+  GSHeadPtr := GVAR_ModuleState.GlobalInfo.HeadVariable^;
+  // reallocate if needed
+  If GSHeadPtr^.Count >= GSHeadPtr^.Capacity then
+    begin
+      Inc(GSHeadPtr^.Capacity,US_GLOBSTATE_LIST_CAPDELTA);
+      GSHeadPtr^.ModuleList := GlobVarRealloc(US_GLOBSTATE_LIST_NAME,GetModuleListSize(GSHeadPtr^.Capacity))^;
+    end;
+  Inc(GSHeadPtr^.Count);
+  GSListPtr := GetModuleListItem(GSHeadPtr^.ModuleList^,Pred(GSHeadPtr^.Count));
+  GSListPtr^.SignalFetchFrom := SignalFetchFrom;
+  GSListPtr^.MakePrimary := MakePrimary;
+finally
+  GlobalStateUnlock;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure GlobalStateRemove;
+var
+  GSHeadPtr:  PUSGlobalStateHead;
+  GSListPtr:  PUSGlobalStateModule;
+  GSItemPtr:  PUSGlobalStateModule;
+  i,Index:    Integer;
+begin
+GlobalStateLock;
+try
+  GSHeadPtr := GVAR_ModuleState.GlobalInfo.HeadVariable^;
+  GSListPtr := GSHeadPtr^.ModuleList^;
+  Index := -1;
+  GSItemPtr := GSListPtr;
+  // find where we are
+  For i := 0 to Pred(GSHeadPtr^.Count) do
+    If (@GSItemPtr^.SignalFetchFrom = @SignalFetchFrom) and
+       (@GSItemPtr^.MakePrimary = @MakePrimary) then
+      begin
+        Index := i;
+        Break{For i};
+      end
+    else Inc(GSItemPtr);
+  // if this module was found, remove it
+  If Index >= 0 then
+    begin
+      GSItemPtr := GetModuleListItem(GSListPtr,Index);
+      For i := Index to (GSHeadPtr^.Count - 2) do
+        begin
+          GSItemPtr^ := GetModuleListNext(GSItemPtr)^;
+          Inc(GSItemPtr);
+        end;
+      GSItemPtr^.SignalFetchFrom := nil;
+      GSItemPtr^.MakePrimary := nil;
+      Dec(GSHeadPtr^.Count);
+    end
+  else raise EUSGlobalStateModListError.Create('GlobalStateRemove: Cannot find current module.');
+finally
+  GlobalStateUnlock;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Global state - init/final functions
+-------------------------------------------------------------------------------}
+
+procedure GlobalStateInit;
+var
+  GSHeadPtr:  PUSGlobalStateHead;
+  MutexAttr:  pthread_mutexattr_t;
+begin
+// PGV must be locked before calling this function
+GSHeadPtr := GVAR_ModuleState.GlobalInfo.HeadVariable^;
+FillChar(GSHeadPtr^,SizeOf(TUSGlobalStateHead),0);
+GSHeadPtr^.Version := US_GLOBSTATE_VERSION;
+// create state lock
+If PThrResChk(pthread_mutexattr_init(@MutexAttr)) then
+  try
+    // make the mutex recursive and robust (it does not need to be process-shared)
+    If not PThrResChk(pthread_mutexattr_settype(@MutexAttr,PTHREAD_MUTEX_RECURSIVE)) then
+      raise EUSGlobalStateMutexError.CreateFmt('GlobalStateInit: Failed to set mutex attribute type (%d).',[ThrErrorCode]);
+    If not PThrResChk(pthread_mutexattr_setrobust(@MutexAttr,PTHREAD_MUTEX_ROBUST)) then
+      raise EUSGlobalStateMutexError.CreateFmt('GlobalStateInit: Failed to set mutex attribute robust (%d).',[ThrErrorCode]);
+    If not PThrResChk(pthread_mutex_init(@GSHeadPtr^.Lock,@MutexAttr)) then
+      raise EUSGlobalStateMutexError.CreateFmt('GlobalStateInit: Failed to init mutex (%d).',[ThrErrorCode]);
+  finally
+    pthread_mutexattr_destroy(@MutexAttr);
+  end
+else raise EUSGlobalStateMutexError.CreateFmt('GlobalStateInit: Failed to init mutex attributes (%d).',[ThrErrorCode]);
+// prepare module list
+GSHeadPtr^.Capacity := US_GLOBSTATE_LIST_CAPDELTA;
+GSHeadPtr^.Count := 0;
+// allocate module list
+GSHeadPtr^.ModuleList := GlobVarAlloc(US_GLOBSTATE_LIST_NAME,GetModuleListSize(GSHeadPtr^.Capacity));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure GlobalStateOpen;
+var
+  VarSize:    TMemSize;
+  GSHeadVar:  TPGVVariable;
+  GSHeadPtr:  PUSGlobalStateHead;
+begin
+GlobVarLock;
+try
+  VarSize := SizeOf(TUSGlobalStateHead);
+  case GlobVarGet(US_GLOBSTATE_HEAD_NAME,VarSize,GSHeadVar) of
+    vgrCreated:
+      begin
+        // we have created the gobal (shared) state, initialize it
+        GVAR_ModuleState.GlobalInfo.HeadVariable := GSHeadVar;
+        GSHeadPtr := GSHeadVar^; // lock is acquired, so this is safe
+        GlobalStateInit;
+        // we are first so we are also primary
+        GlobalStateAdd;
+        GVAR_ModuleState.GlobalInfo.IsPrimary := True;
+        // prepare signal
+        SignalAllocate; // assigns GVAR_ModuleState.Signal
+        SignalBuffersAllocate;
+        SignalActionInstall;
+        GSHeadPtr^.Signal := GVAR_ModuleState.Signal;
+        GlobVarAcquire(GSHeadVar);
+      end;
+    vgrOpened:
+      begin
+      {
+        We have opened the global state, so it already existed - this also
+        means that the signal was already allocated elsewhere.
+      }
+        GVAR_ModuleState.GlobalInfo.HeadVariable := GSHeadVar;
+        GSHeadPtr := GSHeadVar^;
+        GSHeadPtr^.ModuleList := GlobVarGet(US_GLOBSTATE_LIST_NAME);
+        // check that we got list variable with proper size
+        If GlobVarSize(GSHeadPtr^.ModuleList) <> GetModuleListSize(GSHeadPtr^.Capacity) then
+          raise EUSGlobalStateOpenError.Create('GlobalStateOpen: Module list has unexpected size.');
+        GlobalStateAdd;
+        GVAR_ModuleState.GlobalInfo.IsPrimary := False;
+      {
+        Do not allocate signal (only assign existing) and signal buffers and
+        do not install signal action.
+      }
+        SignalAllocate(GSHeadPtr^.Signal);
+        GlobVarAcquire(GSHeadVar);
+      end;
+    vgrSizeMismatch:
+      raise EUSGlobalStateOpenError.Create('GlobalStateOpen: Size mismatch when opening module-shared state.');
+  else
+   {vgrError}
+    raise EUSGlobalStateOpenError.Create('GlobalStateOpen: Failed to open module-shared state.');
+  end;
+finally
+  GlobVarUnlock;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure GlobalStateClose;
+var
+  GSHeadPtr:  PUSGlobalStateHead;
+begin
+GSHeadPtr := GVAR_ModuleState.GlobalInfo.HeadVariable^;
+GlobVarLock;
+try
+  GlobalStateRemove;
+  If GlobVarRelease(US_GLOBSTATE_HEAD_NAME) > 0 then
+    begin
+      // some other module is still using the global state...
+      If GVAR_ModuleState.GlobalInfo.IsPrimary then
+        begin
+        {
+          We are primary module, transfer primarity to other module - note that
+          this module is no longer in the list.
+        }
+          If GSHeadPtr^.Count > 0 then
+            begin
+              If Assigned(@PUSGlobalStateModule(GSHeadPtr^.ModuleList^)^.MakePrimary) then
+                PUSGlobalStateModule(GSHeadPtr^.ModuleList^)^.MakePrimary(@SignalHandler)
+              else
+                raise EUSGlobalStateCloseError.Create('GlobalStateClose: MakePrimary not assigned.');
+            end
+          else raise EUSGlobalStateCloseError.Create('GlobalStateClose: Empty module list.');
+        {
+          Do not call SignalActionUninstall - the action was replaced by the
+          new primary module in MakePrimary.
+        }
+          SignalBuffersDeallocate;
+        end
+      // if we are not primary, there is nothing more to be done
+    end
+  else
+    begin
+      // we were the last module using the global state
+      If GVAR_ModuleState.GlobalInfo.IsPrimary then
+        begin
+          // if last, we should be always primary, but meh...
+          SignalActionUninstall;
+          SignalBuffersDeallocate;
+        end;
+      // destroy the global state
+      GlobVarFree(US_GLOBSTATE_LIST_NAME);
+      If not PThrResChk(pthread_mutex_destroy(@GSHeadPtr^.Lock)) then
+        raise EUSGlobalStateMutexError.CreateFmt('GlobalStateClose: Failed to destroy mutex (%d).',[ThrErrorCode]);
+      GlobVarFree(US_GLOBSTATE_HEAD_NAME);
+    end;
+finally
+  GlobVarUnlock;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Global state - dispatch functions
+-------------------------------------------------------------------------------}
+
+procedure GlobalStateDispatch(SignalBuffer: PUSSignalBuffer);
+var
+  GSHeadPtr:  PUSGlobalStateHead;
+  GSListPtr:  PUSGlobalStateModule;
+  i:          Integer;
+begin
+GlobalStateLock;
+try
+  GSHeadPtr := GVAR_ModuleState.GlobalInfo.HeadVariable^;
+  If GSHeadPtr^.Count > 1 then  // is there anyone but us?
+    begin
+      GSListPtr := GSHeadPtr^.ModuleList^;
+      // traverse all modules and dispatch signal buffer to each one (except ourselves)
+      For i := 0 to Pred(GSHeadPtr^.Count) do
+        begin
+          If Assigned(GSListPtr^.SignalFetchFrom) and
+            (@GSListPtr^.SignalFetchFrom <> @SignalFetchFrom) then
+            GSListPtr^.SignalFetchFrom(SignalBuffer);
+          Inc(GSListPtr);
+        end;
+    end;
+finally
+  GlobalStateUnlock;
+end;
+end;
+
+{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                                Signal processing
+                                 Signal fetching
 --------------------------------------------------------------------------------
 ===============================================================================}
+// it is down here to remove a need for forward declarations
 
 procedure SignalFetch;
 var
@@ -1381,7 +1862,12 @@ var
 begin
 GVAR_ModuleState.ProcessingLock.Enter;
 try
-  // block delivery of allocated signal so we can safely manipulate signal buffer
+{$IFDEF ModuleShared}
+  // if we are not primary then there is nothing to fetch (buffers are not even allocated)
+  If not GVAR_ModuleState.GlobalInfo.IsPrimary then
+    Exit;
+{$ENDIF}
+  // block delivery of allocated signal so we can safely lock signal buffer
   If not PThrResChk(pthread_sigmask(SIG_BLOCK,@GVAR_ModuleState.SignalSet,nil)) then
     raise EUSSignalSetupError.CreateFmt('SignalProcess: Failed to block signal (%d).',[ThrErrorCode]);
   try
@@ -1403,8 +1889,12 @@ try
     If not PThrResChk(pthread_sigmask(SIG_UNBLOCK,@GVAR_ModuleState.SignalSet,nil)) then
       raise EUSSignalSetupError.CreateFmt('SignalProcess: Failed to unblock signal (%d).',[ThrErrorCode]);
   end;
-  // now signal handler has clean (empty) buffer and alt buffer contains received signals
+  // now signal handler has clean (empty) buffer and secondary buffer contains received signals
   TUSSignalDispatcher(GVAR_ModuleState.Dispatcher).DispatchFrom(GVAR_ModuleState.SignalBuffers.Secondary^);
+{$IFDEF ModuleShared}
+  GlobalStateDispatch(GVAR_ModuleState.SignalBuffers.Secondary);
+{$ENDIF}
+  TUSSignalDispatcher(GVAR_ModuleState.Dispatcher).ProcessOrphans(GVAR_ModuleState.SignalBuffers.Secondary^);
   // clear the processed buffer
   FillChar(GVAR_ModuleState.SignalBuffers.Secondary^,SizeOf(TUSSignalBuffer),0);
 finally
@@ -1422,9 +1912,25 @@ end;
     Utility functions - implementation
 ===============================================================================}
 
+Function IsPrimaryModule: Boolean;
+begin
+{$IFDEF ModuleShared}
+GVAR_ModuleState.ProcessingLock.Enter;
+try
+  Result := GVAR_ModuleState.GlobalInfo.IsPrimary;
+finally
+  GVAR_ModuleState.ProcessingLock.Leave;
+end;
+{$ELSE}
+Result := True;
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
 Function AllocatedSignal: Integer;
 begin
-Result := GVAR_ModuleState.SignalNumber;
+Result := GVAR_ModuleState.Signal;
 end;
 
 //------------------------------------------------------------------------------
@@ -1502,21 +2008,21 @@ end;
 
 Function SendSignal(Value: TUSSignalValue; out Error: Integer): Boolean;
 begin
-Result := SendSignal(getpid,GVAR_ModuleState.SignalNumber,Value,Error);
+Result := SendSignal(getpid,GVAR_ModuleState.Signal,Value,Error);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function SendSignal(Value: Integer; out Error: Integer): Boolean;
 begin
-Result := SendSignal(getpid,GVAR_ModuleState.SignalNumber,Value,Error);
+Result := SendSignal(getpid,GVAR_ModuleState.Signal,Value,Error);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function SendSignal(Value: Pointer; out Error: Integer): Boolean;
 begin
-Result := SendSignal(getpid,GVAR_ModuleState.SignalNumber,Value,Error);
+Result := SendSignal(getpid,GVAR_ModuleState.Signal,Value,Error);
 end;
 
 //------------------------------------------------------------------------------
@@ -1525,7 +2031,7 @@ Function SendSignal(Value: TUSSignalValue): Boolean;
 var
   Error: Integer;
 begin
-Result := SendSignal(getpid,GVAR_ModuleState.SignalNumber,Value,Error);
+Result := SendSignal(getpid,GVAR_ModuleState.Signal,Value,Error);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1534,7 +2040,7 @@ Function SendSignal(Value: Integer): Boolean;
 var
   Error: Integer;
 begin
-Result := SendSignal(getpid,GVAR_ModuleState.SignalNumber,Value,Error);
+Result := SendSignal(getpid,GVAR_ModuleState.Signal,Value,Error);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1543,7 +2049,7 @@ Function SendSignal(Value: Pointer): Boolean;
 var
   Error: Integer;
 begin
-Result := SendSignal(getpid,GVAR_ModuleState.SignalNumber,Value,Error);
+Result := SendSignal(getpid,GVAR_ModuleState.Signal,Value,Error);
 end;
 
 {===============================================================================
@@ -1900,6 +2406,36 @@ end;
                       Unit initialization and finalization
 --------------------------------------------------------------------------------
 ===============================================================================}
+
+procedure LibraryInitialize;
+begin
+GVAR_ModuleState.ProcessingLock := TCriticalSection.Create;
+GVAR_ModuleState.Dispatcher := TUSSignalDispatcher.Create;
+{$IFDEF ModuleShared}
+GlobalStateOpen;
+{$ELSE}
+SignalAllocate;
+SignalBuffersAllocate;
+SignalActionInstall;
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure LibraryFinalize;
+begin
+{$IFDEF ModuleShared}
+GlobalStateClose;
+{$ELSE}
+SignalActionUninstall;
+SignalBuffersDeallocate;
+{$ENDIF}
+// there is no need to deallocate the signal (it is not possible anyway)
+FreeAndNil(GVAR_ModuleState.Dispatcher);
+FreeandNil(GVAR_ModuleState.ProcessingLock);
+end;
+
+//==============================================================================
 initialization
   LibraryInitialize;
 

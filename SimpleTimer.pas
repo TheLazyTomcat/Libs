@@ -28,7 +28,7 @@
 
   Version 1.3 (2025-02-18)
 
-  Last change 2025-02-18
+  Last change 2025-02-20
 
   ©2015-2025 František Milt
 
@@ -63,11 +63,16 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    Adler32             - github.com/TheLazyTomcat/Lib.Adler32
+    AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
     MulticastEvent      - github.com/TheLazyTomcat/Lib.MulticastEvent
+    ProcessGlobalVars   - github.com/TheLazyTomcat/Lib.ProcessGlobalVars
     SequentialVectors   - github.com/TheLazyTomcat/Lib.SequentialVectors
     SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
+    StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils
     WinFileInfo         - github.com/TheLazyTomcat/Lib.WinFileInfo
