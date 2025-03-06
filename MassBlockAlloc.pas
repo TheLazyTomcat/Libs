@@ -29,7 +29,7 @@
 
   Version 1.0.1 (2025-01-31)
 
-  Last change 2025-01-31
+  Last change 2025-03-04
 
   ©2024-2025 František Milt
 
@@ -1283,6 +1283,10 @@ implementation
 uses
   {$IFDEF Windows}Windows,{$ELSE}baseunix,{$ENDIF} 
   AuxMath;
+
+{$IFNDEF Windows}
+  {$LINKLIB C}
+{$ENDIF}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

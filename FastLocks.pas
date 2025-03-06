@@ -128,9 +128,9 @@
 
   Version 1.3.2 (2024-05-02)
 
-  Last change 2024-05-02
+  Last change 2025-03-04
 
-  ©2016-2024 František Milt
+  ©2016-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -522,6 +522,10 @@ uses
   baseunix, linux,
 {$ENDIF}
   InterlockedOps;
+
+{$IFNDEF Windows}
+  {$LINKLIB C}
+{$ENDIF}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

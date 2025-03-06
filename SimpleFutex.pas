@@ -31,7 +31,7 @@
 
   Version 1.3.1 (2025-02-05)
 
-  Last change 2025-02-05
+  Last change 2025-03-04
 
   ©2021-2025 František Milt
 
@@ -977,6 +977,8 @@ implementation
 uses
   BaseUnix, Linux, Errors{$IFDEF SF_SimpleRobustMutex}, Syscall, Math{$ENDIF},
   Classes;
+
+{$LINKLIB C}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

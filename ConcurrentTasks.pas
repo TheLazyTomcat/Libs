@@ -50,9 +50,9 @@
 
   Version 1.2.1 (2024-05-03)
 
-  Last change 2024-09-09
+  Last change 2025-03-04
 
-  ©2017-2024 František Milt
+  ©2017-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -390,6 +390,10 @@ implementation
 uses
   {$IFDEF Windows}Windows,{$ELSE}BaseUnix,{$ENDIF}
   InterlockedOps;
+
+{$IFNDEF Windows}
+  {$LINKLIB C}
+{$ENDIF}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

@@ -26,9 +26,9 @@
     are responsible to call this method - so the behavior is technically the
     same as in Windows OS.
 
-  Version 1.3 (2025-02-18)
+  Version 1.3.1 (2025-03-04)
 
-  Last change 2025-02-20
+  Last change 2025-03-04
 
   ©2015-2025 František Milt
 
@@ -164,7 +164,7 @@ type
   {$IFDEF Windows}
     procedure MessageHandler(var Msg: TMessage; var Handled: Boolean; Sent: Boolean); virtual;
   {$ELSE}
-    procedure SignalHandler(Sender: TObject; Code: Integer; var BreakProcessing: Boolean); virtual;
+    procedure SignalHandler(Sender: TObject; Data: TUSSignalInfo; var BreakProcessing: Boolean); virtual;
   {$ENDIF}
     procedure DoOnTimer; virtual;
   public
@@ -197,6 +197,7 @@ implementation
 uses
   Classes, BaseUnix, Linux;
 
+{$LINKLIB C}
 {$LINKLIB RT}
 {$ENDIF}
 
@@ -330,7 +331,7 @@ fTimerCreated := False; // just to be sure
 // setup and create timer
 FillChar(Addr(SignalEvent)^,SizeOf(sigevent_t),0);
 SignalEvent.sigev_value.sigval_ptr := Pointer(fSignal);
-SignalEvent.sigev_signo := cint(TUtilitySignal.Signal);
+SignalEvent.sigev_signo := cint(UtilitySignal.AllocatedSignals[0]);
 SignalEvent.sigev_notify := SIGEV_SIGNAL;
 If timer_create(CLOCK_MONOTONIC,@SignalEvent,@NewTimerID) = 0 then
   begin
@@ -428,9 +429,9 @@ end;
 {$ELSE}//-----------------------------------------------------------------------
 
 {$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-procedure TSimpleTimer.SignalHandler(Sender: TObject; Code: Integer; var BreakProcessing: Boolean);
+procedure TSimpleTimer.SignalHandler(Sender: TObject; Data: TUSSignalInfo; var BreakProcessing: Boolean);
 begin
-If Code = SI_TIMER then
+If Data.Code = SI_TIMER then
   DoOnTimer;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}

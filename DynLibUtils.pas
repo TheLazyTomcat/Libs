@@ -16,11 +16,11 @@
     There are also contexts which offer more advanced options, but they are
     currently untested - use them with caution.
 
-  Version 1.4 (2024-10-14)
+  Version 1.4.1 (2025-03-01)
 
-  Last change 2024-10-14
+  Last change 2025-03-01
 
-  ©2020-2024 František Milt
+  ©2020-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -147,6 +147,7 @@ type
   EDLULibraryOpenError  = class(EDLUException);
   EDLULibraryCloseError = class(EDLUException);
   EDLUInvalidParameter  = class(EDLUException);
+  EDLUInvalidValue      = class(EDLUException);
   EDLUSymbolError       = class(EDLUException);
 
 {$IFDEF Windows}
@@ -193,7 +194,7 @@ Function LibraryIsPresent(const LibFileName: String): Boolean;
   Returns true when requested symbol can be obtained from given library, false
   otherwise.
 
-  If will first load the library, then it will try to normally resolve the
+  It will first load the library, then it will try to normally resolve the
   symbol and in the end will unload the library.
 
   If the library cannot be loaded, it will raise an EDLULibraryOpenError
@@ -304,7 +305,7 @@ type
 
   optResolveNow
 
-    When activated, loading of a library also resolves all undefined symbol
+    When activated, loading of a library also resolves all undefined symbols
     before returning (RTLD_NOW is put into flags), as apposed to lazy binding
     when this option is not active (flags contain RTLD_LAZY).
 
@@ -366,11 +367,11 @@ type
 
     This option works similarly for CloseLibrary - this function decrements
     the internal reference count and only unloads the library if the count
-    reaches zero. With this option active it always cloases the library
+    reaches zero. With this option active it always closes the library
     (whether it is unloaded is decided by the OS).
 
     Each opening call with this option active must be paired by a closing
-    class with it.
+    call with it.
 
     Note that operating system keeps its own reference count for each loaded
     module/object, so this option might seem to be somewhat superfluous. But
@@ -410,11 +411,43 @@ type
     other options given in the parameter. If this is active in contex options,
     then all calls working on that context will use contex options, irrespective
     of whether optContextOptions is given in Options argument or not.
+
+  optOnlyGetHandle
+
+    When this option is used during library loading (eg. functions OpenLibrary),
+    then the library is not classically loaded from the disk, its handle is
+    merely obtained from the already loaded modules. This, of course, assumes
+    that the module was previously loaded into the process.
+
+    System-managed reference count of the library IS incremented, therefore
+    the obtained handle (or context) must be closed using CloseLibrary.
+
+    This option is observed only in Windows OS, it has no effect and is ignored
+    elsewhere.
+
+    If both optOnlyGetHandle and optOnlyGetHandleNoRef are active, then this
+    option takes precedence as it is more secure.
+
+  optOnlyGetHandleNoRef
+
+    Works exactly the same as optOnlyGetHandle (see there for more details),
+    with two major differences...
+
+    Reference count of the requested library is NOT incremented, meaning the
+    obtained handle MUST NOT be closed using CloseLibrary.
+
+    The second difference (which stems from the first one) is, that this option
+    cannot be used for contexts - it is silently ignored there.
+
+      WARNING - using this in multithreaded application is inherently unsafe
+                and great care must be taken when using it there. For more
+                details please refer to Windows OS documentation, function
+                GetModuleHandle.
 }
   TDLUOption = (optDeepCheck,optNoCriticalError,optExceptionOnFailure,
                 optResolveNow,optSafeLoad,optBreakOnUnresolved,optNoSerialize,
                 optAlwaysLoad,optSymbolListResolve,optSymbolListStore,
-                optContextOptions);
+                optContextOptions,optOnlyGetHandle,optOnlyGetHandleNoRef);
 
   TDLUOptions = set of TDLUOption;
 
@@ -462,7 +495,7 @@ Function CheckLibrary(LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = [
   Observed options:
 
     optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
-    optSafeLoad
+    optSafeLoad, optOnlyGetHandle, optOnlyGetHandleNoRef
 }
 Function OpenLibrary(const LibFileName: String; Options: TDLUOptions = []): TDLULibraryHandle; overload;
 
@@ -485,7 +518,7 @@ Function OpenLibrary(const LibFileName: String; Options: TDLUOptions = []): TDLU
   Observed options:
 
     optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
-    optSafeLoad
+    optSafeLoad, optOnlyGetHandle, optOnlyGetHandleNoRef
 }
 Function OpenLibrary(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []): Boolean; overload;
 
@@ -673,7 +706,7 @@ Function ResolveSymbolNames(LibraryHandle: TDLULibraryHandle; const Names: array
   Observed options:
 
     optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
-    optSafeLoad, optBreakOnUnresolved
+    optSafeLoad, optBreakOnUnresolved, optOnlyGetHandle, optOnlyGetHandleNoRef
 }
 Function OpenLibraryAndResolveSymbols(const LibFileName: String; out LibraryHandle: TDLULibraryHandle;
   Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
@@ -986,8 +1019,8 @@ Function CheckLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []
         increments internal reference count. Stored handle is not updated as
         the system function should return the same handle for the same opened
         object (both in Windows and Linux) - this is checked and if the new
-        handle do not match the stored one, then an EDLULibraryOpenError
-        exception s raised.
+        handle do not match the stored one, then an EDLUInvalidValue exception
+        is raised.
         The string given in LibFileName is ignored, instead a string stored in
         the context's field FullFileName is used.
 
@@ -1000,10 +1033,11 @@ Function CheckLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []
               requested file is the same as was opened in the original loading
               call, the given LibFileName string is completely ignored!
 
-  If the library is loaded (first call), the returned handle is always checked
-  for validity (whether with deep check depends on options). If it is not valid,
-  then an EDLULibraryOpenError is raised, irrespective of whether the option
-  optExceptionOnFailure is active or not.
+  If the library is loaded (first call or when optAlwaysLoad is active), the
+  returned handle is always checked for validity (whether with deep check
+  depends on options). If it is not valid, then an EDLULibraryOpenError is
+  raised, irrespective of whether the option optExceptionOnFailure is active
+  or not.
 
     NOTE - if the context is accessed by multiple threads, then the function
            can return false and not actually load the library even if the
@@ -1014,7 +1048,8 @@ Function CheckLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []
   Observed options:
 
     optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
-    optSafeLoad, optNoSerialize, optAlwaysLoad, optContextOptions
+    optSafeLoad, optNoSerialize, optAlwaysLoad, optContextOptions,
+    optOnlyGetHandle
 }
 Function OpenLibrary(const LibFileName: String; var Context: TDLULibraryContext; Options: TDLUOptions = []): Boolean; overload;
 
@@ -1200,7 +1235,8 @@ Function ResolveSymbolNames(var Context: TDLULibraryContext; const Names: array 
 
     optDeepCheck, optNoCriticalError, optExceptionOnFailure, optResolveNow,
     optSafeLoad, optBreakOnUnresolved, optNoSerialize, optAlwaysLoad,
-    optSymbolListStore, optSymbolListResolve, optContextOptions
+    optSymbolListStore, optSymbolListResolve, optContextOptions,
+    optOnlyGetHandle
 }
 Function OpenLibraryAndResolveSymbols(const LibFileName: String; var Context: TDLULibraryContext;
   Symbols: array of TDLUSymbol; out Results: TDLUSymReslResults; Options: TDLUOptions = []): Integer; overload;
@@ -1220,9 +1256,14 @@ Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; var Context
 implementation
 
 uses
-  {$IFNDEF Windows}baseunix, dl,{$ENDIF} SyncObjs,
+  {$IFNDEF Windows}BaseUnix, Math,{$ENDIF} SyncObjs,
   StrRect, InterlockedOps{$IFDEF CPU_x86x}, SimpleCPUID{$ENDIF}
   {$IFDEF Windows}, WindowsVersion{$ENDIF};
+
+{$IFNDEF Windows}
+  {$LINKLIB C}
+  {$LINKLIB DL}
+{$ENDIF}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -1401,13 +1442,12 @@ If IsWindows7OrGreater then
       need to call LoadLibrary (which might cause trouble because of a need to
       call FreeLibrary and so on)
     }
-    Module := GetModuleHandle('kernel32.dll');
-    If Module <> 0 then
+    If OpenLibrary('kernel32.dll',Module,[optOnlyGetHandleNoRef]) then
       begin
         @PEM_VAR_GetThreadErrorMode := GetSymbolAddr(Module,'GetThreadErrorMode',[optExceptionOnFailure]);
         @PEM_VAR_SetThreadErrorMode := GetSymbolAddr(Module,'SetThreadErrorMode',[optExceptionOnFailure]);
       end
-    else raise EDLULibraryOpenError.Create('Kernel32.dll not loaded.');
+    else raise EDLULibraryOpenError.CreateFmt('PEM_Initialize: Kernel32.dll not loaded (%u).',[GetLastError]);
   end;
 end;
 
@@ -1506,9 +1546,20 @@ const
 
 Function SwitchToThread: BOOL; stdcall; external kernel32;
 
+type
+  PHMODULE = ^HMODULE;
+
+Function GetModuleHandleExA(dwFlags: DWORD; lpModuleName: PAnsiChar; phModule: PHMODULE): BOOL; stdcall; external kernel32;
+Function GetModuleHandleExW(dwFlags: DWORD; lpModuleName: PWideChar; phModule: PHMODULE): BOOL; stdcall; external kernel32;
+Function GetModuleHandleEx(dwFlags: DWORD; lpModuleName: PChar; phModule: PHMODULE): BOOL; stdcall; external kernel32
+  name {$IFDEF Unicode}'GetModuleHandleExW'{$ELSE}'GetModuleHandleExA'{$ENDIF};
+
 {$ELSE}//-----------------------------------------------------------------------
 const
   RTLD_DI_LINKMAP = 2;
+
+  RTLD_LAZY = 1;
+  RTLD_NOW  = 2;
 
 type
   plink_map = ^link_map;
@@ -1520,7 +1571,12 @@ type
     l_prev: plink_map;
   end;
 
+Function dlopen(filename: PChar; flags: cint): Pointer; cdecl; external;
+Function dlclose(handle: Pointer): cint; cdecl; external;
+
+Function dlsym(handle: Pointer; symbol: PChar): Pointer; cdecl; external;
 Function dlinfo(handle: Pointer; request: cInt; info: Pointer): cInt; cdecl; external;
+Function dlerror: PChar; cdecl; external;
 
 Function sched_yield: cint; cdecl; external;
 {$ENDIF}
@@ -1536,6 +1592,40 @@ Result := Pointer(LibraryHandle);
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
+//------------------------------------------------------------------------------
+
+Function CheckLibraryBasicOnly(LibraryHandle: TDLULibraryHandle): Boolean;
+begin
+{$IFDEF Windows}
+Result := LibraryHandle <> 0;
+{$ELSE}
+Result := Assigned(LibraryHandle);
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function CheckLibraryDeepOnly(LibraryHandle: TDLULibraryHandle): Boolean;
+{$IFDEF Windows}
+var
+  TempStr:  WideString;
+begin
+TempStr := '';
+{
+  Note that I am NOT trying to get full module name here, this code will fail
+  at doing that. So do not use it for that purpose!
+}
+SetLength(TempStr,UNICODE_STRING_MAX_CHARS);
+Result := GetModuleFileNameW(LibraryHandle,PWideChar(TempStr),Length(TempStr)) > 0;
+end;
+{$ELSE}
+var
+  TempMap:  link_map;
+begin
+Result := dlinfo(LibraryHandle,RTLD_DI_LINKMAP,@TempMap) = 0;
+end;
+{$ENDIF}
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                 Handle functions
@@ -1549,31 +1639,11 @@ end;
 -------------------------------------------------------------------------------}
 
 Function CheckLibrary(LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []): Boolean;
-{$IFDEF Windows}
-var
-  TempStr:  WideString;
 begin
-Result := LibraryHandle <> 0;
-TempStr := '';
+Result := CheckLibraryBasicOnly(LibraryHandle);
 If Result and (optDeepCheck in Options) then
-  begin
-  {
-    Note that I am NOT trying to get full module name here, this code will
-    fail at doing that. So do not use it for that purpose!
-  }
-    SetLength(TempStr,UNICODE_STRING_MAX_CHARS);
-    Result := GetModuleFileNameW(LibraryHandle,PWideChar(TempStr),Length(TempStr)) > 0;
-  end;
+  Result := CheckLibraryDeepOnly(LibraryHandle);
 end;
-{$ELSE}
-var
-  TempMap:  link_map;
-begin
-Result := Assigned(LibraryHandle);
-If Result and (optDeepCheck in Options) then
-  Result := dlinfo(LibraryHandle,RTLD_DI_LINKMAP,@TempMap) = 0;
-end;
-{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1582,6 +1652,12 @@ var
   SL_State:     TDLUSafeLoadState;
 {$IFDEF Windows}
   OldErrorMode: DWORD;
+
+  Function dlerror: String;
+  begin
+    Result := Format('%u',[GetLastError]);
+  end;
+
 {$ENDIF}
 begin
 If optSafeLoad in Options then
@@ -1589,29 +1665,53 @@ If optSafeLoad in Options then
 try
 {$IFDEF Windows}
   OldErrorMode := 0;
-  // windows-only code
+  // windows code
   If optNoCriticalError in Options then
     begin
       OldErrorMode := GetThreadErrorMode;
       SetThreadErrorMode(OldErrorMode or SEM_FAILCRITICALERRORS,nil);
     end;
   try
-    Result := LoadLibraryEx(PSysChar(StrToSys(LibFileName)),0,0);
+    If optOnlyGetHandle in Options then
+      GetModuleHandleEx(0,PSysChar(StrToSys(LibFileName)),@Result)
+    else If optOnlyGetHandleNoRef in Options then
+      Result := GetModuleHandle(PSysChar(StrToSys(LibFileName)))
+    else
+      Result := LoadLibraryEx(PSysChar(StrToSys(LibFileName)),0,0);
+{$ELSE}
+    // linux code
+    Result := dlopen(PSysChar(StrToSys(LibFileName)),IfThen(optResolveNow in Options,RTLD_NOW,RTLD_LAZY));
+{$ENDIF}
+    // check for failures (common code)
+    If optExceptionOnFailure in Options then
+      begin
+        If CheckLibraryBasicOnly(Result) then
+          begin
+            If optDeepCheck in Options then
+              If not CheckLibraryDeepOnly(Result) then
+                begin
+                {$IFDEF Windows}
+                {
+                  We are raising exception here, yet the library was most
+                  probably successfully opened because CheckLibraryBasicOnly
+                  returned true. Because caller of this function cannot know
+                  this and do the cleanup, we must do it ourselves.
+                }
+                  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+                    FreeLibrary(Result);  // ignore errors here
+                {$ENDIF}
+                  // following will show error produced in CheckLibraryDeepOnly
+                  raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s" (deep check failed - %s).',[LibFileName,dlerror]);
+                end;
+          end
+        else raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s" (%s).',[LibFileName,dlerror]);
+      end;
+{$IFDEF Windows}
   finally
     If optNoCriticalError in Options then
       SetThreadErrorMode(OldErrorMode,nil);
   end;
-{$ELSE}
-  // linux-only code
-  If optResolveNow in Options then
-    Result := dlopen(PSysChar(StrToSys(LibFileName)),RTLD_NOW)
-  else
-    Result := dlopen(PSysChar(StrToSys(LibFileName)),RTLD_LAZY);
 {$ENDIF}
-  // common code, check for failures
-  If optExceptionOnFailure in Options then
-    If not CheckLibrary(Result,Options) then
-      raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s".',[LibFileName]);
 finally
   If optSafeLoad in Options then
     SL_RestoreState(SL_State);
@@ -1626,7 +1726,7 @@ begin
   Following OpenLibrary calls CheckLibrary if option optExceptionOnFailure is
   active.
   We can assume, when this option is active and no exception was raised, that
-  the check was already performed and is was succesfull, so we can optimize-out
+  the check was already performed and it was succesfull, so we can optimize-out
   local check and return true straight away.
 }
 LibraryHandle := OpenLibrary(LibFileName,Options);
@@ -1650,7 +1750,7 @@ try
     {$IFDEF Windows}
       If not FreeLibrary(LibraryHandle) then
         If optExceptionOnFailure in Options then
-          raise EDLULibraryCloseError.CreateFmt('CloseLibrary: Failed to free library (%d).',[GetLastError]);
+          raise EDLULibraryCloseError.CreateFmt('CloseLibrary: Failed to free library (%u).',[GetLastError]);
     {$ELSE}
       If dlclose(LibraryHandle) <> 0 then
         If optExceptionOnFailure in Options then
@@ -1679,7 +1779,7 @@ If CheckLibrary(LibraryHandle,Options) then
   {$IFDEF Windows}
     Result := GetProcAddress(LibraryHandle,PSysChar(StrToSys(SymbolName)));
     If not Assigned(Result) and (optExceptionOnFailure in Options) then
-      raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%d).',[SymbolName,GetLastError]);
+      raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%u).',[SymbolName,GetLastError]);
   {$ELSE}
   {
     dlsym can return a VALID nil value, to check for errors, we have to look
@@ -1713,7 +1813,7 @@ If CheckLibrary(LibraryHandle,Options) then
     Address := GetProcAddress(LibraryHandle,PSysChar(StrToSys(SymbolName)));
     Result := Assigned(Address);
     If not Result and (optExceptionOnFailure in Options) then
-      raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%d).',[SymbolName,GetLastError]);
+      raise EDLUSymbolError.CreateFmt('GetSymbolAddr: Unable to resolve symbol "%s" (%u).',[SymbolName,GetLastError]);
   {$ELSE}
     dlerror;
     Address := dlsym(LibraryHandle,PSysChar(StrToSys(SymbolName)));
@@ -1891,7 +1991,17 @@ try
     Exclude(Options,optDeepCheck);
   Result := ResolveSymbols(LibraryHandle,Symbols,Results,Options);
 except
-  CloseLibrary(LibraryHandle,Options);
+{$IFDEF Windows}
+{
+  If optOnlyGetHandleNoRef is in the options but optOnlyGetHandle is not, then
+  do not call CloseLibrary.
+
+  Note that both mentioned options are totally ignored in non-Windows OS, so
+  CloseLibrary is always called there.
+}
+  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+{$ENDIF}
+    CloseLibrary(LibraryHandle,Options);
   raise;  // re-raise exception
 end;
 end;
@@ -1915,7 +2025,10 @@ try
     Exclude(Options,optDeepCheck);
   Result := ResolveSymbolList(LibraryHandle,SymbolList,Results,Options);
 except
-  CloseLibrary(LibraryHandle,Options);
+{$IFDEF Windows}
+  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+{$ENDIF}
+    CloseLibrary(LibraryHandle,Options);
   raise;
 end;
 end;
@@ -1939,7 +2052,10 @@ try
     Exclude(Options,optDeepCheck);
   Result := ResolveSymbolNames(LibraryHandle,Names,AddressVars,Results,Options);
 except
-  CloseLibrary(LibraryHandle,Options);
+{$IFDEF Windows}
+  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+{$ENDIF}
+    CloseLibrary(LibraryHandle,Options);
   raise;
 end;
 end;
@@ -2078,6 +2194,7 @@ If (optContextOptions in Context.Data.Options) or (optContextOptions in CallOpti
   Result := (Context.Data.Options - [optNoSerialize]) + (CallOptions * [optNoSerialize])
 else
   Result := CallOptions;
+Exclude(Result,optOnlyGetHandleNoRef);
 end;
 
 //------------------------------------------------------------------------------
@@ -2361,15 +2478,14 @@ try
   Options := ContextGetEffectiveOptions(InternalCtx,Options);
   If InternalCtx.Data.OpenCount <= 0 then
     begin
-      // initializing call
-      InternalCtx.Data.Handle := OpenLibrary(LibFileName,Options);
     {
-      If optExceptionOnFailure is active, it means the library handle was
-      already checked in previous OpenLibrary call.
+      initializing call
+
+      This function is supposed to always raise an exception if the opening
+      fails. Instead of do it locally, we simply force called OpenLibrary
+      overload to do the checks for us.
     }
-      If not (optExceptionOnFailure in Options) then
-        If not CheckLibrary(InternalCtx.Data.Handle,Options) then
-          raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s".',[LibFileName]);
+      InternalCtx.Data.Handle := OpenLibrary(LibFileName,Options + [optExceptionOnFailure]);
       InternalCtx.Data.OpenCount := 1;
       InternalCtx.Data.OpenFileName := LibFileName;
       UniqueString(InternalCtx.Data.OpenFileName);
@@ -2384,9 +2500,10 @@ try
   else If optAlwaysLoad in Options then
     begin
       // ...load it again
-      NewHandle := OpenLibrary(InternalCtx.Data.FullFileName,Options);
+      NewHandle := OpenLibrary(InternalCtx.Data.FullFileName,Options + [optExceptionOnFailure]);
       If NewHandle <> InternalCtx.Data.Handle then
-        raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to re-open library "%s".',[LibFileName]);
+        raise EDLUInvalidValue.CreateFmt('OpenLibrary: Failed to re-open library "%s" (%p/%p).',
+          [LibFileName,HandleToPtr(NewHandle),HandleToPtr(InternalCtx.Data.Handle)]);
       Inc(InternalCtx.Data.OpenCount);
     end
   // ...do not load it again, only increment refcount

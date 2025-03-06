@@ -15,9 +15,9 @@
 
   Version 1.2.2 (2024-04-20)
 
-  Last change 2024-05-15
+  Last change 2025-03-04
 
-  ©2019-2024 František Milt
+  ©2019-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -765,6 +765,10 @@ uses
     , Classes, StrUtils, dl, UInt64Utils
   {$ENDIF}
 {$ENDIF}{$IFNDEF PurePascal}, SimpleCPUID{$ENDIF};
+
+{$IFNDEF Windows}
+  {$LINKLIB C}
+{$ENDIF}
 
 //------------------------------------------------------------------------------
 

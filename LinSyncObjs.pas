@@ -30,9 +30,9 @@
              problems. Use them with caution and if you find any bugs, please
              report them.
 
-  Version 1.1 (2024-05-15)
+  Version 1.2 (2025-03-06)
 
-  Last change 2025-02-15
+  Last change 2025-03-06
 
   ©2022-2025 František Milt
 
@@ -132,6 +132,8 @@ type
   ELSOOpenError       = class(ELSOException);
   ELSOInvalidLockType = class(ELSOException);
   ELSOInvalidObject   = class(ELSOException);
+
+  ELSOConsistencyError = class(ELSOException);
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -563,10 +565,54 @@ type
     procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
     procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
-    procedure LockStrict; virtual;
-    Function Lock: Boolean; virtual;
-    Function TryLockStrict: Boolean; virtual;
-    Function TryLock: Boolean; virtual;
+  {
+    LockStrict
+
+    This function always acquires (locks) the mutex. If mutex cannot be
+    acquired, then it will raise an exception. Exception (ELSOConsistencyError)
+    is also raised if mutex cannot be made consistent after it is bandoned (its
+    prewious owner dies without releasing it).
+
+    Returns wrSignaled when mutex was normally acquired or wrAbandoned when its
+    prewious owner died - you should check for this value as it may mean the
+    data protected by this mutex are in an inconsistent state.
+  }
+    Function LockStrict: TLSOWaitResult; virtual;
+  {
+    Lock
+
+    Works the same as LockStrict (see there for more info), the only difference
+    is, that it does NOT raise an exception if the mutex cannot be acquired.
+    In such a case, it will only return wrError.
+
+      NOTE - an exception is still raised if making the mutex consistent fails.
+  }
+    Function Lock: TLSOWaitResult; virtual;
+  {
+    TryLockStrict
+
+    Tries to lock the mutext - if it is currently acquired by other thread
+    (ie. is locked), then it will return wrTimeout.
+    Other than that, it behaves the same as LockStrict (ie. returns wrAbandoned
+    for mutex whose prev. owner died or wrSignaled if the mutex was locked
+    successfully).
+  }
+    Function TryLockStrict: TLSOWaitResult; virtual;
+  {
+    TryLock
+
+    Works the same as TryLockStrict, but instead of raising an exception in
+    case of failure, it just returns wrError.
+
+      NOTE - an exception is still raised if making the mutex consistent fails.
+  }
+    Function TryLock: TLSOWaitResult; virtual;
+  {
+    TimedLock
+
+    If making the mutex consistent fails, then an exception of class
+    ELSOConsistencyError is raised.
+  }
     Function TimedLock(Timeout: UInt32): TLSOWaitResult; virtual;
     procedure UnlockStrict; virtual;
     Function Unlock: Boolean; virtual;
@@ -671,20 +717,39 @@ type
     procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
     procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
-    procedure WaitStrict(DataLock: ppthread_mutex_t); overload; virtual;
-    procedure WaitStrict(DataLock: TMutex); overload; virtual;
-    Function Wait(DataLock: ppthread_mutex_t): Boolean; overload; virtual;
-    Function Wait(DataLock: TMutex): Boolean; overload; virtual;
+  {
+    WaitStrict
+
+    Returns wrSignaled if all operations went with no problem or wrAbandoned
+    if the DataLock was acquired but its previous owned died while still
+    holding it. Note that the mutex is automatically made consistent again in
+    such a case.
+
+    In case of unrecoverable problem it raises an exception.
+  }
+    Function WaitStrict(DataLock: ppthread_mutex_t): TLSOWaitResult; overload; virtual;
+    Function WaitStrict(DataLock: TMutex): TLSOWaitResult; overload; virtual;
+  {
+    Wait
+
+    Same as WaitStrict, but does not raise an exception in case of failure.
+    In that case it merely returns wrError and LastError indicates reason for
+    failure.
+
+      NOTE - an exception is raised if making the mutex consistent fails.
+  }
+    Function Wait(DataLock: ppthread_mutex_t): TLSOWaitResult; overload; virtual;
+    Function Wait(DataLock: TMutex): TLSOWaitResult; overload; virtual;
     Function TimedWait(DataLock: ppthread_mutex_t; Timeout: UInt32): TLSOWaitResult; overload; virtual;
     Function TimedWait(DataLock: TMutex; Timeout: UInt32): TLSOWaitResult; overload; virtual;
     procedure SignalStrict; virtual;
     Function Signal: Boolean; virtual;
     procedure BroadcastStrict; virtual;
     Function Broadcast: Boolean; virtual;
-    procedure AutoCycle(DataLock: ppthread_mutex_t; Timeout: UInt32); overload; virtual;
-    procedure AutoCycle(DataLock: TMutex; Timeout: UInt32); overload; virtual;
-    procedure AutoCycle(DataLock: ppthread_mutex_t); overload; virtual;
-    procedure AutoCycle(DataLock: TMutex); overload; virtual;
+    procedure AutoCycle(DataLock: ppthread_mutex_t; Timeout: UInt32; AcceptAbandonedDataLock: Boolean = True); overload; virtual;
+    procedure AutoCycle(DataLock: TMutex; Timeout: UInt32; AcceptAbandonedDataLock: Boolean = True); overload; virtual;
+    procedure AutoCycle(DataLock: ppthread_mutex_t; AcceptAbandonedDataLock: Boolean = True); overload; virtual;
+    procedure AutoCycle(DataLock: TMutex; AcceptAbandonedDataLock: Boolean = True); overload; virtual;
     // events
     property OnPredicateCheckEvent: TLSOPredicateCheckEvent read fOnPredicateCheckEvent write fOnPredicateCheckEvent;
     property OnPredicateCheckCallback: TLSOPredicateCheckCallback read fOnPredicateCheckCallback write fOnPredicateCheckCallback;
@@ -711,15 +776,15 @@ type
     procedure InitializeLock(InitializingData: PtrUInt; var CompleteStage: Integer); override;
     procedure FinalizeLock(CompleteStage: Integer = MAXINT); override;
   public
-    procedure LockStrict; virtual;
-    Function Lock: Boolean; virtual;
+    Function LockStrict: TLSOWaitResult; virtual;           // for details, see TMutex.LockStrict
+    Function Lock: TLSOWaitResult; virtual;                 // TMutex.Lock
     procedure UnlockStrict; virtual;
     Function Unlock: Boolean; virtual;
-    procedure WaitStrict; overload; virtual;
-    Function Wait: Boolean; overload; virtual;
+    Function WaitStrict: TLSOWaitResult; overload; virtual; // TConditionVariable.WaitStrict
+    Function Wait: TLSOWaitResult; overload; virtual;       // TConditionVariable.Wait
     Function TimedWait(Timeout: UInt32): TLSOWaitResult; overload; virtual;
-    procedure AutoCycle(Timeout: UInt32); overload; virtual;
-    procedure AutoCycle; overload; virtual;
+    procedure AutoCycle(Timeout: UInt32; AcceptAbandonedDataLock: Boolean = True); overload; virtual;
+    procedure AutoCycle(AcceptAbandonedDataLock: Boolean = True); overload; virtual;
   end;
 
 {===============================================================================
@@ -810,6 +875,9 @@ uses
   Math, UnixType, Linux, Errors,
   InterlockedOps, BitOps;
 
+{$LINKLIB C}
+{$LINKLIB PTHREAD}
+
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
@@ -862,8 +930,6 @@ end;
                                 TCriticalSection
 --------------------------------------------------------------------------------
 ===============================================================================}
-
-Function pthread_mutex_consistent(mutex: ppthread_mutex_t): cInt; cdecl; external;
 
 Function pthread_mutexattr_getrobust(attr: ppthread_mutexattr_t; robustness: pcInt): cInt; cdecl; external;
 Function pthread_mutexattr_setrobust(attr: ppthread_mutexattr_t; robustness: cInt): cInt; cdecl; external;
@@ -941,10 +1007,16 @@ begin
 ReturnValue := pthread_mutex_trylock(@fMutex);
 If ReturnValue = ESysEOWNERDEAD then
   begin
-    If not CheckResErr(pthread_mutex_consistent(@fMutex)) then
-      raise ELSOSysOpError.CreateFmt('TCriticalSection.TryEnter: ' +
-        'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
-    Result := True;
+  {
+    Critical section should fail if owner dies - threfore do unlock, which will
+    mark the mutex permanently unusable (any future attempt at using it will
+    produce an exception) and raise an exception.
+
+    Ignore possible errors from unlocking, we will be raising an exception
+    anyway.
+  }
+    pthread_mutex_unlock(@fMutex);  // ignore errors
+    raise ELSOSysOpError.Create('TCriticalSection.TryEnter: Mutex was abandoned.');
   end
 else
   begin
@@ -964,9 +1036,8 @@ begin
 ReturnValue := pthread_mutex_lock(@fMutex);
 If ReturnValue = ESysEOWNERDEAD then
   begin
-    If not CheckResErr(pthread_mutex_consistent(@fMutex)) then
-      raise ELSOSysOpError.CreateFmt('TCriticalSection.Enter: ' +
-        'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    pthread_mutex_unlock(@fMutex);
+    raise ELSOSysOpError.Create('TCriticalSection.Enter: Mutex was abandoned.');
   end
 else
   begin
@@ -2877,6 +2948,7 @@ end;
 ===============================================================================}
 
 Function pthread_mutex_timedlock(mutex: ppthread_mutex_t; abstime: ptimespec): cInt; cdecl; external;
+Function pthread_mutex_consistent(mutex: ppthread_mutex_t): cInt; cdecl; external;
 
 {===============================================================================
     TMutex - class implementation
@@ -2945,7 +3017,7 @@ end;
     TMutex - public methods
 -------------------------------------------------------------------------------}
 
-procedure TMutex.LockStrict;
+Function TMutex.LockStrict: TLSOWaitResult;
 var
   ReturnValue:  cInt;
 begin
@@ -2954,20 +3026,22 @@ If ReturnValue = ESysEOWNERDEAD then
   begin
     // we are now owning the mutex, but must make it consistent again
     If not CheckResErr(pthread_mutex_consistent(fLockPtr)) then
-      raise ELSOSysOpError.CreateFmt('TMutex.LockStrict: ' +
+      raise ELSOConsistencyError.CreateFmt('TMutex.LockStrict: ' +
         'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Result := wrAbandoned;
   end
 else
   begin
     If not CheckResErr(ReturnValue) then
       raise ELSOSysOpError.CreateFmt('TMutex.LockStrict: ' +
         'Failed to lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Result := wrSignaled;
   end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TMutex.Lock: Boolean;
+Function TMutex.Lock: TLSOWaitResult;
 var
   ReturnValue:  cInt;
 begin
@@ -2975,64 +3049,74 @@ ReturnValue := pthread_mutex_lock(fLockPtr);
 If ReturnValue = ESysEOWNERDEAD then
   begin
     If not CheckResErr(pthread_mutex_consistent(fLockPtr)) then
-      raise ELSOSysOpError.CreateFmt('TMutex.Lock: ' +
+      raise ELSOConsistencyError.CreateFmt('TMutex.Lock: ' +
         'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
-    Result := True;
+    Result := wrAbandoned;
     fLastError := 0;
   end
 else
   begin
-    Result := CheckResErr(ReturnValue);
+    If CheckResErr(ReturnValue) then
+      Result := wrSignaled
+    else
+      Result := wrError;
     fLastError := Integer(ThrErrorCode);
   end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TMutex.TryLockStrict: Boolean;
+Function TMutex.TryLockStrict: TLSOWaitResult;
 var
   ReturnValue:  cInt;
 begin
 ReturnValue := pthread_mutex_trylock(fLockPtr);
-If ReturnValue = ESysEOWNERDEAD then
-  begin
-    If not CheckResErr(pthread_mutex_consistent(fLockPtr)) then
-      raise ELSOSysOpError.CreateFmt('TMutex.TryLockStrict: ' +
-        'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
-    Result := True;
-  end
+case ReturnValue of
+  ESysEOWNERDEAD:
+    begin
+      If not CheckResErr(pthread_mutex_consistent(fLockPtr)) then
+        raise ELSOConsistencyError.CreateFmt('TMutex.TryLockStrict: ' +
+          'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+      Result := wrAbandoned;
+    end;
+  ESysEBUSY:
+    Result := wrTimeout;
 else
-  begin
-    Result := CheckResErr(ReturnValue);
-    If not Result and (ThrErrorCode <> ESysEBUSY) then
-      raise ELSOSysOpError.CreateFmt('TMutex.TryLockStrict: ' +
-        'Failed to try-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
-  end;
+  If not CheckResErr(ReturnValue) then
+    raise ELSOSysOpError.CreateFmt('TMutex.TryLockStrict: ' +
+      'Failed to try-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+  Result := wrSignaled;
+end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TMutex.TryLock: Boolean;
+Function TMutex.TryLock: TLSOWaitResult;
 var
   ReturnValue:  cInt;
 begin
 ReturnValue := pthread_mutex_trylock(fLockPtr);
-If ReturnValue = ESysEOWNERDEAD then
-  begin
-    If not CheckResErr(pthread_mutex_consistent(fLockPtr)) then
-      raise ELSOSysOpError.CreateFmt('TMutex.TryLock: ' +
-        'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
-    Result := True;
-    fLastError := 0;
-  end
+case ReturnValue of
+  ESysEOWNERDEAD:
+    begin
+      If not CheckResErr(pthread_mutex_consistent(fLockPtr)) then
+        raise ELSOConsistencyError.CreateFmt('TMutex.TryLock: ' +
+          'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+      Result := wrAbandoned;
+      fLastError := 0;
+    end;
+  ESysEBUSY:
+    begin
+      Result := wrTimeout;
+      fLastError := 0;
+    end
 else
-  begin
-    Result := CheckResErr(ReturnValue);
-    If not Result and (ThrErrorCode = ESysEBUSY) then
-      fLastError := 0
-    else
-      fLastError := Integer(ThrErrorCode);
-  end;
+  If CheckResErr(ReturnValue) then
+    Result := wrSignaled
+  else
+    Result := wrError;
+  fLastError := Integer(ThrErrorCode);
+end;
 end;
 
 //------------------------------------------------------------------------------
@@ -3050,7 +3134,7 @@ try
       If ReturnValue = ESysEOWNERDEAD then
         begin
           If not CheckResErr(pthread_mutex_consistent(fLockPtr)) then
-            raise ELSOSysOpError.CreateFmt('TMutex.TimedLock: ' +
+            raise ELSOConsistencyError.CreateFmt('TMutex.TimedLock: ' +
               'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
           Result := wrAbandoned;
         end
@@ -3065,15 +3149,11 @@ try
         end
       else Result := wrSignaled;
     end
-  else
-    begin
-      If Lock then
-        Result := wrSignaled
-      else
-        Result := wrError;
-    end;
+  else Result := Lock;
 except
-  Result := wrError;
+  on ELSOConsistencyError do raise;
+  else
+    Result := wrError;
 end;
 end;
 
@@ -3185,7 +3265,7 @@ Function TSemaphore.GetValue: cInt;
 begin
 If not CheckErrAlt(sem_getvalue(fLockPtr,@Result)) then
   begin
-    fLastError := ThrErrorCode;
+    fLastError := Integer(ThrErrorCode);
     Result := -1;
   end;
 end;
@@ -3642,31 +3722,63 @@ end;
     TConditionVariable - public methods
 -------------------------------------------------------------------------------}
 
-procedure TConditionVariable.WaitStrict(DataLock: ppthread_mutex_t);
+Function TConditionVariable.WaitStrict(DataLock: ppthread_mutex_t): TLSOWaitResult;
+var
+  ReturnValue:  cInt;
 begin
-If not CheckResErr(pthread_cond_wait(fLockPtr,DataLock)) then
-  raise ELSOSysOpError.CreateFmt('TConditionVariable.WaitStrict: ' +
-    'Failed to wait on condvar (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+ReturnValue := pthread_cond_wait(fLockPtr,DataLock);
+If ReturnValue = ESysEOWNERDEAD then
+  begin
+    // we are now owning the mutex, but must make it consistent again
+    If not CheckResErr(pthread_mutex_consistent(DataLock)) then
+      raise ELSOConsistencyError.CreateFmt('TConditionVariable.WaitStrict: ' +
+        'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Result := wrAbandoned;
+  end
+else
+  begin
+    If not CheckResErr(ReturnValue) then
+      raise ELSOSysOpError.CreateFmt('TConditionVariable.WaitStrict: ' +
+        'Failed to wait on condvar (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Result := wrSignaled;
+  end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure TConditionVariable.WaitStrict(DataLock: TMutex);
+Function TConditionVariable.WaitStrict(DataLock: TMutex): TLSOWaitResult;
 begin
-WaitStrict(DataLock.fLockPtr);
+Result := WaitStrict(DataLock.fLockPtr);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TConditionVariable.Wait(DataLock: ppthread_mutex_t): Boolean;
+Function TConditionVariable.Wait(DataLock: ppthread_mutex_t): TLSOWaitResult;
+var
+  ReturnValue:  cInt;
 begin
-Result := CheckResErr(pthread_cond_wait(fLockPtr,DataLock));
-fLastError := Integer(ThrErrorCode);
+ReturnValue := pthread_cond_wait(fLockPtr,DataLock);
+If ReturnValue = ESysEOWNERDEAD then
+  begin
+    If not CheckResErr(pthread_mutex_consistent(DataLock)) then
+      raise ELSOConsistencyError.CreateFmt('TConditionVariable.Wait: ' +
+        'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Result := wrAbandoned;
+    fLastError := 0;
+  end
+else
+  begin
+    If CheckResErr(ReturnValue) then
+      Result := wrSignaled
+    else
+      Result := wrError;
+    fLastError := Integer(ThrErrorCode);
+  end;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function TConditionVariable.Wait(DataLock: TMutex): Boolean;
+Function TConditionVariable.Wait(DataLock: TMutex): TLSOWaitResult;
 begin
 Result := Wait(DataLock.fLockPtr);
 end;
@@ -3676,12 +3788,21 @@ end;
 Function TConditionVariable.TimedWait(DataLock: ppthread_mutex_t; Timeout: UInt32): TLSOWaitResult;
 var
   TimeoutSpec:  timespec;
+  ReturnValue:  cInt;
 begin
 try
   If Timeout <> INFINITE then
     begin
       ResolveAbsoluteTimeout(Timeout,TimeoutSpec);
-      If not CheckResErr(pthread_cond_timedwait(fLockPtr,DataLock,@TimeoutSpec)) then
+      ReturnValue := pthread_cond_timedwait(fLockPtr,DataLock,@TimeoutSpec);
+      If ReturnValue = ESysEOWNERDEAD then
+        begin
+          If not CheckResErr(pthread_mutex_consistent(DataLock)) then
+            raise ELSOConsistencyError.CreateFmt('TConditionVariable.TimedWait: ' +
+              'Failed to make mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+          Result := wrAbandoned;
+        end
+      else If not CheckResErr(ReturnValue) then
         begin
           If ThrErrorCode <> ESysETIMEDOUT then
             begin
@@ -3692,15 +3813,11 @@ try
         end
       else Result := wrSignaled;
     end
-  else
-    begin
-      If Wait(DataLock) then
-        Result := wrSignaled
-      else
-        Result := wrError;
-    end;
+  else Result :=  Wait(DataLock);
 except
-  Result := wrError;
+  on ELSOConsistencyError do raise;
+  else
+    Result := wrError;
 end;
 end;
 
@@ -3747,7 +3864,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariable.AutoCycle(DataLock: ppthread_mutex_t; Timeout: UInt32);
+procedure TConditionVariable.AutoCycle(DataLock: ppthread_mutex_t; Timeout: UInt32; AcceptAbandonedDataLock: Boolean = True);
 var
   ReturnValue:  cInt;
   WakeOptions:  TLSOWakeOptions;
@@ -3759,18 +3876,19 @@ If Assigned(fOnPredicateCheckEvent) or Assigned(fOnPredicateCheckCallback) then
     If ReturnValue = ESysEOWNERDEAD then
       begin
         If not CheckResErr(pthread_mutex_consistent(DataLock)) then
-          raise ELSOSysOpError.CreateFmt('TConditionVariable.AutoCycle: ' +
+          raise ELSOConsistencyError.CreateFmt('TConditionVariable.AutoCycle: ' +
             'Failed to make data-lock mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+        If not AcceptAbandonedDataLock then
+          raise ELSOSysOpError.Create('TConditionVariable.AutoCycle: Data lock was abandoned before auto-cycle.');
       end
-    else
-      begin
-        If not CheckResErr(ReturnValue) then
-          raise ELSOSysOpError.CreateFmt('TConditionVariable.AutoCycle: ' +
-            'Failed to lock data-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
-      end;
+    else If not CheckResErr(ReturnValue) then
+      raise ELSOSysOpError.CreateFmt('TConditionVariable.AutoCycle: ' +
+        'Failed to lock data-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
     // test predicate and wait condition
     while not DoOnPredicateCheck do
-      TimedWait(DataLock,Timeout);
+      If TimedWait(DataLock,Timeout) = wrAbandoned then
+        If not AcceptAbandonedDataLock then
+          raise ELSOSysOpError.Create('TConditionVariable.AutoCycle: Data lock was abandoned during predicate check.');
     // access protected data
     WakeOptions := DoOnDataAccess;
     // wake waiters before unlock
@@ -3788,15 +3906,19 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure TConditionVariable.AutoCycle(DataLock: TMutex; Timeout: UInt32);
+procedure TConditionVariable.AutoCycle(DataLock: TMutex; Timeout: UInt32; AcceptAbandonedDataLock: Boolean = True);
 var
   WakeOptions:  TLSOWakeOptions;
 begin
 If Assigned(fOnPredicateCheckEvent) or Assigned(fOnPredicateCheckCallback) then
   begin
-    DataLock.LockStrict;
+    If DataLock.LockStrict = wrAbandoned then
+      If not AcceptAbandonedDataLock then
+        raise ELSOSysOpError.Create('TConditionVariable.AutoCycle: Data lock was abandoned before auto-cycle.');
     while not DoOnPredicateCheck do
-      TimedWait(DataLock,Timeout);
+      If TimedWait(DataLock,Timeout) = wrAbandoned then
+        If not AcceptAbandonedDataLock then
+          raise ELSOSysOpError.Create('TConditionVariable.AutoCycle: Data lock was abandoned during predicate check.');
     WakeOptions := DoOnDataAccess;
     If (woWakeBeforeUnlock in WakeOptions) then
       SelectWake(WakeOptions);
@@ -3808,16 +3930,16 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure TConditionVariable.AutoCycle(DataLock: ppthread_mutex_t);
+procedure TConditionVariable.AutoCycle(DataLock: ppthread_mutex_t; AcceptAbandonedDataLock: Boolean = True);
 begin
-AutoCycle(DataLock,INFINITE);
+AutoCycle(DataLock,INFINITE,AcceptAbandonedDataLock);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure TConditionVariable.AutoCycle(DataLock: TMutex);
+procedure TConditionVariable.AutoCycle(DataLock: TMutex; AcceptAbandonedDataLock: Boolean = True);
 begin
-AutoCycle(DataLock,INFINITE);
+AutoCycle(DataLock,INFINITE,AcceptAbandonedDataLock);
 end;
 
 
@@ -3896,7 +4018,7 @@ end;
     TConditionVariableEx - public methods
 -------------------------------------------------------------------------------}
 
-procedure TConditionVariableEx.LockStrict;
+Function TConditionVariableEx.LockStrict: TLSOWaitResult;
 var
   ReturnValue:  cInt;
 begin
@@ -3904,20 +4026,22 @@ ReturnValue := pthread_mutex_lock(fDataLockPtr);
 If ReturnValue = ESysEOWNERDEAD then
   begin
     If not CheckResErr(pthread_mutex_consistent(fDataLockPtr)) then
-      raise ELSOSysOpError.CreateFmt('TConditionVariableEx.LockStrict: ' +
+      raise ELSOConsistencyError.CreateFmt('TConditionVariableEx.LockStrict: ' +
         'Failed to make data-lock mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Result := wrAbandoned;
   end
 else
   begin
     If not CheckResErr(ReturnValue) then
       raise ELSOSysOpError.CreateFmt('TConditionVariableEx.LockStrict: ' +
         'Failed to lock data-lock mutex (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
+    Result := wrSignaled;
   end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function TConditionVariableEx.Lock: Boolean;
+Function TConditionVariableEx.Lock: TLSOWaitResult;
 var
   ReturnValue:  cInt;
 begin
@@ -3925,14 +4049,17 @@ ReturnValue := pthread_mutex_lock(fDataLockPtr);
 If ReturnValue = ESysEOWNERDEAD then
   begin
     If not CheckResErr(pthread_mutex_consistent(fDataLockPtr)) then
-      raise ELSOSysOpError.CreateFmt('TConditionVariableEx.Lock: ' +
+      raise ELSOConsistencyError.CreateFmt('TConditionVariableEx.Lock: ' +
         'Failed to make data-lock mutex consistent (%d - %s).',[ThrErrorCode,StrError(ThrErrorCode)]);
-    Result := True;
+    Result := wrAbandoned;
     fLastError := 0;
   end
 else
   begin
-    Result := CheckResErr(ReturnValue);
+    If CheckResErr(ReturnValue) then
+      Result := wrSignaled
+    else
+      Result := wrError;
     fLastError := Integer(ThrErrorCode);
   end;
 end;
@@ -3956,14 +4083,14 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariableEx.WaitStrict;
+Function TConditionVariableEx.WaitStrict: TLSOWaitResult;
 begin
-WaitStrict(fDataLockPtr);
+Result := WaitStrict(fDataLockPtr);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TConditionVariableEx.Wait: Boolean;
+Function TConditionVariableEx.Wait: TLSOWaitResult;
 begin
 Result := Wait(fDataLockPtr);
 end;
@@ -3977,16 +4104,16 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariableEx.AutoCycle(Timeout: UInt32);
+procedure TConditionVariableEx.AutoCycle(Timeout: UInt32; AcceptAbandonedDataLock: Boolean = True);
 begin
-AutoCycle(fDataLockPtr,Timeout);
+AutoCycle(fDataLockPtr,Timeout,AcceptAbandonedDataLock);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure TConditionVariableEx.AutoCycle;
+procedure TConditionVariableEx.AutoCycle(AcceptAbandonedDataLock: Boolean = True);
 begin
-AutoCycle(fDataLockPtr,INFINITE);
+AutoCycle(fDataLockPtr,INFINITE,AcceptAbandonedDataLock);
 end;
 
 

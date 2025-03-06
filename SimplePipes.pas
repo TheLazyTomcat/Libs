@@ -37,7 +37,7 @@
       data automatically from this shared memory - so you don't have to manage
       any IPC or other means of data sharing.
 
-      Named pipes works similarly to shared pipes (on the outside, not
+      Named pipes work similarly to shared pipes (on the outside, not
       internally), but they are managed by the operating system. Simply pass
       the same name to both server and client and you are golden.
 
@@ -50,9 +50,9 @@
 
   Version 1.1.2 (2024-05-03)
 
-  Last change 2024-09-09
+  Last change 2025-03-06
 
-  ©2022-2024 František Milt
+  ©2022-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -290,6 +290,10 @@ uses
   StrRect,
 {$ENDIF}
   InterlockedOps;
+
+{$IFNDEF Windows}
+  {$LINKLIB C}
+{$ENDIF}
 
 {===============================================================================
     Externals
@@ -820,7 +824,6 @@ end;
 {-------------------------------------------------------------------------------
     TNamedPipe - public methods
 -------------------------------------------------------------------------------}
-
 
 constructor TNamedPipe.CreateReadEnd(const Name: String);
 begin

@@ -98,9 +98,9 @@
 
   Version 1.2 (2024-05-18)
 
-  Last change 2024-05-18
+  Last change 2025-03-05
 
-  ©2023-2024 František Milt
+  ©2023-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1318,6 +1318,10 @@ uses
   syscall, pthreads,
 {$ENDIF}
   SimpleCPUID;
+
+{$IFNDEF Windows}
+  {$LINKLIB C}
+{$ENDIF}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

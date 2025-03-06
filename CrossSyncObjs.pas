@@ -31,11 +31,11 @@
       WARNING - remembed that all system-specific limitations still apply here
                 (eg. max 64 events in WaitForMultipleEvents on Windows).
 
-  Version 1.1.1 (2024-05-15)
+  Version 1.1.2 (2025-03-06)
 
-  Last change 2024-09-09
+  Last change 2025-03-06
 
-  ©2022-2024 František Milt
+  ©2022-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -106,7 +106,7 @@ uses
   AuxTypes, AuxClasses, {$IFDEF Windows}WinSyncObjs{$ELSE}LinSyncObjs{$ENDIF};
 
 type
-  TCSOWaitResult = (wrSignaled,wrTimeout,wrError);
+  TCSOWaitResult = (wrSignaled,wrAbandoned,wrTimeout,wrError);
 
 const
   INFINITE = UInt32(-1);  // infinite timeout
@@ -251,7 +251,7 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  Allows for recursive locking.
+  Allows for recursive locking and is robust.
 }
 {===============================================================================
     TMutex - class declaration
@@ -363,10 +363,10 @@ type
     constructor Open(const Name: String{$IFNDEF FPC}; Dummy: Integer = 0{$ENDIF});
     constructor DuplicateFrom(Source: TConditionVariable);
     destructor Destroy; override;
-    procedure Wait(DataLock: TMutex; Timeout: UInt32 = INFINITE); overload; virtual;
+    Function Wait(DataLock: TMutex; Timeout: UInt32 = INFINITE): TCSOWaitResult; overload; virtual;
     procedure Wake; virtual;
     procedure WakeAll; virtual;
-    procedure AutoCycle(DataLock: TMutex; Timeout: DWORD = INFINITE); overload; virtual;
+    procedure AutoCycle(DataLock: TMutex; Timeout: DWORD = INFINITE; AcceptAbandonedDataLock: Boolean = True); overload; virtual;
     // events
     property OnPredicateCheckEvent: TCSOPredicateCheckEvent read fOnPredicateCheckEvent write fOnPredicateCheckEvent;
     property OnPredicateCheckCallback: TCSOPredicateCheckCallback read fOnPredicateCheckCallback write fOnPredicateCheckCallback;
@@ -389,10 +389,10 @@ type
   protected
     class Function GetActualSyncClass: TConditionVariableClass; override;  
   public
-    procedure Lock; virtual;
+    Function Lock: TCSOWaitResult; virtual;
     procedure Unlock; virtual;
-    procedure Wait(Timeout: UInt32 = INFINITE); overload; virtual;
-    procedure AutoCycle(Timeout: DWORD = INFINITE); overload; virtual;
+    Function Wait(Timeout: UInt32 = INFINITE): TCSOWaitResult; overload; virtual;
+    procedure AutoCycle(Timeout: DWORD = INFINITE; AcceptAbandonedDataLock: Boolean = True); overload; virtual;
   end;
 
 {===============================================================================
@@ -461,12 +461,12 @@ Function TranslateWaitResult(WaitResult: {$IFDEF Windows}TWSOWaitResult{$ELSE}TL
 begin
 case WaitResult of
 {$IFDEF Windows}
-  WinSyncObjs.wrSignaled,
-  WinSyncObjs.wrAbandoned:  Result := wrSignaled;
+  WinSyncObjs.wrSignaled:   Result := wrSignaled;
+  WinSyncObjs.wrAbandoned:  Result := wrAbandoned;
   WinSyncObjs.wrTimeout:    Result := wrTimeout;
 {$ELSE}
-  LinSyncObjs.wrSignaled,
-  LinSyncObjs.wrAbandoned:  Result := wrSignaled;
+  LinSyncObjs.wrSignaled:   Result := wrSignaled;
+  LinSyncObjs.wrAbandoned:  Result := wrAbandoned;
   LinSyncObjs.wrTimeout:    Result := wrTimeout;
 {$ENDIF}
 else
@@ -593,7 +593,7 @@ end;
 
 procedure TRTLMultiReadExclusiveWriteSynchronizer.WriteUnlock;
 begin
-fSync.EndWrite
+fSync.EndWrite;
 end;
 
 
@@ -836,14 +836,8 @@ begin
 Result := TranslateWaitResult(fSync.WaitFor(Timeout));
 {$ELSE}
 case Timeout of
-  0:        If fSync.TryLockStrict then
-              Result := wrSignaled
-            else
-              Result := wrTimeout;
-  INFINITE: begin
-              fSync.LockStrict;
-              Result := wrSignaled;
-            end;
+  0:        Result := TranslateWaitResult(fSync.TryLockStrict);
+  INFINITE: Result := TranslateWaitResult(fSync.LockStrict);
 else
   Result := TranslateWaitResult(fSync.TimedLock(Timeout));
 end;
@@ -1194,15 +1188,15 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariable.Wait(DataLock: TMutex; Timeout: UInt32 = INFINITE);
+Function TConditionVariable.Wait(DataLock: TMutex; Timeout: UInt32 = INFINITE): TCSOWaitResult;
 begin
 {$IFDEF Windows}
-fSync.Sleep(DataLock.fSync,Timeout);
+Result := TranslateWaitResult(fSync.Sleep(DataLock.fSync,Timeout));
 {$ELSE}
 If Timeout <> INFINITE then
-  fSync.TimedWait(DataLock.fSync,Timeout)
+  Result := TranslateWaitResult(fSync.TimedWait(DataLock.fSync,Timeout))
 else
-  fSync.WaitStrict(DataLock.fSync);
+  Result := TranslateWaitResult(fSync.WaitStrict(DataLock.fSync));
 {$ENDIF}
 end;
 
@@ -1230,10 +1224,10 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariable.AutoCycle(DataLock: TMutex; Timeout: DWORD = INFINITE);
+procedure TConditionVariable.AutoCycle(DataLock: TMutex; Timeout: DWORD = INFINITE; AcceptAbandonedDataLock: Boolean = True);
 begin
 If Assigned(fOnPredicateCheckEvent) or Assigned(fOnPredicateCheckCallback) then
-  fSync.AutoCycle(DataLock.fSync,Timeout);
+  fSync.AutoCycle(DataLock.fSync,Timeout,AcceptAbandonedDataLock);
 end;
 
 
@@ -1259,9 +1253,9 @@ end;
     TConditionVariableEx - public methods
 -------------------------------------------------------------------------------}
 
-procedure TConditionVariableEx.Lock;
+Function TConditionVariableEx.Lock: TCSOWaitResult;
 begin
-{$IFDEF Windows}WinSyncObjs{$ELSE}LinSyncObjs{$ENDIF}.TConditionVariableEx(fSync).Lock;
+Result := TranslateWaitResult({$IFDEF Windows}WinSyncObjs{$ELSE}LinSyncObjs{$ENDIF}.TConditionVariableEx(fSync).Lock);
 end;
 
 //------------------------------------------------------------------------------
@@ -1273,24 +1267,24 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TConditionVariableEx.Wait(Timeout: UInt32 = INFINITE);
+Function TConditionVariableEx.Wait(Timeout: UInt32 = INFINITE): TCSOWaitResult;
 begin
 {$IFDEF Windows}
-WinSyncObjs.TConditionVariableEx(fSync).Sleep(Timeout);
+Result := TranslateWaitResult(WinSyncObjs.TConditionVariableEx(fSync).Sleep(Timeout));
 {$ELSE}
 If Timeout <> INFINITE then
-  LinSyncObjs.TConditionVariableEx(fSync).TimedWait(Timeout)
+  Result := TranslateWaitResult(LinSyncObjs.TConditionVariableEx(fSync).TimedWait(Timeout))
 else
-  LinSyncObjs.TConditionVariableEx(fSync).WaitStrict;
+  Result := TranslateWaitResult(LinSyncObjs.TConditionVariableEx(fSync).WaitStrict);
 {$ENDIF}
 end;
  
 //------------------------------------------------------------------------------
 
-procedure TConditionVariableEx.AutoCycle(Timeout: DWORD = INFINITE);
+procedure TConditionVariableEx.AutoCycle(Timeout: DWORD = INFINITE; AcceptAbandonedDataLock: Boolean = True);
 begin
 If Assigned(fOnPredicateCheckEvent) or Assigned(fOnPredicateCheckCallback) then
-  {$IFDEF Windows}WinSyncObjs{$ELSE}LinSyncObjs{$ENDIF}.TConditionVariableEx(fSync).AutoCycle(Timeout);
+  {$IFDEF Windows}WinSyncObjs{$ELSE}LinSyncObjs{$ENDIF}.TConditionVariableEx(fSync).AutoCycle(Timeout,AcceptAbandonedDataLock);
 end;
 
 {===============================================================================
@@ -1417,7 +1411,7 @@ end;
 
 Function WaitResultToStr(WaitResult: TCSOWaitResult): String;
 const
-  WR_STRS: array[TCSOWaitResult] of String = ('Signaled','Timeout','Error');
+  WR_STRS: array[TCSOWaitResult] of String = ('Signaled','Abandoned','Timeout','Error');
 begin
 If (WaitResult >= Low(TCSOWaitResult)) and (WaitResult <= High(TCSOWaitResult)) then
   Result := WR_STRS[WaitResult]

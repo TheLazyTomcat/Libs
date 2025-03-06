@@ -36,9 +36,9 @@
 
   Version 1.1 (2023-01-13)
 
-  Last change 2024-09-09
+  Last change 2025-03-05
 
-  ©2022-2024 František Milt
+  ©2022-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -632,6 +632,10 @@ uses
   {$IFDEF Windows}Windows,{$ELSE}BaseUnix,{$ENDIF} Math,
   StrRect, BitOps, InterlockedOps, StaticMemoryStream;
 
+{$IFNDEF Windows}
+  {$LINKLIB C}
+{$ENDIF}
+
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
   {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
@@ -715,7 +719,7 @@ const
 
   MD6_S[0] := MD6_S_0;
   For i := 1 to High(MD6_S) do
-    MD6_S[i] := ROL(MD6_S[i - 1],1) xor (MD6_S[i - 1] and MD6_S_STAR)
+    MD6_S[i] := ROL(MD6_S[i - 1],1) xor (MD6_S[i - 1] and MD6_S_MASK)
 }
   MD6_S: array[0..167] of TMD6Word = (
     TMD6Word($0123456789ABCDEF), TMD6Word($0347CACE1376567E),
