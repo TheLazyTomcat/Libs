@@ -61,6 +61,15 @@
     Buffers and array of bytes are both stored as plain byte streams, without
     explicit size.
 
+    Streaming of complex types (currently only type TGUID is implemented) is
+    case-specific.
+
+      Type TGUID is streamed as a record (structure), where fields are stored
+      separately and in the order they appear in declaration (so D1 first, then
+      D2, D3 and finally D4). Endianness affects only individual fields, not
+      the order of them (note that D4 is an array of bytes, so it is not
+      affected by changing endianness).
+
     Variants are stored in a litle more complex way - first a byte denoting
     type of the variant is stored (note that value of this byte does NOT
     correspond to a TVarType value), directly followed by the value itself.
@@ -107,9 +116,9 @@
     read (does not apply to Get* functions, as they are returning the value
     being read).
 
-  Version 2.1 (2025-01-19)
+  Version 2.2 (2025-03-08)
 
-  Last change 2025-01-27
+  Last change 2025-03-08
 
   ©2015-2025 František Milt
 
@@ -187,11 +196,6 @@ unit BinaryStreaming;
 // do not change following defines
 
 {$UNDEF BS_OverflowChecks}
-
-{$UNDEF BS_INC_VW}  // variant writing
-{$UNDEF BS_INC_VR}  // variant reading
-{$UNDEF BS_INC_M}   // operating on memory (stream is inferred when not defined)
-{$UNDEF BS_INC_L}   // little endian (big endian inferred when not defined)
 
 interface
 
@@ -330,8 +334,11 @@ Function StreamedSize_TinyString(const Value: String): TMemSize;
 {<lite-begin>}
 Function StreamedSize_Buffer(Size: TMemSize): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
 Function StreamedSize_Bytes(Count: TMemSize): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
-{<lite-end-ln>}
 
+//------------------------------------------------------------------------------
+
+Function StreamedSize_GUID: TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+{<lite-end-ln>}
 //------------------------------------------------------------------------------
 
 Function StreamedSize_Variant(const Value: Variant): TMemSize;
@@ -930,6 +937,22 @@ Function Ptr_FillBytes_BE(Dest: Pointer; Count: TMemSize; Value: UInt8): TMemSiz
 
 Function Ptr_FillBytes(var Dest: Pointer; Count: TMemSize; Value: UInt8; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
 Function Ptr_FillBytes(Dest: Pointer; Count: TMemSize; Value: UInt8; Endian: TEndian = endDefault): TMemSize; overload;
+
+{<lite-begin>}
+{<lite-block-replace-begin _LE "">}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_WriteGUID_LE(var Dest: Pointer; const Value: TGUID; Advance: Boolean): TMemSize; overload;
+Function Ptr_WriteGUID_LE(Dest: Pointer; const Value: TGUID): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{<lite-end-ln>}
+
+Function Ptr_WriteGUID_BE(var Dest: Pointer; const Value: TGUID; Advance: Boolean): TMemSize; overload;
+Function Ptr_WriteGUID_BE(Dest: Pointer; const Value: TGUID): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function Ptr_WriteGUID(var Dest: Pointer; const Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
+Function Ptr_WriteGUID(Dest: Pointer; const Value: TGUID; Endian: TEndian = endDefault): TMemSize; overload;
 
 {-------------------------------------------------------------------------------
     Variants
@@ -1966,6 +1989,34 @@ Function Ptr_ReadBuffer_BE(Src: Pointer; out Buffer; Size: TMemSize): TMemSize; 
 Function Ptr_ReadBuffer(var Src: Pointer; out Buffer; Size: TMemSize; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
 Function Ptr_ReadBuffer(Src: Pointer; out Buffer; Size: TMemSize; Endian: TEndian = endDefault): TMemSize; overload;
 
+{<lite-begin>}
+{<lite-block-replace-begin _LE "">}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_ReadGUID_LE(var Src: Pointer; out Value: TGUID; Advance: Boolean): TMemSize; overload;
+Function Ptr_ReadGUID_LE(Src: Pointer; out Value: TGUID): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{<lite-end-ln>}
+
+Function Ptr_ReadGUID_BE(var Src: Pointer; out Value: TGUID; Advance: Boolean): TMemSize; overload;
+Function Ptr_ReadGUID_BE(Src: Pointer; out Value: TGUID): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function Ptr_ReadGUID(var Src: Pointer; out Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
+Function Ptr_ReadGUID(Src: Pointer; out Value: TGUID; Endian: TEndian = endDefault): TMemSize; overload;
+
+{<lite-begin>}
+{<lite-block-replace-begin _LE "">}
+Function Ptr_GetGUID_LE(var Src: Pointer; Advance: Boolean): TGUID; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function Ptr_GetGUID_LE(Src: Pointer): TGUID; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{<lite-end-ln>}
+
+Function Ptr_GetGUID_BE(var Src: Pointer; Advance: Boolean): TGUID; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function Ptr_GetGUID_BE(Src: Pointer): TGUID; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function Ptr_GetGUID(var Src: Pointer; Advance: Boolean; Endian: TEndian = endDefault): TGUID; overload;
+Function Ptr_GetGUID(Src: Pointer; Endian: TEndian = endDefault): TGUID; overload;
+
 {-------------------------------------------------------------------------------
     Variants
 -------------------------------------------------------------------------------}
@@ -2488,6 +2539,20 @@ Function Stream_FillBytes_BE(Stream: TStream; Count: TMemSize; Value: UInt8; Adv
 
 Function Stream_FillBytes(Stream: TStream; Count: TMemSize; Value: UInt8; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
 Function Stream_FillBytes(Stream: TStream; Count: TMemSize; Value: UInt8; Endian: TEndian = endDefault): TMemSize; overload;
+
+{<lite-begin>}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+{<lite-replace _LE "">}
+Function Stream_WriteGUID_LE(Stream: TStream; const Value: TGUID; Advance: Boolean = True): TMemSize; overload;
+{<lite-end-ln>}
+
+Function Stream_WriteGUID_BE(Stream: TStream; const Value: TGUID; Advance: Boolean = True): TMemSize; overload;
+
+Function Stream_WriteGUID(Stream: TStream; const Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
+Function Stream_WriteGUID(Stream: TStream; const Value: TGUID; Endian: TEndian = endDefault): TMemSize; overload;
 
 {-------------------------------------------------------------------------------
     Variants
@@ -3348,6 +3413,30 @@ Function Stream_ReadBuffer_BE(Stream: TStream; out Buffer; Size: TMemSize; Advan
 Function Stream_ReadBuffer(Stream: TStream; out Buffer; Size: TMemSize; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
 Function Stream_ReadBuffer(Stream: TStream; out Buffer; Size: TMemSize; Endian: TEndian = endDefault): TMemSize; overload;
 
+{<lite-begin>}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+{<lite-replace _LE "">}
+Function Stream_ReadGUID_LE(Stream: TStream; out Value: TGUID; Advance: Boolean = True): TMemSize;
+{<lite-end-ln>}
+
+Function Stream_ReadGUID_BE(Stream: TStream; out Value: TGUID; Advance: Boolean = True): TMemSize;
+
+Function Stream_ReadGUID(Stream: TStream; out Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize; overload;
+Function Stream_ReadGUID(Stream: TStream; out Value: TGUID; Endian: TEndian = endDefault): TMemSize; overload;
+
+{<lite-begin>}
+{<lite-replace _LE "">}
+Function Stream_GetGUID_LE(Stream: TStream; Advance: Boolean = True): TGUID;{$IFDEF CanInline} inline;{$ENDIF}
+{<lite-end-ln>}
+
+Function Stream_GetGUID_BE(Stream: TStream; Advance: Boolean = True): TGUID;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function Stream_GetGUID(Stream: TStream; Advance: Boolean; Endian: TEndian = endDefault): TGUID; overload;
+Function Stream_GetGUID(Stream: TStream; Endian: TEndian = endDefault): TGUID; overload;
+
 {-------------------------------------------------------------------------------
     Variants
 -------------------------------------------------------------------------------}
@@ -3496,6 +3585,7 @@ type
     Function WriteBuffer(const Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
     Function WriteBytes(const Value: array of UInt8; Advance: Boolean = True): TMemSize; virtual;
     Function FillBytes(Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize; virtual;
+    Function WriteGUID(const Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function WriteVariant(const Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function WriteBoolAt(Position: Int64; Value: ByteBool; Advance: Boolean = True): TMemSize; overload; virtual;
@@ -3541,6 +3631,7 @@ type
     Function WriteBufferAt(Position: Int64; const Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; overload; virtual;
     Function WriteBytesAt(Position: Int64; const Value: array of UInt8; Advance: Boolean = True): TMemSize; overload; virtual;
     Function FillBytesAt(Position: Int64; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize; overload; virtual;
+    Function WriteGUIDAt(Position: Int64; const Value: TGUID; Advance: Boolean = True): TMemSize; overload; virtual;
     Function WriteVariantAt(Position: Int64; const Value: Variant; Advance: Boolean = True): TMemSize; overload; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function WriteBoolAtOffset(Offset: Int64; Value: ByteBool; Advance: Boolean = True): TMemSize; virtual;
@@ -3586,6 +3677,7 @@ type
     Function WriteBufferAtOffset(Offset: Int64; const Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
     Function WriteBytesAtOffset(Offset: Int64; const Value: array of UInt8; Advance: Boolean = True): TMemSize; virtual;
     Function FillBytesAtOffset(Offset: Int64; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize; virtual;
+    Function WriteGUIDAtOffset(Offset: Int64; const Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function WriteVariantAtOffset(Offset: Int64; const Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function WriteBoolTo(ID: TBSBookmarkID; Value: ByteBool; Advance: Boolean = True): TMemSize; virtual;
@@ -3631,6 +3723,7 @@ type
     Function WriteBufferTo(ID: TBSBookmarkID; const Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
     Function WriteBytesTo(ID: TBSBookmarkID; const Value: array of UInt8; Advance: Boolean = True): TMemSize; virtual;
     Function FillBytesTo(ID: TBSBookmarkID; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize; virtual;
+    Function WriteGUIDTo(ID: TBSBookmarkID; const Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function WriteVariantTo(ID: TBSBookmarkID; const Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function WriteBoolToIndex(Index: Integer; Value: ByteBool; Advance: Boolean = True): TMemSize; virtual;
@@ -3676,6 +3769,7 @@ type
     Function WriteBufferToIndex(Index: Integer; const Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
     Function WriteBytesToIndex(Index: Integer; const Value: array of UInt8; Advance: Boolean = True): TMemSize; virtual;
     Function FillBytesToIndex(Index: Integer; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize; virtual;
+    Function WriteGUIDToIndex(Index: Integer; const Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function WriteVariantToIndex(Index: Integer; const Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // read methods
     Function ReadBool(out Value: ByteBool; Advance: Boolean = True): TMemSize; virtual;
@@ -3719,6 +3813,7 @@ type
     Function ReadTinyUCS4String(out Value: UCS4String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadTinyString(out Value: String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadBuffer(out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
+    Function ReadGUID(out Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function ReadVariant(out Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function ReadBoolAt(Position: Int64; out Value: ByteBool; Advance: Boolean = True): TMemSize; overload; virtual;
@@ -3762,6 +3857,7 @@ type
     Function ReadTinyUCS4StringAt(Position: Int64; out Value: UCS4String; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadTinyStringAt(Position: Int64; out Value: String; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadBufferAt(Position: Int64; out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; overload; virtual;
+    Function ReadGUIDAt(Position: Int64; out Value: TGUID; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadVariantAt(Position: Int64; out Value: Variant; Advance: Boolean = True): TMemSize; overload; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function ReadBoolAtOffset(Offset: Int64; out Value: ByteBool; Advance: Boolean = True): TMemSize; virtual;
@@ -3805,6 +3901,7 @@ type
     Function ReadTinyUCS4StringAtOffset(Offset: Int64; out Value: UCS4String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadTinyStringAtOffset(Offset: Int64; out Value: String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadBufferAtOffset(Offset: Int64; out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
+    Function ReadGUIDAtOffset(Offset: Int64; out Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function ReadVariantAtOffset(Offset: Int64; out Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function ReadBoolFrom(ID: TBSBookmarkID; out Value: ByteBool; Advance: Boolean = True): TMemSize; virtual;
@@ -3848,6 +3945,7 @@ type
     Function ReadTinyUCS4StringFrom(ID: TBSBookmarkID; out Value: UCS4String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadTinyStringFrom(ID: TBSBookmarkID; out Value: String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadBufferFrom(ID: TBSBookmarkID; out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
+    Function ReadGUIDFrom(ID: TBSBookmarkID; out Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function ReadVariantFrom(ID: TBSBookmarkID; out Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function ReadBoolFromIndex(Index: Integer; out Value: ByteBool; Advance: Boolean = True): TMemSize; virtual;
@@ -3891,6 +3989,7 @@ type
     Function ReadTinyUCS4StringFromIndex(Index: Integer; out Value: UCS4String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadTinyStringFromIndex(Index: Integer; out Value: String; Advance: Boolean = True): TMemSize; virtual;
     Function ReadBufferFromIndex(Index: Integer; out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; virtual;
+    Function ReadGUIDFromIndex(Index: Integer; out Value: TGUID; Advance: Boolean = True): TMemSize; virtual;
     Function ReadVariantFromIndex(Index: Integer; out Value: Variant; Advance: Boolean = True): TMemSize; virtual;
     // reading into result
     Function GetBool(Advance: Boolean = True): ByteBool; virtual;
@@ -3933,6 +4032,7 @@ type
     Function GetTinyUnicodeString(Advance: Boolean = True): UnicodeString; virtual;
     Function GetTinyUCS4String(Advance: Boolean = True): UCS4String; virtual;
     Function GetTinyString(Advance: Boolean = True): String; virtual;
+    Function GetGUID(Advance: Boolean = True): TGUID; virtual;
     Function GetVariant(Advance: Boolean = True): Variant; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function GetBoolAt(Position: Int64; Advance: Boolean = True): ByteBool; overload; virtual;
@@ -3975,6 +4075,7 @@ type
     Function GetTinyUnicodeStringAt(Position: Int64; Advance: Boolean = True): UnicodeString; overload; virtual;
     Function GetTinyUCS4StringAt(Position: Int64; Advance: Boolean = True): UCS4String; overload; virtual;
     Function GetTinyStringAt(Position: Int64; Advance: Boolean = True): String; overload; virtual;
+    Function GetGUIDAt(Position: Int64; Advance: Boolean = True): TGUID; overload; virtual;
     Function GetVariantAt(Position: Int64; Advance: Boolean = True): Variant; overload; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function GetBoolAtOffset(Offset: Int64; Advance: Boolean = True): ByteBool; virtual;
@@ -4017,6 +4118,7 @@ type
     Function GetTinyUnicodeStringAtOffset(Offset: Int64; Advance: Boolean = True): UnicodeString; virtual;
     Function GetTinyUCS4StringAtOffset(Offset: Int64; Advance: Boolean = True): UCS4String; virtual;
     Function GetTinyStringAtOffset(Offset: Int64; Advance: Boolean = True): String; virtual;
+    Function GetGUIDAtOffset(Offset: Int64; Advance: Boolean = True): TGUID; virtual;
     Function GetVariantAtOffset(Offset: Int64; Advance: Boolean = True): Variant; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function GetBoolFrom(ID: TBSBookmarkID; Advance: Boolean = True): ByteBool; virtual;
@@ -4059,6 +4161,7 @@ type
     Function GetTinyUnicodeStringFrom(ID: TBSBookmarkID; Advance: Boolean = True): UnicodeString; virtual;
     Function GetTinyUCS4StringFrom(ID: TBSBookmarkID; Advance: Boolean = True): UCS4String; virtual;
     Function GetTinyStringFrom(ID: TBSBookmarkID; Advance: Boolean = True): String; virtual;
+    Function GetGUIDFrom(ID: TBSBookmarkID; Advance: Boolean = True): TGUID; virtual;
     Function GetVariantFrom(ID: TBSBookmarkID; Advance: Boolean = True): Variant; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function GetBoolFromIndex(Index: Integer; Advance: Boolean = True): ByteBool; virtual;
@@ -4101,6 +4204,7 @@ type
     Function GetTinyUnicodeStringFromIndex(Index: Integer; Advance: Boolean = True): UnicodeString; virtual;
     Function GetTinyUCS4StringFromIndex(Index: Integer; Advance: Boolean = True): UCS4String; virtual;
     Function GetTinyStringFromIndex(Index: Integer; Advance: Boolean = True): String; virtual;
+    Function GetGUIDFromIndex(Index: Integer; Advance: Boolean = True): TGUID; virtual;
     Function GetVariantFromIndex(Index: Integer; Advance: Boolean = True): Variant; virtual;
     // properties
     property Endian: TEndian read fEndian write fEndian;
@@ -4189,6 +4293,7 @@ type
     Function WriteBufferAt(Address: Pointer; const Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; overload; virtual;
     Function WriteBytesAt(Address: Pointer; const Value: array of UInt8; Advance: Boolean = True): TMemSize; overload; virtual;
     Function FillBytesAt(Address: Pointer; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize; overload; virtual;
+    Function WriteGUIDAt(Address: Pointer; const Value: TGUID; Advance: Boolean = True): TMemSize; overload; virtual;
     Function WriteVariantAt(Address: Pointer; const Value: Variant; Advance: Boolean = True): TMemSize; overload; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function ReadBoolAt(Address: Pointer; out Value: ByteBool; Advance: Boolean = True): TMemSize; overload; virtual;
@@ -4232,6 +4337,7 @@ type
     Function ReadTinyUCS4StringAt(Address: Pointer; out Value: UCS4String; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadTinyStringAt(Address: Pointer; out Value: String; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadBufferAt(Address: Pointer; out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize; overload; virtual;
+    Function ReadGUIDAt(Address: Pointer; out Value: TGUID; Advance: Boolean = True): TMemSize; overload; virtual;
     Function ReadVariantAt(Address: Pointer; out Value: Variant; Advance: Boolean = True): TMemSize; overload; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Function GetBoolAt(Address: Pointer; Advance: Boolean = True): ByteBool; overload; virtual;
@@ -4274,6 +4380,7 @@ type
     Function GetTinyUnicodeStringAt(Address: Pointer; Advance: Boolean = True): UnicodeString; overload; virtual;
     Function GetTinyUCS4StringAt(Address: Pointer; Advance: Boolean = True): UCS4String; overload; virtual;
     Function GetTinyStringAt(Address: Pointer; Advance: Boolean = True): String; overload; virtual;
+    Function GetGUIDAt(Address: Pointer; Advance: Boolean = True): TGUID; overload; virtual;
     Function GetVariantAt(Address: Pointer; Advance: Boolean = True): Variant; overload; virtual;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     property StartAddress: Pointer read GetStartAddress;
@@ -5141,6 +5248,13 @@ end;
 Function StreamedSize_Bytes(Count: TMemSize): TMemSize;
 begin
 Result := Count;
+end;
+
+//==============================================================================
+
+Function StreamedSize_GUID: TMemSize;
+begin
+Result := SizeOf(TGUID);
 end;
 {<lite-end-lns 2>}
 
@@ -8378,7 +8492,7 @@ Ptr := Dest;
 {<lite-replace _Ptr Ptr>}
 Result := _Ptr_FillBytes(Ptr,Count,Value,False);
 end;
-{<lite-end-lns 2>}
+{<lite-end-ln>}
 
 //------------------------------------------------------------------------------
 
@@ -8418,6 +8532,84 @@ If ResolveEndian(Endian) = endBig then
   Result := Ptr_FillBytes_BE(Ptr,Count,Value,False)
 else
   Result := Ptr_FillBytes_LE(Ptr,Count,Value,False);
+end;
+
+{<lite-begin>}
+{<lite-block-replace-begin _LE "">}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_WriteGUID_LE(var Dest: Pointer; const Value: TGUID; Advance: Boolean): TMemSize;
+var
+  WorkPtr:  Pointer;
+begin
+WorkPtr := Dest;
+Result := Ptr_WriteUInt32_LE(WorkPtr,Value.D1,True);
+Inc(Result,Ptr_WriteUInt16_LE(WorkPtr,Value.D2,True));
+Inc(Result,Ptr_WriteUInt16_LE(WorkPtr,Value.D3,True));
+Inc(Result,Ptr_WriteBuffer_LE(WorkPtr,Value.D4,SizeOf(Value.D4),True));
+If Advance then
+  Dest := WorkPtr;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_WriteGUID_LE(Dest: Pointer; const Value: TGUID): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Dest;
+Result := Ptr_WriteGUID_LE(Ptr,Value,False);
+end;
+{<lite-end-lns 2>}
+
+//------------------------------------------------------------------------------
+
+Function Ptr_WriteGUID_BE(var Dest: Pointer; const Value: TGUID; Advance: Boolean): TMemSize;
+var
+  WorkPtr:  Pointer;
+begin
+WorkPtr := Dest;
+Result := Ptr_WriteUInt32_BE(WorkPtr,Value.D1,True);
+Inc(Result,Ptr_WriteUInt16_BE(WorkPtr,Value.D2,True));
+Inc(Result,Ptr_WriteUInt16_BE(WorkPtr,Value.D3,True));
+Inc(Result,Ptr_WriteBuffer_BE(WorkPtr,Value.D4,SizeOf(Value.D4),True));
+If Advance then
+  Dest := WorkPtr;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_WriteGUID_BE(Dest: Pointer; const Value: TGUID): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Dest;
+Result := Ptr_WriteGUID_BE(Ptr,Value,False);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Ptr_WriteGUID(var Dest: Pointer; const Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Ptr_WriteGUID_BE(Dest,Value,Advance)
+else
+  Result := Ptr_WriteGUID_LE(Dest,Value,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_WriteGUID(Dest: Pointer; const Value: TGUID; Endian: TEndian = endDefault): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Dest;
+If ResolveEndian(Endian) = endBig then
+  Result := Ptr_WriteGUID_BE(Ptr,Value,False)
+else
+  Result := Ptr_WriteGUID_LE(Ptr,Value,False);
 end;
 
 {-------------------------------------------------------------------------------
@@ -13981,7 +14173,7 @@ Ptr := Src;
 {<lite-replace _Ptr Ptr>}
 Result := _Ptr_ReadBuffer(Ptr,Buffer,Size,False);
 end;
-{<lite-end-lns 2>}
+{<lite-end-ln>}
 
 //------------------------------------------------------------------------------
 
@@ -14021,6 +14213,145 @@ If ResolveEndian(Endian) = endBig then
   Result := Ptr_ReadBuffer_BE(Ptr,Buffer,Size,False)
 else
   Result := Ptr_ReadBuffer_LE(Ptr,Buffer,Size,False);
+end;
+
+
+{<lite-begin>}
+{<lite-block-replace-begin _LE "">}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_ReadGUID_LE(var Src: Pointer; out Value: TGUID; Advance: Boolean): TMemSize;
+var
+  WorkPtr:  Pointer;
+begin
+WorkPtr := Src;
+Result := Ptr_ReadUInt32_LE(WorkPtr,Value.D1,True);
+Inc(Result,Ptr_ReadUInt16_LE(WorkPtr,Value.D2,True));
+Inc(Result,Ptr_ReadUInt16_LE(WorkPtr,Value.D3,True));
+Inc(Result,Ptr_ReadBuffer_LE(WorkPtr,Value.D4,SizeOf(Value.D4),True));
+If Advance then
+  Src := WorkPtr;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_ReadGUID_LE(Src: Pointer; out Value: TGUID): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+Result := Ptr_ReadGUID_LE(Ptr,Value,False);
+end;
+{<lite-end-ln>}
+
+//------------------------------------------------------------------------------
+
+Function Ptr_ReadGUID_BE(var Src: Pointer; out Value: TGUID; Advance: Boolean): TMemSize;
+var
+  WorkPtr:  Pointer;
+begin
+WorkPtr := Src;
+Result := Ptr_ReadUInt32_BE(WorkPtr,Value.D1,True);
+Inc(Result,Ptr_ReadUInt16_BE(WorkPtr,Value.D2,True));
+Inc(Result,Ptr_ReadUInt16_BE(WorkPtr,Value.D3,True));
+Inc(Result,Ptr_ReadBuffer_BE(WorkPtr,Value.D4,SizeOf(Value.D4),True));
+If Advance then
+  Src := WorkPtr;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_ReadGUID_BE(Src: Pointer; out Value: TGUID): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+Result := Ptr_ReadGUID_BE(Ptr,Value,False);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Ptr_ReadGUID(var Src: Pointer; out Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Ptr_ReadGUID_BE(Src,Value,Advance)
+else
+  Result := Ptr_ReadGUID_LE(Src,Value,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_ReadGUID(Src: Pointer; out Value: TGUID; Endian: TEndian = endDefault): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+If ResolveEndian(Endian) = endBig then
+  Result := Ptr_ReadGUID_BE(Ptr,Value,False)
+else
+  Result := Ptr_ReadGUID_LE(Ptr,Value,False);
+end;
+
+{<lite-begin>}
+{<lite-block-replace-begin _LE "">}
+//------------------------------------------------------------------------------
+
+Function Ptr_GetGUID_LE(var Src: Pointer; Advance: Boolean): TGUID;
+begin
+Ptr_ReadGUID_LE(Src,Result,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_GetGUID_LE(Src: Pointer): TGUID;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+Ptr_ReadGUID_LE(Ptr,Result,False);
+end;
+{<lite-end-lns 2>}
+
+//------------------------------------------------------------------------------
+
+Function Ptr_GetGUID_BE(var Src: Pointer; Advance: Boolean): TGUID;
+begin
+Ptr_ReadGUID_BE(Src,Result,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_GetGUID_BE(Src: Pointer): TGUID;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+Ptr_ReadGUID_BE(Ptr,Result,False);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Ptr_GetGUID(var Src: Pointer; Advance: Boolean; Endian: TEndian = endDefault): TGUID;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Ptr_GetGUID_BE(Src,Advance)
+else
+  Result := Ptr_GetGUID_LE(Src,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_GetGUID(Src: Pointer; Endian: TEndian = endDefault): TGUID;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+If ResolveEndian(Endian) = endBig then
+  Result := Ptr_GetGUID_BE(Ptr,False)
+else
+  Result := Ptr_GetGUID_LE(Ptr,False);
 end;
 
 {-------------------------------------------------------------------------------
@@ -16437,7 +16768,7 @@ while Count > 0 do
   end;
 AdvanceStream(Advance,Stream,Result);
 end;
-{<lite-end-lns 2>}
+{<lite-end-ln>}
 
 //------------------------------------------------------------------------------
 
@@ -16471,6 +16802,53 @@ If ResolveEndian(Endian) = endBig then
   Result := Stream_FillBytes_BE(Stream,Count,Value)
 else
   Result := Stream_FillBytes_LE(Stream,Count,Value);
+end;
+
+{<lite-begin>}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+{<lite-block-replace-begin _LE "">}
+Function Stream_WriteGUID_LE(Stream: TStream; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := Stream_WriteUInt32_LE(Stream,Value.D1,True);
+Inc(Result,Stream_WriteUInt16_LE(Stream,Value.D2,True));
+Inc(Result,Stream_WriteUInt16_LE(Stream,Value.D3,True));
+Inc(Result,Stream_WriteBuffer_LE(Stream,Value.D4,SizeOf(Value.D4),True));
+AdvanceStream(Advance,Stream,Result);
+end;
+{<lite-end-lns 2>}
+
+//------------------------------------------------------------------------------
+
+Function Stream_WriteGUID_BE(Stream: TStream; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := Stream_WriteUInt32_BE(Stream,Value.D1,True);
+Inc(Result,Stream_WriteUInt16_BE(Stream,Value.D2,True));
+Inc(Result,Stream_WriteUInt16_BE(Stream,Value.D3,True));
+Inc(Result,Stream_WriteBuffer_BE(Stream,Value.D4,SizeOf(Value.D4),True));
+AdvanceStream(Advance,Stream,Result);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Stream_WriteGUID(Stream: TStream; const Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Stream_WriteGUID_BE(Stream,Value,Advance)
+else
+  Result := Stream_WriteGUID_LE(Stream,Value,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Stream_WriteGUID(Stream: TStream; const Value: TGUID; Endian: TEndian = endDefault): TMemSize;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Stream_WriteGUID_BE(Stream,Value)
+else
+  Result := Stream_WriteGUID_LE(Stream,Value);
 end;
 
 {-------------------------------------------------------------------------------
@@ -20086,7 +20464,7 @@ Stream.ReadBuffer(Addr(Buffer)^,Size);
 Result := Size;
 AdvanceStream(Advance,Stream,Result);
 end;
-{<lite-end-lns 2>}
+{<lite-end-ln>}
 
 //------------------------------------------------------------------------------
 
@@ -20120,6 +20498,90 @@ If ResolveEndian(Endian) = endBig then
   Result := Stream_ReadBuffer_BE(Stream,Buffer,Size)
 else
   Result := Stream_ReadBuffer_LE(Stream,Buffer,Size);
+end;
+
+{<lite-begin>}
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+{<lite-block-replace-begin _LE "">}
+Function Stream_ReadGUID_LE(Stream: TStream; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := Stream_ReadUInt32_LE(Stream,Value.D1,True);
+Inc(Result,Stream_ReadUInt16_LE(Stream,Value.D2,True));
+Inc(Result,Stream_ReadUInt16_LE(Stream,Value.D3,True));
+Inc(Result,Stream_ReadBuffer_LE(Stream,Value.D4,SizeOf(Value.D4),True));
+AdvanceStream(Advance,Stream,Result);
+end;
+{<lite-end-ln>}
+
+//------------------------------------------------------------------------------
+
+Function Stream_ReadGUID_BE(Stream: TStream; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := Stream_ReadUInt32_BE(Stream,Value.D1,True);
+Inc(Result,Stream_ReadUInt16_BE(Stream,Value.D2,True));
+Inc(Result,Stream_ReadUInt16_BE(Stream,Value.D3,True));
+Inc(Result,Stream_ReadBuffer_BE(Stream,Value.D4,SizeOf(Value.D4),True));
+AdvanceStream(Advance,Stream,Result);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Stream_ReadGUID(Stream: TStream; out Value: TGUID; Advance: Boolean; Endian: TEndian = endDefault): TMemSize;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Stream_ReadGUID_BE(Stream,Value,Advance)
+else
+  Result := Stream_ReadGUID_LE(Stream,Value,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Stream_ReadGUID(Stream: TStream; out Value: TGUID; Endian: TEndian = endDefault): TMemSize;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Stream_ReadGUID_BE(Stream,Value)
+else
+  Result := Stream_ReadGUID_LE(Stream,Value);
+end;
+
+{<lite-begin>}
+//------------------------------------------------------------------------------
+
+{<lite-block-replace-begin _LE "">}
+Function Stream_GetGUID_LE(Stream: TStream; Advance: Boolean = True): TGUID;
+begin
+Stream_ReadGUID_LE(Stream,Result,Advance);
+end;
+{<lite-end-lns 2>}
+
+//------------------------------------------------------------------------------
+
+Function Stream_GetGUID_BE(Stream: TStream; Advance: Boolean = True): TGUID;
+begin
+Stream_ReadGUID_BE(Stream,Result,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Stream_GetGUID(Stream: TStream; Advance: Boolean; Endian: TEndian = endDefault): TGUID;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Stream_GetGUID_BE(Stream,Advance)
+else
+  Result := Stream_GetGUID_LE(Stream,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Stream_GetGUID(Stream: TStream; Endian: TEndian = endDefault): TGUID;
+begin
+If ResolveEndian(Endian) = endBig then
+  Result := Stream_GetGUID_BE(Stream)
+else
+  Result := Stream_GetGUID_LE(Stream);
 end;
 
 {-------------------------------------------------------------------------------
@@ -20417,7 +20879,8 @@ const
   BS_VALTYPE_BUFFER         = 27;
   BS_VALTYPE_BYTEARRAY      = 28;
   BS_VALTYPE_FILL           = 29;
-  BS_VALTYPE_VARIANT        = 30;
+  BS_VALTYPE_GUID           = 30;
+  BS_VALTYPE_VARIANT        = 31;
 
 //------------------------------------------------------------------------------
 {===============================================================================
@@ -21313,6 +21776,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.WriteGUID(const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := WriteValue(BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.WriteVariant(const Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := WriteValue(BS_VALTYPE_VARIANT,@Value,Advance);
@@ -21617,6 +22087,13 @@ end;
 Function TCustomStreamer.FillBytesAt(Position: Int64; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize;
 begin
 Result := WriteValueAt(Position,BS_VALTYPE_FILL,@Value,Advance,Count);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.WriteGUIDAt(Position: Int64; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := WriteValueAt(Position,BS_VALTYPE_GUID,@Value,Advance);
 end;
 
 //------------------------------------------------------------------------------
@@ -21929,6 +22406,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.WriteGUIDAtOffset(Offset: Int64; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := WriteValueAtOffset(Offset,BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.WriteVariantAtOffset(Offset: Int64; const Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := WriteValueAtOffset(Offset,BS_VALTYPE_VARIANT,@Value,Advance);
@@ -22233,6 +22717,13 @@ end;
 Function TCustomStreamer.FillBytesTo(ID: TBSBookmarkID; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize;
 begin
 Result := WriteValueTo(ID,BS_VALTYPE_FILL,@Value,Advance,Count);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.WriteGUIDTo(ID: TBSBookmarkID; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := WriteValueTo(ID,BS_VALTYPE_GUID,@Value,Advance);
 end;
 
 //------------------------------------------------------------------------------
@@ -22545,6 +23036,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.WriteGUIDToIndex(Index: Integer; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := WriteValueToIndex(Index,BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.WriteVariantToIndex(Index: Integer; const Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := WriteValueToIndex(Index,BS_VALTYPE_VARIANT,@Value,Advance);
@@ -22835,6 +23333,13 @@ end;
 Function TCustomStreamer.ReadBuffer(out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize;
 begin
 Result := ReadValue(BS_VALTYPE_BUFFER,@Buffer,Advance,Size);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.ReadGUID(out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := ReadValue(BS_VALTYPE_GUID,@Value,Advance);
 end;
 
 //------------------------------------------------------------------------------
@@ -23133,6 +23638,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.ReadGUIDAt(Position: Int64; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := ReadValueAt(Position,BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.ReadVariantAt(Position: Int64; out Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := ReadValueAt(Position,BS_VALTYPE_VARIANT,@Value,Advance);
@@ -23423,6 +23935,13 @@ end;
 Function TCustomStreamer.ReadBufferAtOffset(Offset: Int64; out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize;
 begin
 Result := ReadValueAtOffset(Offset,BS_VALTYPE_BUFFER,@Buffer,Advance,Size);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.ReadGUIDAtOffset(Offset: Int64; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := ReadValueAtOffset(Offset,BS_VALTYPE_GUID,@Value,Advance);
 end;
 
 //------------------------------------------------------------------------------
@@ -23721,6 +24240,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.ReadGUIDFrom(ID: TBSBookmarkID; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := ReadValueFrom(ID,BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.ReadVariantFrom(ID: TBSBookmarkID; out Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := ReadValueFrom(ID,BS_VALTYPE_VARIANT,@Value,Advance);
@@ -24015,6 +24541,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.ReadGUIDFromIndex(Index: Integer; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := ReadValueFromIndex(Index,BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.ReadVariantFromIndex(Index: Integer; out Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := ReadValueFromIndex(Index,BS_VALTYPE_VARIANT,@Value,Advance);
@@ -24298,6 +24831,13 @@ end;
 Function TCustomStreamer.GetTinyString(Advance: Boolean = True): String;
 begin
 ReadValue(BS_VALTYPE_TNYSTR,@Result,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.GetGUID(Advance: Boolean = True): TGUID;
+begin
+ReadValue(BS_VALTYPE_GUID,@Result,Advance)
 end;
 
 //------------------------------------------------------------------------------
@@ -24589,6 +25129,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.GetGUIDAt(Position: Int64; Advance: Boolean = True): TGUID;
+begin
+ReadValueAt(Position,BS_VALTYPE_GUID,@Result,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.GetVariantAt(Position: Int64; Advance: Boolean = True): Variant;
 begin
 ReadValueAt(Position,BS_VALTYPE_VARIANT,@Result,Advance);
@@ -24872,6 +25419,13 @@ end;
 Function TCustomStreamer.GetTinyStringAtOffset(Offset: Int64; Advance: Boolean = True): String;
 begin
 ReadValueAtOffset(Offset,BS_VALTYPE_TNYSTR,@Result,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCustomStreamer.GetGUIDAtOffset(Offset: Int64; Advance: Boolean = True): TGUID;
+begin
+ReadValueAtOffset(Offset,BS_VALTYPE_GUID,@Result,Advance);
 end;
 
 //------------------------------------------------------------------------------
@@ -25163,6 +25717,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.GetGUIDFrom(ID: TBSBookmarkID; Advance: Boolean = True): TGUID;
+begin
+ReadValueFrom(ID,BS_VALTYPE_GUID,@Result,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.GetVariantFrom(ID: TBSBookmarkID; Advance: Boolean = True): Variant;
 begin
 ReadValueFrom(ID,BS_VALTYPE_VARIANT,@Result,Advance);
@@ -25450,6 +26011,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TCustomStreamer.GetGUIDFromIndex(Index: Integer; Advance: Boolean = True): TGUID;
+begin
+ReadValueFromIndex(Index,BS_VALTYPE_GUID,@Result,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCustomStreamer.GetVariantFromIndex(Index: Integer; Advance: Boolean = True): Variant;
 begin
 ReadValueFromIndex(Index,BS_VALTYPE_VARIANT,@Result,Advance);
@@ -25521,6 +26089,7 @@ case ValueType of
   BS_VALTYPE_TNYSTR:          Result := Ptr_WriteTinyString(fPositionAddress,String(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_BYTEARRAY:       Result := WriteOpenByteArray(ValuePtr,Integer(Size),Advance);
   BS_VALTYPE_FILL:            Result := Ptr_FillBytes(fPositionAddress,Size,UInt8(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_GUID:            Result := Ptr_WriteGUID(fPositionAddress,TGUID(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_VARIANT:         Result := Ptr_WriteVariant(fPositionAddress,Variant(ValuePtr^),Advance,fEndian);
 else
  {BS_VALTYPE_BUFFER}
@@ -25585,6 +26154,7 @@ case ValueType of
   BS_VALTYPE_TNYSTR_UNICODE:  Result := Ptr_ReadTinyUnicodeString(fPositionAddress,UnicodeString(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_TNYSTR_UCS4:     Result := Ptr_ReadTinyUCS4String(fPositionAddress,UCS4String(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_TNYSTR:          Result := Ptr_ReadTinyString(fPositionAddress,String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_GUID:            Result := Ptr_ReadGUID(fPositionAddress,TGUID(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_VARIANT:         Result := Ptr_ReadVariant(fPositionAddress,Variant(ValuePtr^),Advance,fEndian);
 else
  {BS_VALTYPE_FILL,BS_VALTYPE_BUFFER}
@@ -25980,6 +26550,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TMemoryStreamer.WriteGUIDAt(Address: Pointer; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := WriteValueAtAddr(Address,BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TMemoryStreamer.WriteVariantAt(Address: Pointer; const Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := WriteValueAtAddr(Address,BS_VALTYPE_VARIANT,@Value,Advance);
@@ -26274,6 +26851,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TMemoryStreamer.ReadGUIDAt(Address: Pointer; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := ReadValueAtAddr(Address,BS_VALTYPE_GUID,@Value,Advance);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TMemoryStreamer.ReadVariantAt(Address: Pointer; out Value: Variant; Advance: Boolean = True): TMemSize;
 begin
 Result := ReadValueAtAddr(Address,BS_VALTYPE_VARIANT,@Value,Advance);
@@ -26561,6 +27145,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TMemoryStreamer.GetGUIDAt(Address: Pointer; Advance: Boolean = True): TGUID;
+begin
+ReadValueAtAddr(Address,BS_VALTYPE_GUID,@Result,Advance);
+end;     
+
+//------------------------------------------------------------------------------
+
 Function TMemoryStreamer.GetVariantAt(Address: Pointer; Advance: Boolean = True): Variant;
 begin
 ReadValueAtAddr(Address,BS_VALTYPE_VARIANT,@Result,Advance);
@@ -26625,6 +27216,7 @@ case ValueType of
   BS_VALTYPE_TNYSTR:          Result := Stream_WriteTinyString(fTarget,String(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_BYTEARRAY:       Result := WriteOpenByteArray(ValuePtr,Integer(Size),Advance);
   BS_VALTYPE_FILL:            Result := Stream_FillBytes(fTarget,Size,UInt8(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_GUID:            Result := Stream_WriteGUID(fTarget,TGUID(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_VARIANT:         Result := Stream_WriteVariant(fTarget,Variant(ValuePtr^),Advance,fEndian);
 else
  {BS_VALTYPE_BUFFER}
@@ -26641,42 +27233,43 @@ var
 begin
 case ValueType of
   BS_VALTYPE_BOOL:            begin
-                                Result := Stream_ReadUInt8(fTarget,TempUInt8,Advance);
+                                Result := Stream_ReadUInt8(fTarget,TempUInt8,Advance,fEndian);
                                 ByteBool(ValuePtr^) := NumToBool(TempUInt8);
                               end;
   BS_VALTYPE_BOOLEAN:         begin
-                                Result := Stream_ReadUInt8(fTarget,TempUInt8,Advance);
+                                Result := Stream_ReadUInt8(fTarget,TempUInt8,Advance,fEndian);
                                 Boolean(ValuePtr^) := NumToBool(TempUInt8);
                               end;
-  BS_VALTYPE_NUM_1:           Result := Stream_ReadUInt8(fTarget,UInt8(ValuePtr^),Advance);
-  BS_VALTYPE_NUM_2:           Result := Stream_ReadUInt16(fTarget,UInt16(ValuePtr^),Advance);
-  BS_VALTYPE_NUM_4:           Result := Stream_ReadUInt32(fTarget,UInt32(ValuePtr^),Advance);
-  BS_VALTYPE_NUM_8:           Result := Stream_ReadUInt64(fTarget,UInt64(ValuePtr^),Advance);
-  BS_VALTYPE_NUM_10:          Result := Stream_ReadFloat80(fTarget,Float80(ValuePtr^),Advance);
+  BS_VALTYPE_NUM_1:           Result := Stream_ReadUInt8(fTarget,UInt8(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_NUM_2:           Result := Stream_ReadUInt16(fTarget,UInt16(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_NUM_4:           Result := Stream_ReadUInt32(fTarget,UInt32(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_NUM_8:           Result := Stream_ReadUInt64(fTarget,UInt64(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_NUM_10:          Result := Stream_ReadFloat80(fTarget,Float80(ValuePtr^),Advance,fEndian);
   BS_VALTYPE_CHAR:            begin
-                                Result := Stream_ReadUInt16(fTarget,TempUInt16,Advance);
+                                Result := Stream_ReadUInt16(fTarget,TempUInt16,Advance,fEndian);
                                 Char(ValuePtr^) := Char(TempUInt16);
                               end;
-  BS_VALTYPE_STR_SHORT:       Result := Stream_ReadShortString(fTarget,ShortString(ValuePtr^),Advance);
-  BS_VALTYPE_STR_ANSI:        Result := Stream_ReadAnsiString(fTarget,AnsiString(ValuePtr^),Advance);
-  BS_VALTYPE_STR_UTF8:        Result := Stream_ReadUTF8String(fTarget,UTF8String(ValuePtr^),Advance);
-  BS_VALTYPE_STR_WIDE:        Result := Stream_ReadWideString(fTarget,WideString(ValuePtr^),Advance);
-  BS_VALTYPE_STR_UNICODE:     Result := Stream_ReadUnicodeString(fTarget,UnicodeString(ValuePtr^),Advance);
-  BS_VALTYPE_STR_UCS4:        Result := Stream_ReadUCS4String(fTarget,UCS4String(ValuePtr^),Advance);
-  BS_VALTYPE_STR:             Result := Stream_ReadString(fTarget,String(ValuePtr^),Advance);
-  BS_VALTYPE_SMLSTR_ANSI:     Result := Stream_ReadSmallAnsiString(fTarget,AnsiString(ValuePtr^),Advance);
-  BS_VALTYPE_SMLSTR_UTF8:     Result := Stream_ReadSmallUTF8String(fTarget,UTF8String(ValuePtr^),Advance);
-  BS_VALTYPE_SMLSTR_WIDE:     Result := Stream_ReadSmallWideString(fTarget,WideString(ValuePtr^),Advance);
-  BS_VALTYPE_SMLSTR_UNICODE:  Result := Stream_ReadSmallUnicodeString(fTarget,UnicodeString(ValuePtr^),Advance);
-  BS_VALTYPE_SMLSTR_UCS4:     Result := Stream_ReadSmallUCS4String(fTarget,UCS4String(ValuePtr^),Advance);
-  BS_VALTYPE_SMLSTR:          Result := Stream_ReadSmallString(fTarget,String(ValuePtr^),Advance);
-  BS_VALTYPE_TNYSTR_ANSI:     Result := Stream_ReadTinyAnsiString(fTarget,AnsiString(ValuePtr^),Advance);
-  BS_VALTYPE_TNYSTR_UTF8:     Result := Stream_ReadTinyUTF8String(fTarget,UTF8String(ValuePtr^),Advance);
-  BS_VALTYPE_TNYSTR_WIDE:     Result := Stream_ReadTinyWideString(fTarget,WideString(ValuePtr^),Advance);
-  BS_VALTYPE_TNYSTR_UNICODE:  Result := Stream_ReadTinyUnicodeString(fTarget,UnicodeString(ValuePtr^),Advance);
-  BS_VALTYPE_TNYSTR_UCS4:     Result := Stream_ReadTinyUCS4String(fTarget,UCS4String(ValuePtr^),Advance);
-  BS_VALTYPE_TNYSTR:          Result := Stream_ReadTinyString(fTarget,String(ValuePtr^),Advance);
-  BS_VALTYPE_VARIANT:         Result := Stream_ReadVariant(fTarget,Variant(ValuePtr^),Advance);
+  BS_VALTYPE_STR_SHORT:       Result := Stream_ReadShortString(fTarget,ShortString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_STR_ANSI:        Result := Stream_ReadAnsiString(fTarget,AnsiString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_STR_UTF8:        Result := Stream_ReadUTF8String(fTarget,UTF8String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_STR_WIDE:        Result := Stream_ReadWideString(fTarget,WideString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_STR_UNICODE:     Result := Stream_ReadUnicodeString(fTarget,UnicodeString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_STR_UCS4:        Result := Stream_ReadUCS4String(fTarget,UCS4String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_STR:             Result := Stream_ReadString(fTarget,String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_SMLSTR_ANSI:     Result := Stream_ReadSmallAnsiString(fTarget,AnsiString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_SMLSTR_UTF8:     Result := Stream_ReadSmallUTF8String(fTarget,UTF8String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_SMLSTR_WIDE:     Result := Stream_ReadSmallWideString(fTarget,WideString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_SMLSTR_UNICODE:  Result := Stream_ReadSmallUnicodeString(fTarget,UnicodeString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_SMLSTR_UCS4:     Result := Stream_ReadSmallUCS4String(fTarget,UCS4String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_SMLSTR:          Result := Stream_ReadSmallString(fTarget,String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_TNYSTR_ANSI:     Result := Stream_ReadTinyAnsiString(fTarget,AnsiString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_TNYSTR_UTF8:     Result := Stream_ReadTinyUTF8String(fTarget,UTF8String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_TNYSTR_WIDE:     Result := Stream_ReadTinyWideString(fTarget,WideString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_TNYSTR_UNICODE:  Result := Stream_ReadTinyUnicodeString(fTarget,UnicodeString(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_TNYSTR_UCS4:     Result := Stream_ReadTinyUCS4String(fTarget,UCS4String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_TNYSTR:          Result := Stream_ReadTinyString(fTarget,String(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_GUID:            Result := Stream_ReadGUID(fTarget,TGUID(ValuePtr^),Advance,fEndian);
+  BS_VALTYPE_VARIANT:         Result := Stream_ReadVariant(fTarget,Variant(ValuePtr^),Advance,fEndian);
 else
  {BS_VALTYPE_BUFFER,BS_VALTYPE_BYTEARRAY,BS_VALTYPE_FILL}
   Result := Stream_ReadBuffer(fTarget,ValuePtr^,Size,Advance);

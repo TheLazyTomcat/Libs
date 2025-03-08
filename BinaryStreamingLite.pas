@@ -31,13 +31,13 @@
              specialized program, it was not manually written. The code was
              copied, so if BS contains some error, it might appear here too.
 
-  Build from BinaryStreaming of version 2.1 (2025-01-19)             
+  Build from BinaryStreaming of version 2.2 (2025-03-08)             
 
-  Version 1.0.2 (2025-01-19)
+  Version 1.1 (2025-03-08)
 
-  Last change 2025-01-19
+  Last change 2025-03-08
 
-  ©2025 František Milt
+  ©2024-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -166,6 +166,10 @@ Function StreamedSize_String(const Value: String): TMemSize;{$IFDEF CanInline} i
 
 Function StreamedSize_Buffer(Size: TMemSize): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
 Function StreamedSize_Bytes(Count: TMemSize): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function StreamedSize_GUID: TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -339,6 +343,13 @@ Function Ptr_WriteBytes(Dest: Pointer; const Value: array of UInt8): TMemSize; o
 
 Function Ptr_FillBytes(var Dest: Pointer; Count: TMemSize; Value: UInt8; Advance: Boolean): TMemSize; overload;
 Function Ptr_FillBytes(Dest: Pointer; Count: TMemSize; Value: UInt8): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_WriteGUID(var Dest: Pointer; const Value: TGUID; Advance: Boolean): TMemSize; overload;
+Function Ptr_WriteGUID(Dest: Pointer; const Value: TGUID): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -586,6 +597,16 @@ Function Ptr_GetString(Src: Pointer): String; overload;{$IFDEF CanInline} inline
 Function Ptr_ReadBuffer(var Src: Pointer; out Buffer; Size: TMemSize; Advance: Boolean): TMemSize; overload;
 Function Ptr_ReadBuffer(Src: Pointer; out Buffer; Size: TMemSize): TMemSize; overload;
 
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_ReadGUID(var Src: Pointer; out Value: TGUID; Advance: Boolean): TMemSize; overload;
+Function Ptr_ReadGUID(Src: Pointer; out Value: TGUID): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function Ptr_GetGUID(var Src: Pointer; Advance: Boolean): TGUID; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function Ptr_GetGUID(Src: Pointer): TGUID; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                  Stream writing
@@ -726,6 +747,12 @@ Function Stream_WriteBytes(Stream: TStream; const Value: array of UInt8; Advance
 //------------------------------------------------------------------------------
 
 Function Stream_FillBytes(Stream: TStream; Count: TMemSize; Value: UInt8; Advance: Boolean = True): TMemSize;
+
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Stream_WriteGUID(Stream: TStream; const Value: TGUID; Advance: Boolean = True): TMemSize; overload;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -915,6 +942,14 @@ Function Stream_GetString(Stream: TStream; Advance: Boolean = True): String;{$IF
 -------------------------------------------------------------------------------}
 
 Function Stream_ReadBuffer(Stream: TStream; out Buffer; Size: TMemSize; Advance: Boolean = True): TMemSize;
+
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Stream_ReadGUID(Stream: TStream; out Value: TGUID; Advance: Boolean = True): TMemSize;
+
+Function Stream_GetGUID(Stream: TStream; Advance: Boolean = True): TGUID;{$IFDEF CanInline} inline;{$ENDIF}
 
 implementation
 
@@ -1412,6 +1447,13 @@ end;
 Function StreamedSize_Bytes(Count: TMemSize): TMemSize;
 begin
 Result := Count;
+end;
+
+//==============================================================================
+
+Function StreamedSize_GUID: TMemSize;
+begin
+Result := SizeOf(TGUID);
 end;
 
 
@@ -2136,6 +2178,33 @@ var
 begin
 Ptr := Dest;
 Result := Ptr_FillBytes(Ptr,Count,Value,False);
+end;
+
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_WriteGUID(var Dest: Pointer; const Value: TGUID; Advance: Boolean): TMemSize;
+var
+  WorkPtr:  Pointer;
+begin
+WorkPtr := Dest;
+Result := Ptr_WriteUInt32(WorkPtr,Value.D1,True);
+Inc(Result,Ptr_WriteUInt16(WorkPtr,Value.D2,True));
+Inc(Result,Ptr_WriteUInt16(WorkPtr,Value.D3,True));
+Inc(Result,Ptr_WriteBuffer(WorkPtr,Value.D4,SizeOf(Value.D4),True));
+If Advance then
+  Dest := WorkPtr;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_WriteGUID(Dest: Pointer; const Value: TGUID): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Dest;
+Result := Ptr_WriteGUID(Ptr,Value,False);
 end;
 
 
@@ -3292,6 +3361,50 @@ Ptr := Src;
 Result := Ptr_ReadBuffer(Ptr,Buffer,Size,False);
 end;
 
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Ptr_ReadGUID(var Src: Pointer; out Value: TGUID; Advance: Boolean): TMemSize;
+var
+  WorkPtr:  Pointer;
+begin
+WorkPtr := Src;
+Result := Ptr_ReadUInt32(WorkPtr,Value.D1,True);
+Inc(Result,Ptr_ReadUInt16(WorkPtr,Value.D2,True));
+Inc(Result,Ptr_ReadUInt16(WorkPtr,Value.D3,True));
+Inc(Result,Ptr_ReadBuffer(WorkPtr,Value.D4,SizeOf(Value.D4),True));
+If Advance then
+  Src := WorkPtr;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_ReadGUID(Src: Pointer; out Value: TGUID): TMemSize;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+Result := Ptr_ReadGUID(Ptr,Value,False);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Ptr_GetGUID(var Src: Pointer; Advance: Boolean): TGUID;
+begin
+Ptr_ReadGUID(Src,Result,Advance);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Ptr_GetGUID(Src: Pointer): TGUID;
+var
+  Ptr:  Pointer;
+begin
+Ptr := Src;
+Ptr_ReadGUID(Ptr,Result,False);
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -3704,6 +3817,19 @@ while Count > 0 do
     Dec(Count,TMemSize(CopyCnt));
     Inc(Result,TMemSize(CopyCnt));
   end;
+AdvanceStream(Advance,Stream,Result);
+end;
+
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Stream_WriteGUID(Stream: TStream; const Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := Stream_WriteUInt32(Stream,Value.D1,True);
+Inc(Result,Stream_WriteUInt16(Stream,Value.D2,True));
+Inc(Result,Stream_WriteUInt16(Stream,Value.D3,True));
+Inc(Result,Stream_WriteBuffer(Stream,Value.D4,SizeOf(Value.D4),True));
 AdvanceStream(Advance,Stream,Result);
 end;
 
@@ -4279,6 +4405,26 @@ begin
 Stream.ReadBuffer(Addr(Buffer)^,Size);
 Result := Size;
 AdvanceStream(Advance,Stream,Result);
+end;
+
+{-------------------------------------------------------------------------------
+    Complex types
+-------------------------------------------------------------------------------}
+
+Function Stream_ReadGUID(Stream: TStream; out Value: TGUID; Advance: Boolean = True): TMemSize;
+begin
+Result := Stream_ReadUInt32(Stream,Value.D1,True);
+Inc(Result,Stream_ReadUInt16(Stream,Value.D2,True));
+Inc(Result,Stream_ReadUInt16(Stream,Value.D3,True));
+Inc(Result,Stream_ReadBuffer(Stream,Value.D4,SizeOf(Value.D4),True));
+AdvanceStream(Advance,Stream,Result);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Stream_GetGUID(Stream: TStream; Advance: Boolean = True): TGUID;
+begin
+Stream_ReadGUID(Stream,Result,Advance);
 end;
 
 

@@ -67,7 +67,7 @@
 
   Version 2.2 (2025-03-04)
 
-  Last change 2025-03-04
+  Last change 2025-03-08
 
   ©2024-2025 František Milt
 
@@ -1647,7 +1647,7 @@ end;
 procedure SignalSetEmpty(var SignalSet: sigset_t);
 begin
 If sigemptyset(@SignalSet) <> 0 then
-  raise EUSSignalSetError.CreateFmt('SignalEmptySet: Failed to empty signal set (%d).',[errno_ptr^]);
+  raise EUSSignalSetError.CreateFmt('SignalSetEmpty: Failed to empty signal set (%d).',[errno_ptr^]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1655,7 +1655,7 @@ end;
 procedure SignalSetAdd(var SignalSet: sigset_t; Signal: cint);
 begin
 If sigaddset(@SignalSet,Signal) <> 0 then
-  raise EUSSignalSetError.CreateFmt('SignalAddSet: Failed to add signal to set (%d).',[errno_ptr^]);
+  raise EUSSignalSetError.CreateFmt('SignalSetAdd: Failed to add signal to set (%d).',[errno_ptr^]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1663,7 +1663,7 @@ end;
 procedure SignalSetRemove(var SignalSet: sigset_t; Signal: cint);
 begin
 If sigdelset(@SignalSet,Signal) <> 0 then
-  raise EUSSignalSetError.CreateFmt('SignalRemoveSet: Failed to remove signal from set (%d).',[errno_ptr^]);
+  raise EUSSignalSetError.CreateFmt('SignalSetRemove: Failed to remove signal from set (%d).',[errno_ptr^]);
 end;
 
 {===============================================================================
