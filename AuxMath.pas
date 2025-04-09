@@ -44,9 +44,9 @@
       about which types and what functions are affected, refer to "Overloading
       information symbols" further down.
 
-  Version 1.3 (2025-01-24)
+  Version 1.3.1 (2025-03-31)
 
-  Last change (2025-01-24)
+  Last change (2025-03-31)
 
   ©2024-2025 František Milt
 
@@ -3310,6 +3310,29 @@ Function LongMul(const A,B: UInt32): UInt64; overload;{$IFDEF CanInline} inline;
 Function LongMul(const A,B: UInt64): UInt128; overload;{$IFDEF CanInline} inline;{$ENDIF}
 {$IFEND}
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                                  Sign product
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Returns true when the two given numbers have the same sign, false otherwise.
+  This can be represented in pseudocode as...
+
+    Result = not(Sign(A) xor Sign(B))
+}
+
+Function SignProduct(const A,B: Int8): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function SignProduct(const A,B: Int16): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function SignProduct(const A,B: Int32): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function SignProduct(const A,B: Int64): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function SignProduct(const A,B: Single): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SignProduct(const A,B: Double): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF SizeOf(Extended) = 10}
+Function SignProduct(const A,B: Extended): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+
 implementation
 
 // paranoia...
@@ -3626,8 +3649,8 @@ procedure iDivMod(const Dividend,Divisor: Int64; out Quotient,Remainder: Int64);
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-        Dividend          (EBP + 8)          RCX           RDI
-         Divisor          (EBP + 16)         RDX           RSI
+        Dividend          (EBP + 16)         RCX           RDI
+         Divisor          (EBP + 8)          RDX           RSI
         Quotient             EAX^             R8^          RDX^
        Remainder             EDX^             R9^          RCX^
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -4049,8 +4072,8 @@ procedure uDivMod(const Dividend,Divisor: UInt64; out Quotient,Remainder: UInt64
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-        Dividend          (EBP + 8)          RCX           RDI
-         Divisor          (EBP + 16)         RDX           RSI
+        Dividend          (EBP + 16)         RCX           RDI
+         Divisor          (EBP + 8)          RDX           RSI
         Quotient             EAX^             R8^          RDX^
        Remainder             EDX^             R9^          RCX^
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -4349,7 +4372,7 @@ var
   Remainder:  Int8;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -4360,7 +4383,7 @@ var
   Remainder:  Int16;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -4371,7 +4394,7 @@ var
   Remainder:  Int32;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -4382,7 +4405,7 @@ var
   Remainder:  Int64;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -4514,7 +4537,7 @@ var
   Remainder:  Int8;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -4525,7 +4548,7 @@ var
   Remainder:  Int16;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -4536,7 +4559,7 @@ var
   Remainder:  Int32;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -4547,7 +4570,7 @@ var
   Remainder:  Int64;
 begin
 iDivMod(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -6507,8 +6530,8 @@ Function iTryDivModPow2(const Dividend,Divisor: Int64; out Quotient,Remainder: I
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-        Dividend          (EBP + 8)          RCX           RDI
-         Divisor          (EBP + 16)         RDX           RSI
+        Dividend          (EBP + 16)         RCX           RDI
+         Divisor          (EBP + 8)          RDX           RSI
         Quotient             EAX^             R8^          RDX^
        Remainder             EDX^             R9^          RCX^
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -7212,8 +7235,8 @@ Function uTryDivModPow2(const Dividend,Divisor: UInt64; out Quotient,Remainder: 
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-        Dividend          (EBP + 8)          RCX           RDI
-         Divisor          (EBP + 16)         RDX           RSI
+        Dividend          (EBP + 16)         RCX           RDI
+         Divisor          (EBP + 8)          RDX           RSI
         Quotient             EAX^             R8^          RDX^
        Remainder             EDX^             R9^          RCX^
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -7637,7 +7660,7 @@ var
   Remainder:  Int8;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -7648,7 +7671,7 @@ var
   Remainder:  Int16;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -7659,7 +7682,7 @@ var
   Remainder:  Int32;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -7670,7 +7693,7 @@ var
   Remainder:  Int64;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -7799,7 +7822,7 @@ var
   Remainder:  Int8;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -7810,7 +7833,7 @@ var
   Remainder:  Int16;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -7821,7 +7844,7 @@ var
   Remainder:  Int32;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -7832,7 +7855,7 @@ var
   Remainder:  Int64;
 begin
 iDivModPow2(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -8426,8 +8449,8 @@ procedure iDivModPow2NoCheck(const Dividend,Divisor: Int64; out Quotient,Remaind
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-        Dividend          (EBP + 8)          RCX           RDI
-         Divisor          (EBP + 16)         RDX           RSI
+        Dividend          (EBP + 16)         RCX           RDI
+         Divisor          (EBP + 8)          RDX           RSI
         Quotient             EAX^             R8^          RDX^
        Remainder             EDX^             R9^          RCX^
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -8853,8 +8876,8 @@ procedure uDivModPow2NoCheck(const Dividend,Divisor: UInt64; out Quotient,Remain
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-        Dividend          (EBP + 8)          RCX           RDI
-         Divisor          (EBP + 16)         RDX           RSI
+        Dividend          (EBP + 16)         RCX           RDI
+         Divisor          (EBP + 8)          RDX           RSI
         Quotient             EAX^             R8^          RDX^
        Remainder             EDX^             R9^          RCX^
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -9143,7 +9166,7 @@ var
   Remainder:  Int8;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -9154,7 +9177,7 @@ var
   Remainder:  Int16;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -9165,7 +9188,7 @@ var
   Remainder:  Int32;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -9176,7 +9199,7 @@ var
   Remainder:  Int64;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result > 0) and (Remainder <> 0) then
+If SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Inc(Result);
 end;
 
@@ -9423,7 +9446,7 @@ var
   Remainder:  Int8;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -9434,7 +9457,7 @@ var
   Remainder:  Int16;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -9445,7 +9468,7 @@ var
   Remainder:  Int32;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -9456,7 +9479,7 @@ var
   Remainder:  Int64;
 begin
 iDivModPow2NoCheck(Dividend,Divisor,Result,Remainder);
-If (Result < 0) and (Remainder <> 0) then
+If not SignProduct(Dividend,Divisor) and (Remainder <> 0) then
   Dec(Result);
 end;
 
@@ -18727,8 +18750,8 @@ Function iLongMul(const A,B: Int64; out Product: Int128): Boolean;
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-               A          (EBP + 8)          RCX           RDI
-               B          (EBP + 16)         RDX           RSI
+               A          (EBP + 16)         RCX           RDI
+               B          (EBP + 8)          RDX           RSI
          Product             EAX^             R8^          RDX^
           Result              AL              AL            AL
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -19098,8 +19121,8 @@ Function uLongMul(const A,B: UInt64; out Product: UInt128): Boolean;
 asm
 { --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
                         win32 & lin32       win64         lin64
-               A          (EBP + 8)          RCX           RDI
-               B          (EBP + 16)         RDX           RSI
+               A          (EBP + 16)         RCX           RDI
+               B          (EBP + 8)          RDX           RSI
          Product             EAX^             R8^          RDX^
           Result              AL              AL            AL
 --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
@@ -19443,6 +19466,160 @@ end;
 Function LongMul(const A,B: UInt64): UInt128;
 begin
 uLongMul(A,B,Result);
+end;
+{$IFEND}
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                  Sign product
+--------------------------------------------------------------------------------
+===============================================================================}
+
+Function SignProduct(const A,B: Int8): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A              AL              CL           DIL
+               B              DL              DL           SIL
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+    XOR     CL, DL
+  {$ELSE}
+    XOR     DIL, SIL
+  {$ENDIF}
+{$ELSE}
+    XOR     AL, DL
+{$ENDIF}
+  {
+    ASM here only removes one TEST instruction when compared to code produced
+    by the compiler from pascal implementation, but whatever...
+  }
+    SETNS   AL
+end;
+{$ELSE}
+begin
+Result := (A xor B) and $80 = 0;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SignProduct(const A,B: Int16): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A              AX              CX            DI
+               B              DX              DX            SI
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+    XOR     CX, DX
+  {$ELSE}
+    XOR     DI, SI
+  {$ENDIF}
+{$ELSE}
+    XOR     AX, DX
+{$ENDIF}
+    SETNS   AL
+end;
+{$ELSE}
+begin
+Result := (A xor B) and $8000 = 0;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SignProduct(const A,B: Int32): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A             EAX             ECX           EDI
+               B             EDX             EDX           ESI
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+    XOR     ECX, EDX
+  {$ELSE}
+    XOR     EDI, ESI
+  {$ENDIF}
+{$ELSE}
+    XOR     EAX, EDX
+{$ENDIF}
+    SETNS   AL
+end;
+{$ELSE}
+begin
+Result := (A xor B) and $80000000 = 0;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SignProduct(const A,B: Int64): Boolean;
+{$IFNDEF PurePascal}
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A          (EBP + 16)         RCX           RDI
+               B          (EBP + 8)          RDX           RSI
+          Result              AL              AL            AL
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+    XOR     RCX, RDX
+  {$ELSE}
+    XOR     RDI, RSI
+  {$ENDIF}
+{$ELSE}
+    MOV     EAX, dword ptr [A + 4]
+    XOR     EAX, dword ptr [B + 4]
+{$ENDIF}
+    SETNS   AL
+end;
+{$ELSE}
+begin
+Result := (Int64Rec(A).Hi xor Int64Rec(B).Hi) and $80000000 = 0;
+end;
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SignProduct(const A,B: Single): Boolean;
+var
+  AI: Int32 absolute A;
+  BI: Int32 absolute B;
+begin
+Result := SignProduct(AI,BI);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SignProduct(const A,B: Double): Boolean;
+var
+  AI: Int64 absolute A;
+  BI: Int64 absolute B;
+begin
+Result := SignProduct(AI,BI);
+end;
+
+{$IF SizeOf(Extended) = 10}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SignProduct(const A,B: Extended): Boolean;
+var
+  AO: TAMFloat80Overlay absolute A;
+  BO: TAMFloat80Overlay absolute B;
+begin
+Result := SignProduct(Int16(AO.SignExponent),Int16(BO.SignExponent));
 end;
 {$IFEND}
 

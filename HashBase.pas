@@ -18,11 +18,11 @@
     stored in a memory buffer and then the processing is run as a whole at
     finalization.
 
-  Version 1.0.5 (2024-04-14)
+  Version 1.0.6 (2025-03-28)
 
-  Last change 2024-04-28
+  Last change 2025-03-28
 
-  ©2020-2024 František Milt
+  ©2020-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -239,6 +239,14 @@ type
     Function TryFromString(const Str: String): Boolean; virtual;
     procedure FromStringDef(const Str: String; const Default); virtual;
     Function IsHashing: Boolean; virtual;
+  {
+    BreakProcessing, when called inside of progress event or callback, will
+    cause premature termination of hashing right after return from the call.
+
+    Returns true if the processing was already terminated previously, false
+    otherwise.
+  }
+    Function BreakProcessing: Boolean; virtual;
     // IO
     procedure SaveToStream(Stream: TStream; Endianness: THashEndianness = heDefault); virtual; abstract;
     procedure LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault); virtual; abstract;
@@ -248,12 +256,6 @@ type
     property ReadBufferSize: TMemSize read fReadBufferSize write fReadBufferSize;
     property BufferProgress: Boolean read fBufferProgress write fBufferProgress;
     property ProcessedBytes: TMemSize read fProcessedBytes write fProcessedBytes;
-  {
-    BreakProcessing, when set to true inside of progress event or callback,
-    will cause premature termination of hashing right after return from the
-    call.
-  }
-    property BreakProcessing: Boolean read fBreakProcessing write fBreakProcessing;
   {
     If hash is implemented both in assembly and pascal (and potentially also
     accelerated), this property can be used to discern which implementation is
@@ -787,6 +789,14 @@ end;
 Function THashBase.IsHashing: Boolean;
 begin
 Result := fInitialized and not fFinalized;
+end;
+
+//------------------------------------------------------------------------------
+
+Function THashBase.BreakProcessing: Boolean;
+begin
+Result := fBreakProcessing;
+fBreakProcessing := True;
 end;
 
 //------------------------------------------------------------------------------

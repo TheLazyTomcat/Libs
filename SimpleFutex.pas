@@ -31,7 +31,7 @@
 
   Version 1.3.1 (2025-02-05)
 
-  Last change 2025-03-04
+  Last change 2025-04-06
 
   ©2021-2025 František Milt
 
@@ -1611,13 +1611,13 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 
-Function SemPostItrLckOp(A: TFutexUWord; var ItrLckResult: TFutexUWord): TFutexUWord; register;
+Function SemPostItrLckOp(var A: TFutexUWord): TFutexUWord; register;
 begin
 If A < TFutexUWord($FFFFFFFF) then
-  Result := A + 1
+  A := A + 1
 else
-  Result := TFutexUWord($FFFFFFFF);
-ItrLckResult := Result;
+  A := TFutexUWord($FFFFFFFF);
+Result := A;
 end;
 
 {===============================================================================

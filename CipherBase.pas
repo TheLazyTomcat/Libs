@@ -14,11 +14,11 @@
     At this moment, only base class for symmetric block cipher is implemented
     (used for Rijndael/AES), more will probably be implemented later.
 
-  Version 1.0.6 (2024-05-02)
+  Version 1.0.7 (2024-03-28)
 
-  Last change 2024-05-02
+  Last change 2025-03-28
 
-  ©2021-2024 František Milt
+  ©2021-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -287,6 +287,14 @@ type
     procedure ProcessAnsiString(var Str: AnsiString); overload; virtual;
     procedure ProcessWideString(const InStr: WideString; out OutStr: WideString); overload; virtual;
     procedure ProcessWideString(var Str: WideString); overload; virtual;
+  {
+    BreakProcessing, when called inside of progress event or callback, will
+    cause premature termination of processing right after return from the call.
+
+    Returns true when the processing was already terminated previously, false
+    otherwise.
+  }
+    Function BreakProcessing: Boolean; virtual;
     // properties
     property Mode: TCipherMode read GetMode write SetMode;    
   {
@@ -319,12 +327,6 @@ type
     method Init.  
   }
     property ProcessedBytes: TMemSize read fProcessedBytes write fProcessedBytes;
-  {
-    BreakProcessing, when set to true inside of progress event or callback,
-    will cause premature termination of processing right after return from the
-    call.
-  }
-    property BreakProcessing: Boolean read fBreakProcessing write fBreakProcessing;    
     property Initialized: Boolean read fInitialized;
     property Finalized: Boolean read fFinalized;
   {
@@ -1077,6 +1079,15 @@ InLen := Length(Str);
 SetLength(Str,OutputSize(InLen * SizeOf(WideChar)) div SizeOf(WideChar));
 ProcessMemory(PWideChar(Str),InLen * SizeOf(WideChar));
 end;
+
+//------------------------------------------------------------------------------
+
+Function TCipherBase.BreakProcessing: Boolean;
+begin
+Result := fBreakProcessing;
+fBreakProcessing := True;
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
