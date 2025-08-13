@@ -12,9 +12,9 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.24 (2025-02-05)
+  Version 1.25 (2025-05-21)
 
-  Last change 2025-02-05
+  Last change 2025-05-21
 
   ©2014-2025 František Milt
 
@@ -1673,6 +1673,67 @@ procedure CopyMemory(Dst,Src: Pointer; Size: TMemSize);{$IFDEF CanInline} inline
 
 procedure MoveMemory(Dst,Src: Pointer; Size: TMemSize);
 
+{-------------------------------------------------------------------------------
+================================================================================
+                                  Memory search
+================================================================================
+-------------------------------------------------------------------------------}
+{
+  Searches provided memory buffer for a given integer and returns zero-based
+  address offset (that is, offset from given Memory pointer to the start of the
+  value) of its first occurrence. Entire buffer is searched, but since the
+  value must be present in its entirety (see further for partial match), only
+  offsets from zero up to (Size - SizeOf(Value)) are returned.
+
+  If the value is not found, then -SizeOf(Value) is returned.
+
+    WARNING - the integers are assumed to be stored with system endianness,
+              and are therefore searched that way. If you want to search for
+              values stored with different endianness, just use SwapEndian on
+              the Value parameter.
+
+  LeadingPartialMatch
+
+    If this option is set to true, then the function checks leading bytes of
+    the provided memory buffer for a partial match with the given value (as if
+    the value was stored at address below the Memory pointer). If a match is
+    found, then the function returns lowest negative offset corresponding to
+    how far below the given pointer the value would be stored to produce the
+    found partial match.
+
+    Offsets from -Pred(SizeOf(Value)) to -1 can be returned for leading partial
+    match.
+
+      NOTE - this check is done before the memory is scanned for full
+             occurences.
+
+    For example, let's have UInt32 value $11223344 and a memory buffer starting
+    with byte sequence $22 $11 $AA $5B $00 ... (little endian). This will return
+    an offset of -2.
+
+  TrailingPartialMatch
+
+    This is similar to LeadingPartialMatch, except it tries to match trailing
+    bytes of the memory. If match is found, then it returns a positive offset
+    which will be above normally returned offsets, that is, larger than
+    (Size - SizeOf(Value)), corresponding to where the partially matched value
+    would start in the buffer.
+
+    Offsets from (Size - Pred(SizeOf(Value))) to (Size - 1) can be returned for
+    trailing partial match.
+
+  LeadingPartialMatch and TrailingPartialMatch are here for situations where
+  you are scanning some non-memory data (eg. file) - there, one would read and
+  scan smaller buffers. This might create problems if the multi-byte value
+  lies across the buffers boundary - you can use these settings to search for
+  such occurences.
+}
+
+Function FindByte(Value: UInt8; Memory: Pointer; Size: TMemSize): TMemOffset;
+Function FindWord(Value: UInt16; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+Function FindLong(Value: UInt32; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+Function FindQuad(Value: UInt64; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1956,6 +2017,27 @@ else
 {$IFEND}
   Result := AnsiChar(C) in S;
 end;
+
+//------------------------------------------------------------------------------
+
+Function MemSizeMin(A,B: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If A < B then
+  Result := A
+else
+  Result := B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemSizeMax(A,B: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If A > B then
+  Result := A
+else
+  Result := B;
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -8549,25 +8631,6 @@ end;
 
 Function CompareData(const A; SizeA: TMemSize; const B; SizeB: TMemSize; CompareMethod: TCompareMethod): Integer;
 
-  Function MemSizeMin(A,B: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
-  begin
-    If A < B then
-      Result := A
-    else
-      Result := B;
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-  Function MemSizeMax(A,B: TMemSize): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
-  begin
-    If A > B then
-      Result := A
-    else
-      Result := B;
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
 
   Function CompareBytes: Integer;
   var
@@ -9934,6 +9997,205 @@ while Size > TMemSize(High(PtrInt)) do
   end;
 If Size > 0 then
   System.Move(Src^,Dst^,PtrInt(Size));
+end;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                  Memory search
+================================================================================
+-------------------------------------------------------------------------------}
+
+Function FindByte(Value: UInt8; Memory: Pointer; Size: TMemSize): TMemOffset;
+var
+  WorkPtr:  PUInt8;
+begin
+If Size > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('FindByte: Memory buffer too large.');
+WorkPtr := PUInt8(Memory);
+Result := 0;
+while Size > 0 do
+  begin
+    If WorkPtr^ = Value then
+      Exit; // we have found the value - result is already set, so just exit
+    Dec(Size);
+    Inc(Result);
+    Inc(WorkPtr);
+  end;
+// if here, it means the value was not found
+Result := -SizeOf(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindWord(Value: UInt16; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+var
+  WorkPtr:        PUInt16;
+  BytesRemaining: TMemSize;
+begin
+If Size > 0 then
+  begin
+    If Size > TMemSize(High(TMemOffset)) then
+      raise EBOInvalidValue.Create('FindWord: Memory buffer too large.');
+    // leading partial match check
+    If LeadingPartialMatch then
+    {$IFDEF ENDIAN_BIG}
+      If UInt8(Value) = PUInt8(Memory)^ then
+    {$ELSE}
+      If UInt8(Value shr 8) = PUInt8(Memory)^ then
+    {$ENDIF}
+        begin
+          Result := -1;
+          Exit;
+        end;
+    // check the data
+    WorkPtr := PUInt16(Memory);
+    BytesRemaining := Size;
+    Result := 0;
+    while BytesRemaining >= SizeOf(UInt16) do
+      begin
+        If WorkPtr^ = Value then
+          Exit;
+        Inc(PUInt8(WorkPtr)); // increment only by one
+        Dec(BytesRemaining);
+        Inc(Result);
+      end;
+  {
+    Trailing partial match check.
+
+    Note that by this point, WorkPtr always points to a byte that is
+    SizeOf(Value) - 1 remote from the end of data, so we can use it
+    to do partial check.
+  }
+    If TrailingPartialMatch then
+    {$IFDEF ENDIAN_BIG}
+      If UInt8(Value shr 8) = PUInt8(WorkPtr)^ then
+    {$ELSE}
+      If UInt8(Value) = PUInt8(WorkPtr)^ then
+    {$ENDIF}
+        begin
+          Result := TMemOffset(Size) - 1;
+          Exit;
+        end;
+  end;
+Result := -SizeOf(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindLong(Value: UInt32; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+var
+  WorkPtr:        PUInt32;
+  BytesRemaining: TMemSize;
+  Temp:           UInt32;
+  i:              Integer;
+begin
+If Size > 0 then
+  begin
+    If Size > TMemSize(High(TMemOffset)) then
+      raise EBOInvalidValue.Create('FindLong: Memory buffer too large.');
+    If LeadingPartialMatch then
+      For i := 1 to Integer(MemSizeMin(Pred(SizeOf(UInt32)),Size)) do
+        begin
+          Temp := 0;
+          Move(Memory^,Temp,i);
+        {$IFDEF ENDIAN_BIG}
+          If Temp = UInt32(Value shl (8 * (SizeOf(UInt32) - i))) then
+        {$ELSE}
+          If Temp = Value shr (8 * (SizeOf(UInt32) - i)) then
+        {$ENDIF}
+            begin
+              Result := TMemOffset(i) - SizeOf(UInt32);
+              Exit;
+            end;
+        end;
+    WorkPtr := PUInt32(Memory);
+    BytesRemaining := Size;
+    Result := 0;
+    while BytesRemaining >= SizeOf(UInt32) do
+      begin
+        If WorkPtr^ = Value then
+          Exit;
+        Inc(PUInt8(WorkPtr));
+        Dec(BytesRemaining);
+        Inc(Result);
+      end;
+    If TrailingPartialMatch then
+      For i := Integer(MemSizeMin(Pred(SizeOf(UInt32)),Size)) downto 1 do
+        begin
+          Temp := 0;
+          Move(WorkPtr^,Temp,i);
+        {$IFDEF ENDIAN_BIG}
+          If Temp = Value and UInt32(UInt32(-1) shl (8 * (SizeOf(UInt32) - i))) then
+        {$ELSE}
+          If Temp = Value and {mask}(UInt32(-1) shr (8 * (SizeOf(UInt32) - i))) then
+        {$ENDIF}
+            begin
+              Result := TMemOffset(Size) - i;
+              Exit;
+            end;
+          Inc(PUInt8(WorkPtr));
+        end;
+  end;
+Result := -SizeOf(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindQuad(Value: UInt64; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+var
+  WorkPtr:        PUInt64;
+  BytesRemaining: TMemSize;
+  Temp:           UInt64;
+  i:              Integer;
+begin
+If Size > 0 then
+  begin
+    If Size > TMemSize(High(TMemOffset)) then
+      raise EBOInvalidValue.Create('FindQuad: Memory buffer too large.');
+    If LeadingPartialMatch then
+      For i := 1 to Integer(MemSizeMin(Pred(SizeOf(UInt64)),Size)) do
+        begin
+          Temp := 0;
+          Move(Memory^,Temp,i);
+        {$IFDEF ENDIAN_BIG}
+          If Temp = UInt64(Value shl (8 * (SizeOf(UInt64) - i))) then
+        {$ELSE}
+          If Temp = Value shr (8 * (SizeOf(UInt64) - i)) then
+        {$ENDIF}
+            begin
+              Result := TMemOffset(i) - SizeOf(UInt64);
+              Exit;
+            end;
+        end;
+    WorkPtr := PUInt64(Memory);
+    BytesRemaining := Size;
+    Result := 0;
+    while BytesRemaining >= SizeOf(UInt64) do
+      begin
+        If WorkPtr^ = Value then
+          Exit;
+        Inc(PUInt8(WorkPtr));
+        Dec(BytesRemaining);
+        Inc(Result);
+      end;
+    If TrailingPartialMatch then
+      For i := Integer(MemSizeMin(Pred(SizeOf(UInt64)),Size)) downto 1 do
+        begin
+          Temp := 0;
+          Move(WorkPtr^,Temp,i);
+        {$IFDEF ENDIAN_BIG}
+          If Temp = Value and UInt64(UInt64(-1) shl (8 * (SizeOf(UInt64) - i))) then
+        {$ELSE}
+          If Temp = Value and (UInt64(-1) shr (8 * (SizeOf(UInt64) - i))) then
+        {$ENDIF}
+            begin
+              Result := TMemOffset(Size) - i;
+              Exit;
+            end;
+          Inc(PUInt8(WorkPtr));
+        end;
+  end;
+Result := -SizeOf(Value);
 end;
 
 

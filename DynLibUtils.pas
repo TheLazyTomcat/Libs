@@ -16,9 +16,9 @@
     There are also contexts which offer more advanced options, but they are
     currently untested - use them with caution.
 
-  Version 1.4.1 (2025-03-01)
+  Version 1.5 (2025-08-06)
 
-  Last change 2025-03-01
+  Last change 2025-08-06
 
   ©2020-2025 František Milt
 
@@ -150,13 +150,97 @@ type
   EDLUInvalidValue      = class(EDLUException);
   EDLUSymbolError       = class(EDLUException);
 
+{===============================================================================
+    Safe loading management - declaration
+===============================================================================}
+{
+  Safe loading, when enabled, ensures that currently loaded or unloaded library
+  cannot change some selected system or process/thread settings - or, to be
+  more correct, it saves these settings and restores them when the (un)loading
+  is done.
+
+  It is activated by option optSafeLoad - see description of type TDLUOption
+  for more details.
+
+  Type TDLUSafeLoadEntries contains all entries that can be preserved by safe
+  loading, but note that some might not be supported, depending on where and
+  how the program is run (operating system, processor architecture, ...) - only
+  supported entries will be preserved.
+
+  Following entries are currently implemented:
+
+    sleProcErrMode (windows)              - process-wide error mode
+
+    sleThrErrMode  (windows 7 and newer)  - thread-specific error mode
+
+    sleX87         (x86(-64) processors)  - settings of x87 floating point unit
+
+    sleSSE         (x86(-64) processors)  - settings of SSE/AVX units
+}
+type
+  TDLUSafeLoadEntries = set of (sleProcErrMode,sleThrErrMode,sleX87,sleSSE);
+
+//------------------------------------------------------------------------------  
+{
+  SafeLoadSupported
+
+  Returns set of entries that are supported in the current environment.
+}
+Function SafeLoadSupported: TDLUSafeLoadEntries;
+
+{
+  Following two functions are designed to access a set of entries (saved
+  settings) that should be removed from safe loading - that is, entries that
+  normally would be preserved during library (un)loading, but for some reason
+  are required NOT to be preserved (ie. the library must be allowed to change
+  them even if safe loading is active).
+
+  This set is maintained separately for each thread (it is a thread variable).
+  Changes made in one thread will not be visible in other threads.
+
+  Initially this set is empty (ie. all supported entries are saved), entries
+  that are added to it are disabled/removed from safe loading.
+}
+{
+  SafeLoadGetDisabled
+
+  Returns set of entries that are removed from safe loading.
+}
+Function SafeLoadGetDisabled: TDLUSafeLoadEntries;
+
+{
+  SafeLoadSetDisabled
+
+  Changes set of disabled entries to a provided set and returns its previous
+  value.
+
+  It is possible to use entries that are not supported in current environment,
+  they just will be ignored.  
+}
+Function SafeLoadSetDisabled(NewSet: TDLUSafeLoadEntries): TDLUSafeLoadEntries;
+
 {$IFDEF Windows}
 {===============================================================================
-    Process error mode management - declaration
+    Error mode management - declaration
 ===============================================================================}
+{
+  Error mode management is provided only for Windows OS, it has no meaning on
+  other operating systems and therefore is removed there.
+
+  All Windows versions support process-wide error mode, but only newer systems
+  (from Windows 7 up) will support thread-specific error mode, be aware of this.
+
+  These Functions are here only to facilitate suppression of critical system
+  error dialog (see description of type TDLUOption further down, specificaly
+  option optNoCriticalError). For more details about error modes, please refer
+  to WinAPI documentation.
+}
+
+Function GetProcessErrorMode: UINT;
+Function SetProcessErrorMode(NewMode: UINT): UINT;
 
 Function GetThreadErrorMode: DWORD;
-Function SetThreadErrorMode(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL;
+Function SetThreadErrorMode(NewMode: DWORD): DWORD;
 
 {$ENDIF}
 
@@ -167,7 +251,7 @@ type
   // TDLUSymbol is used in macro functions for symbol resolving
   TDLUSymbol = record
     Name:       String;     // name of the symbol
-    AddressVar: PPointer;   // pointer to a variable to which the address shall be stored
+    AddressVar: PPointer;   // pointer to a variable to which the symbol address shall be stored
   end;
   PDLUSymbol = ^TDLUSymbol;
 
@@ -317,12 +401,10 @@ type
     Activate this option if you want to preserve some selected system settings
     across the call when loading or unloading a library.
 
-    In current implementation, it preserves process/thread error mode on
-    Windows OS and X87 control word (FPU settings) and MXCSR register (SSE and
-    AVX settings) on x86(-64) processors.
-
     It is here for situations where the loaded library is changing those
     settings but this behavior is undesirable.
+
+    For more details refer to safe loading management description above.
 
   optBreakOnUnresolved
 
@@ -351,7 +433,7 @@ type
       WARNING - take great care where and when you use this option, as using
                 it in an inappropriate situation will inadvertently lead to
                 corruption of the affected context.
-                Generally, you should never use this option on sole calls,
+                Generally, you should never use this option on isolated calls,
                 use it only if the context is currently thread locked, as
                 the locking and unlocking calls do way more than just that.
 
@@ -513,7 +595,8 @@ Function OpenLibrary(const LibFileName: String; Options: TDLUOptions = []): TDLU
   The returned library handle must be closed using function CloseLibrary when
   you are done using it.
 
-  If an exception is raised, then value of LibraryHandle is undefined.
+  If an exception is raised, then value of LibraryHandle is undefined (do not
+  close it).
 
   Observed options:
 
@@ -530,8 +613,8 @@ Function OpenLibrary(const LibFileName: String; out LibraryHandle: TDLULibraryHa
   It checks the handle (calls CheckLibrary) before processing. If it is not
   deemed to be valid, it will exit without doing anything (no exception).
 
-  Note that it will always invalide the library handle, irrespective of whether
-  the OS unloads the library or not.
+  Note that it will always invalidate the library handle, irrespective of
+  whether the OS unloads the library or not.
 
   Observed options:
 
@@ -741,8 +824,8 @@ Function OpenLibraryAndResolveSymbolNames(const LibFileName: String; out Library
   a library, but also more information about that library along with some
   statistics, though this is currently implemented only in a limited form.
 
-  The most important feature of contexts is, that the library to which a
-  context is bound is loaded (ie. system function loading it is called) only
+  The most important feature of contexts is, that the library, to which a
+  context is bound, is loaded (ie. system function loading it is called) only
   once, in the first loading call. Also, the system freeing is done only once.
   This is achieved by maintaining an internal reference count. But note that
   this all holds true only per context, not globally (the same library can be
@@ -1026,7 +1109,7 @@ Function CheckLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []
 
       optAlwaysLoad is not active
 
-        Function does NOT load the library again, only increments context's
+        Function does NOT load the library again, it only increments context's
         internal reference count (field OpenCount). LibFileName is ignored.
 
     WARNING - in both cases, no check is performed whether the currently
@@ -1044,6 +1127,9 @@ Function CheckLibrary(var Context: TDLULibraryContext; Options: TDLUOptions = []
            context was uninitialized prior the call to this function. This is
            because other thread can initialize it before this call is able to
            do its own initialization.
+
+    NOTE - even when an exception is raised by this function, the context
+           variable will stay in a consistent state.
 
   Observed options:
 
@@ -1271,8 +1357,11 @@ uses
 {$ENDIF}
 
 {===============================================================================
-    Safe loading - implementation
+    Safe loading management - implementation
 ===============================================================================}
+{-------------------------------------------------------------------------------
+    Safe loading management - internals
+-------------------------------------------------------------------------------}
 {$IFDEF CPU_x86x}
 
 Function GetX87CW: Word; register; assembler;
@@ -1315,38 +1404,48 @@ end;
 
 {$ENDIF}
 
-//------------------------------------------------------------------------------
-{$IFDEF CPU_x86x}
-const
-  DLU_SL_CPUFLAG_X87 = 1;
-  DLU_SL_CPUFLAG_SSE = 2;
-
-var
-  VAR_SafeLoadCPUFlags: Integer = 0;  // written only during unit initialization
-{$ENDIF}
-
+//==============================================================================
 type
   TDLUSafeLoadState = record
   {$IFDEF Windows}
-    ErrorMode:  DWORD;
+    ProcErrMode:  UINT;
+    ThrErrMode:   DWORD;
   {$ENDIF}
   {$IFDEF CPU_x86x}
-    X87CW:      Word;
-    MXCSR:      LongWord;
+    X87CW:        Word;
+    MXCSR:        LongWord;
   {$ENDIF}
   end;
+
+var  
+{
+  VAR_SafeLoadSupports is written only during unit initialization, it is only
+  read later, therefore there is no need for thread protection.
+}
+  VAR_SafeLoadSupports: TDLUSafeLoadEntries = [];
+
+threadvar
+  // THRVAR_SafeLoadDisabled is automatically initialized to an empty set
+  THRVAR_SafeLoadDisabled: TDLUSafeLoadEntries;  
 
 //------------------------------------------------------------------------------
 
 procedure SL_SaveState(out State: TDLUSafeLoadState);
+var
+  DisabledLocal:  TDLUSafeLoadEntries;
 begin
+// get local copy to prevent repeated TLS lookups
+DisabledLocal := THRVAR_SafeLoadDisabled;
 {$IFDEF Windows}
-State.ErrorMode := GetThreadErrorMode;
+If (sleProcErrMode in VAR_SafeLoadSupports) and not (sleProcErrMode in DisabledLocal) then
+  State.ProcErrMode := GetProcessErrorMode;
+If (sleThrErrMode in VAR_SafeLoadSupports) and not (sleThrErrMode in DisabledLocal) then
+  State.ThrErrMode := GetThreadErrorMode;
 {$ENDIF}
 {$IFDEF CPU_x86x}
-If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_X87) <> 0 then
+If (sleX87 in VAR_SafeLoadSupports) and not (sleX87 in DisabledLocal) then
   State.X87CW := GetX87CW;
-If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_SSE) <> 0 then
+If (sleSSE in VAR_SafeLoadSupports) and not (sleSSE in DisabledLocal) then
   State.MXCSR := GetMXCSR;
 {$ENDIF}
 end;
@@ -1354,14 +1453,20 @@ end;
 //------------------------------------------------------------------------------
 
 procedure SL_RestoreState(const State: TDLUSafeLoadState);
+var
+  DisabledLocal:  TDLUSafeLoadEntries;
 begin
+DisabledLocal := THRVAR_SafeLoadDisabled;
 {$IFDEF Windows}
-SetThreadErrorMode(State.ErrorMode,nil);
+If (sleProcErrMode in VAR_SafeLoadSupports) and not (sleProcErrMode in DisabledLocal) then
+  SetThreadErrorMode(State.ThrErrMode);
+If (sleThrErrMode in VAR_SafeLoadSupports) and not (sleThrErrMode in DisabledLocal) then
+  SetProcessErrorMode(State.ProcErrMode);
 {$ENDIF}
 {$IFDEF CPU_x86x}
-If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_X87) <> 0 then
+If (sleX87 in VAR_SafeLoadSupports) and not (sleX87 in DisabledLocal) then
   SetX87CW(State.X87CW);
-If (VAR_SafeLoadCPUFlags and DLU_SL_CPUFLAG_SSE) <> 0 then
+If (sleSSE in VAR_SafeLoadSupports) and not (sleSSE in DisabledLocal) then
   SetMXCSR(State.MXCSR);
 {$ENDIF}
 end;
@@ -1370,26 +1475,55 @@ end;
 
 procedure SL_Initialize;
 begin
+{$IFDEF Windows}
+Include(VAR_SafeLoadSupports,sleProcErrMode);
+If IsWindows7OrGreater then
+  Include(VAR_SafeLoadSupports,sleThrErrMode);
+{$ENDIF}
 {$IFDEF CPU_x86x}
 with TSimpleCPUID.Create do
 try
   If Info.SupportedExtensions.X87 then
-    VAR_SafeLoadCPUFlags := VAR_SafeLoadCPUFlags or DLU_SL_CPUFLAG_X87;
+    Include(VAR_SafeLoadSupports,sleX87);
   If Info.SupportedExtensions.SSE then
-    VAR_SafeLoadCPUFlags := VAR_SafeLoadCPUFlags or DLU_SL_CPUFLAG_SSE;
+    Include(VAR_SafeLoadSupports,sleSSE);
 finally
   Free;
 end;
 {$ENDIF}
 end;
 
+{-------------------------------------------------------------------------------
+    Safe loading management - public functions
+-------------------------------------------------------------------------------}
+
+Function SafeLoadSupported: TDLUSafeLoadEntries;
+begin
+Result := VAR_SafeLoadSupports;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SafeLoadGetDisabled: TDLUSafeLoadEntries;
+begin
+Result := THRVAR_SafeLoadDisabled;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SafeLoadSetDisabled(NewSet: TDLUSafeLoadEntries): TDLUSafeLoadEntries;
+begin
+Result := THRVAR_SafeLoadDisabled;
+THRVAR_SafeLoadDisabled := NewSet;
+end;
+
 
 {$IFDEF Windows}
 {===============================================================================
-    Process error mode management - implementation
+    Error mode management - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Process error mode management - internals
+    Error mode management - internals
 -------------------------------------------------------------------------------}
 {
   "Solution" for thread safe error mode management (function GetThreadErrorMode
@@ -1405,11 +1539,18 @@ end;
   use of SetErrorMode WinAPI function are called instead.
 }
 
-Function PEM_EMUL_GetThreadErrorMode: DWORD; stdcall;
+Function PEM_EMUL_GetProcessErrorMode: UINT; stdcall;
 begin
-// note that GetErrorMode is available only from Windows Vista
+// system call GetErrorMode is available only from Windows Vista up
 Result := SetErrorMode(0);
 SetErrorMode(Result);
+end;
+
+//------------------------------------------------------------------------------
+
+Function PEM_EMUL_GetThreadErrorMode: DWORD; stdcall;
+begin
+Result := DWORD(PEM_EMUL_GetProcessErrorMode);
 end;
 
 //------------------------------------------------------------------------------
@@ -1423,10 +1564,11 @@ else
 Result := True;
 end;
 
-//------------------------------------------------------------------------------
+//==============================================================================
 var
-  PEM_VAR_GetThreadErrorMode: Function: DWORD; stdcall = PEM_EMUL_GetThreadErrorMode;
-  PEM_VAR_SetThreadErrorMode: Function(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL; stdcall = PEM_EMUL_SetThreadErrorMode;
+  PEM_VAR_GetProcessErrorMode: Function: UINT; stdcall = PEM_EMUL_GetProcessErrorMode;
+  PEM_VAR_GetThreadErrorMode:  Function: DWORD; stdcall = PEM_EMUL_GetThreadErrorMode;
+  PEM_VAR_SetThreadErrorMode:  Function(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL; stdcall = PEM_EMUL_SetThreadErrorMode;
 
 //------------------------------------------------------------------------------
 
@@ -1434,26 +1576,42 @@ procedure PEM_Initialize;
 var
   Module: TDLULibraryHandle;
 begin
-// for win7 and up, load "real" functions into procedural variables
-If IsWindows7OrGreater then
+{
+  kernel32.dll really should be loaded by this point, so there should be no
+  need to call LoadLibrary (which might cause trouble because of a need to
+  call FreeLibrary and so on)
+}
+If OpenLibrary('kernel32.dll',Module,[optOnlyGetHandleNoRef]) then
   begin
-    {
-      kernel32.dll really should be loaded by this point, so there should be no
-      need to call LoadLibrary (which might cause trouble because of a need to
-      call FreeLibrary and so on)
-    }
-    If OpenLibrary('kernel32.dll',Module,[optOnlyGetHandleNoRef]) then
+    // load "real" functions into procedural variables in systems that supports them
+    If IsWindowsVistaOrGreater then
+      @PEM_VAR_GetProcessErrorMode := GetSymbolAddr(Module,'GetErrorMode',[optExceptionOnFailure]);
+    If IsWindows7OrGreater then
       begin
         @PEM_VAR_GetThreadErrorMode := GetSymbolAddr(Module,'GetThreadErrorMode',[optExceptionOnFailure]);
         @PEM_VAR_SetThreadErrorMode := GetSymbolAddr(Module,'SetThreadErrorMode',[optExceptionOnFailure]);
       end
-    else raise EDLULibraryOpenError.CreateFmt('PEM_Initialize: Kernel32.dll not loaded (%u).',[GetLastError]);
-  end;
+  end
+else raise EDLULibraryOpenError.CreateFmt('PEM_Initialize: Kernel32.dll not loaded (%u).',[GetLastError]);
 end;
 
 {-------------------------------------------------------------------------------
-    Process error mode management - public functions
+    Error mode management - public functions
 -------------------------------------------------------------------------------}
+
+Function GetProcessErrorMode: DWORD;
+begin
+Result := PEM_VAR_GetProcessErrorMode;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SetProcessErrorMode(NewMode: DWORD): DWORD;
+begin
+Result := SetErrorMode(NewMode);
+end;
+
+//------------------------------------------------------------------------------
 
 Function GetThreadErrorMode: DWORD;
 begin
@@ -1462,9 +1620,9 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function SetThreadErrorMode(dwNewMode: DWORD; lpOldMode: LPDWORD): BOOL;
+Function SetThreadErrorMode(NewMode: DWORD): DWORD;
 begin
-Result := PEM_VAR_SetThreadErrorMode(dwNewMode,lpOldMode);
+PEM_VAR_SetThreadErrorMode(NewMode,@Result);
 end;
 
 {$ENDIF}
@@ -1626,6 +1784,7 @@ Result := dlinfo(LibraryHandle,RTLD_DI_LINKMAP,@TempMap) = 0;
 end;
 {$ENDIF}
 
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                 Handle functions
@@ -1650,6 +1809,7 @@ end;
 Function OpenLibrary(const LibFileName: String; Options: TDLUOptions = []): TDLULibraryHandle; overload;
 var
   SL_State:     TDLUSafeLoadState;
+  StoredError:  String;
 {$IFDEF Windows}
   OldErrorMode: DWORD;
 
@@ -1657,7 +1817,7 @@ var
   begin
     Result := Format('%u',[GetLastError]);
   end;
-
+  
 {$ENDIF}
 begin
 If optSafeLoad in Options then
@@ -1667,10 +1827,7 @@ try
   OldErrorMode := 0;
   // windows code
   If optNoCriticalError in Options then
-    begin
-      OldErrorMode := GetThreadErrorMode;
-      SetThreadErrorMode(OldErrorMode or SEM_FAILCRITICALERRORS,nil);
-    end;
+    OldErrorMode := SetThreadErrorMode(OldErrorMode or SEM_FAILCRITICALERRORS);
   try
     If optOnlyGetHandle in Options then
       GetModuleHandleEx(0,PSysChar(StrToSys(LibFileName)),@Result)
@@ -1690,18 +1847,29 @@ try
             If optDeepCheck in Options then
               If not CheckLibraryDeepOnly(Result) then
                 begin
-                {$IFDEF Windows}
                 {
                   We are raising exception here, yet the library was most
                   probably successfully opened because CheckLibraryBasicOnly
                   returned true. Because caller of this function cannot know
                   this and do the cleanup, we must do it ourselves.
+
+                  Also note that we need to preserve current error produced in
+                  CheckLibraryDeepOnly as it can be rewritten by FreeLibrary or
+                  dlclose before we get chance to raise it.
                 }
-                  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+                  StoredError := dlerror;
+                {$IFDEF Windows}
+                {
+                  Do cleanup only when optOnlyGetHandleNoRef is not used or,
+                  when it is, optOnlyGetHandle is used too.
+                }
+                  If not(optOnlyGetHandleNoRef in Options) or (optOnlyGetHandle in Options) then
                     FreeLibrary(Result);  // ignore errors here
+                {$ELSE}
+                  dlclose(Result);
                 {$ENDIF}
                   // following will show error produced in CheckLibraryDeepOnly
-                  raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s" (deep check failed - %s).',[LibFileName,dlerror]);
+                  raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s" (deep check failed - %s).',[LibFileName,StoredError]);
                 end;
           end
         else raise EDLULibraryOpenError.CreateFmt('OpenLibrary: Failed to open library "%s" (%s).',[LibFileName,dlerror]);
@@ -1709,7 +1877,7 @@ try
 {$IFDEF Windows}
   finally
     If optNoCriticalError in Options then
-      SetThreadErrorMode(OldErrorMode,nil);
+      SetThreadErrorMode(OldErrorMode);
   end;
 {$ENDIF}
 finally
@@ -1723,11 +1891,10 @@ end;
 Function OpenLibrary(const LibFileName: String; out LibraryHandle: TDLULibraryHandle; Options: TDLUOptions = []): Boolean;
 begin
 {
-  Following OpenLibrary calls CheckLibrary if option optExceptionOnFailure is
-  active.
-  We can assume, when this option is active and no exception was raised, that
-  the check was already performed and it was succesfull, so we can optimize-out
-  local check and return true straight away.
+  Following OpenLibrary does library checks when option optExceptionOnFailure
+  is active. We can assume, when this option is active and no exception was
+  raised, that the check was already performed and it was succesfull, so we can
+  optimize-out local check and return true straight away.
 }
 LibraryHandle := OpenLibrary(LibFileName,Options);
 If not (optExceptionOnFailure in Options) then
@@ -1999,7 +2166,7 @@ except
   Note that both mentioned options are totally ignored in non-Windows OS, so
   CloseLibrary is always called there.
 }
-  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+  If not(optOnlyGetHandleNoRef in Options) or (optOnlyGetHandle in Options) then  
 {$ENDIF}
     CloseLibrary(LibraryHandle,Options);
   raise;  // re-raise exception
@@ -2026,7 +2193,7 @@ try
   Result := ResolveSymbolList(LibraryHandle,SymbolList,Results,Options);
 except
 {$IFDEF Windows}
-  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+  If not(optOnlyGetHandleNoRef in Options) or (optOnlyGetHandle in Options) then
 {$ENDIF}
     CloseLibrary(LibraryHandle,Options);
   raise;
@@ -2053,7 +2220,7 @@ try
   Result := ResolveSymbolNames(LibraryHandle,Names,AddressVars,Results,Options);
 except
 {$IFDEF Windows}
-  If ([optOnlyGetHandle,optOnlyGetHandleNoRef] * Options) <> [optOnlyGetHandleNoRef] then
+  If not(optOnlyGetHandleNoRef in Options) or (optOnlyGetHandle in Options) then
 {$ENDIF}
     CloseLibrary(LibraryHandle,Options);
   raise;
@@ -2191,9 +2358,11 @@ end;
 Function ContextGetEffectiveOptions(const Context: TDLULibraryContextInternal; CallOptions: TDLUOptions): TDLUOptions;
 begin
 If (optContextOptions in Context.Data.Options) or (optContextOptions in CallOptions) then
+  // optNoSerialize from CallOptions, if present, must be preserved
   Result := (Context.Data.Options - [optNoSerialize]) + (CallOptions * [optNoSerialize])
 else
   Result := CallOptions;
+// optOnlyGetHandleNoRef is not allowed for contexts, so remove it here
 Exclude(Result,optOnlyGetHandleNoRef);
 end;
 
@@ -2482,8 +2651,8 @@ try
       initializing call
 
       This function is supposed to always raise an exception if the opening
-      fails. Instead of do it locally, we simply force called OpenLibrary
-      overload to do the checks for us.
+      fails. Instead of doing it locally, we simply force called OpenLibrary
+      overload to do the checks and raising for us.
     }
       InternalCtx.Data.Handle := OpenLibrary(LibFileName,Options + [optExceptionOnFailure]);
       InternalCtx.Data.OpenCount := 1;
@@ -2570,6 +2739,10 @@ try
   Options := ContextGetEffectiveOptions(InternalCtx,Options);
   If ContextCheckLibrary(InternalCtx,Options) then
     begin
+    {
+      Deep check, if requested, was already performed in ContextCheckLibrary,
+      no need to do it again (eg. in GetSymbolAddr).
+    }
       Exclude(Options,optDeepCheck);
       // first try to find the symbol in a list of already resolved (if allowed)
       If optSymbolListResolve in Options then
@@ -2646,8 +2819,6 @@ If not (optNoSerialize in Options) then
   ContextLock(InternalCtx);
 try
   Options := ContextGetEffectiveOptions(InternalCtx,Options);
-  if optNoSerialize in options then
-    writeln('boo');
   If ContextCheckLibrary(InternalCtx,Options) then
     begin
       Exclude(Options,optDeepCheck);

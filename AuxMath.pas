@@ -44,9 +44,9 @@
       about which types and what functions are affected, refer to "Overloading
       information symbols" further down.
 
-  Version 1.3.1 (2025-03-31)
+  Version 1.3.5 (2025-08-13)
 
-  Last change (2025-03-31)
+  Last change (2025-08-13)
 
   ©2024-2025 František Milt
 
@@ -150,11 +150,15 @@ unit AuxMath;
 // do not touch following defines!
 
 {$UNDEF AM_OverflowChecks}
+{$UNDEF AM_ForceStackFrames}
 {$UNDEF AM_DistinctUCS4Str}
 {$UNDEF AM_DistinctUTF8Str}
 
 {$IFOPT Q+}
   {$DEFINE AM_OverflowChecks}
+{$ENDIF}
+{$IFOPT W+}
+  {$DEFINE AM_ForceStackFrames}
 {$ENDIF}
 
 {$IFDEF FPC}
@@ -246,6 +250,10 @@ uses
       IfThen
       InRange
       EnsureRange
+      LongMul
+      GranularValue
+      IndexValue
+      IndexValueIn
 }
 const
   DistinctOverloadUInt64 = {$IF Declared(NativeUInt64E)}True{$ELSE}False{$IFEND};
@@ -346,7 +354,7 @@ type
 ===============================================================================}
 {
   Lowest and highest possible values of selected integer types. They can all be
-  obtained using stndard functions Low() and High(), but if anyone wants them
+  obtained using standard functions Low() and High(), but if anyone wants them
   as constants, there they are...
 }
 const
@@ -455,6 +463,14 @@ const
 
   MinPtrUInt = {$IF SizeOf(PtrUInt) = 8}MinUInt64{$ELSE}MinUInt32{$IFEND};
   MaxPtrUInt = {$IF SizeOf(PtrUInt) = 8}MaxUInt64{$ELSE}MaxUInt32{$IFEND};
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+  MinMemOffset = {$IF SizeOf(TMemOffset) = 8}MinInt64{$ELSE}MinInt32{$IFEND};
+  MaxMemOffset = {$IF SizeOf(TMemOffset) = 8}MaxInt64{$ELSE}MaxInt32{$IFEND};
+
+  MinMemSize = {$IF SizeOf(TMemSize) = 8}MinUInt64{$ELSE}MinUInt32{$IFEND};
+  MaxMemSize = {$IF SizeOf(TMemSize) = 8}MaxUInt64{$ELSE}MaxUInt32{$IFEND};
 
 //==============================================================================
 {
@@ -3134,6 +3150,11 @@ Function CvtU2I(const N: UInt64): Int64; overload;{$IFDEF CanInline} inline;{$EN
 
     PtrInt and PtrUInt are both pointer-sized - ie. have the same width as
     pointer, which obviously changes between 32bit and 64bit platfroms.
+
+    TMemOffset is a pointer-sized signed integer used when moving a memory
+    address (pointer), meaning it changes between 32bit and 64bit platforms.
+    Similarly, TMemSize is pointer-sized unsigned integer used to store size
+    of memory buffers.
 }
 
 Function CvtI2LI(const N: Int8): LongInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
@@ -3206,6 +3227,30 @@ Function CvtI2PU(const N: Int16): PtrUInt; overload;{$IFDEF CanInline} inline;{$
 Function CvtI2PU(const N: Int32): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function CvtI2PU(const N: Int64): PtrUInt; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+//------------------------------------------------------------------------------
+
+Function CvtI2MI(const N: Int8): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2MI(const N: Int16): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2MI(const N: Int32): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2MI(const N: Int64): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtU2MI(const N: UInt8): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2MI(const N: UInt16): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2MI(const N: UInt32): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2MI(const N: UInt64): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function CvtU2MU(const N: UInt8): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2MU(const N: UInt16): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2MU(const N: UInt32): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtU2MU(const N: UInt64): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function CvtI2MU(const N: Int8): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2MU(const N: Int16): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2MU(const N: Int32): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function CvtI2MU(const N: Int64): TMemSize; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -3215,9 +3260,10 @@ Function CvtI2PU(const N: Int64): PtrUInt; overload;{$IFDEF CanInline} inline;{$
 {
   Calculates product of two given numbers (multiplies them) that is twice the
   width of inputs and returns it in Product output parameter. Result is set to
-  true when the product overflows into higher 64 bits, false otherwise.
+  true when the product overflows into higher half (eg. higher 64bits of 128bit 
+  result when multiplying two 64bit numbers), false otherwise.
   Making the product double-width ensures that no overflow error (that with
-  information loss) can happen, as the resulting value will always fit into it.
+  information loss) can happen, as the resulting value will always fit.
 
   The same functionality can be achieved by widening the arguments and doing
   "normal" multiplication, but not with (U)Int64 - and when at implementing for
@@ -3320,6 +3366,9 @@ Function LongMul(const A,B: UInt64): UInt128; overload;{$IFDEF CanInline} inline
   This can be represented in pseudocode as...
 
     Result = not(Sign(A) xor Sign(B))
+
+    NOTE - there are no overloads for unsigned integers simply because they, by
+           definition, do not have sign, duh!
 }
 
 Function SignProduct(const A,B: Int8): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
@@ -3332,6 +3381,422 @@ Function SignProduct(const A,B: Double): Boolean; overload;{$IFDEF CanInline} in
 {$IF SizeOf(Extended) = 10}
 Function SignProduct(const A,B: Extended): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
 {$IFEND}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 Granular value
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Returns number closest to a given value in the given direction that is an
+  integral multiple of absolute value of requested granularity. As such, this
+  operation is very similar to rounding or step function.
+
+  Exception of class EAMInvalidOperation will be raised if you set granularity
+  to zero or to a minimum (negative) type value when using signed integers -
+  this is because minimum value of two-complement signed integer has bigger
+  absolute magnitude than can be encoded in the same type as positive value.
+
+  If granular value in the requested direction is outside of range the result
+  type can encode/hold (eg. Int8 value of 103 with granularity 50 and grPosInf
+  direction - this would return 150, but highest value Int8 can hold is 127),
+  then an EAMRangeError exception is raised.
+
+    WARNING - pointer type is treated as an unsigned integer here.
+
+  Individual direction values have following meaning and effects on returned
+  number (note grDefault is the same as grPosInf, grAvoidZero is the same as
+  grAvoidZeroPos and grNearest is the same as grNearEven):
+
+    grDefault
+    grPosInf        Towards positive infinity - returns number that is larger
+                    than or equal to a given value.
+
+                      Result >= Value
+
+    grNegInf        Towards negative infinity - returns number that is smaller
+                    than or equal to a given value.
+
+                      Result <= Value
+
+    grToZero        Towards zero - for positive values, it returns number that
+                    is smaller than or equal to given value. For negative
+                    values, it returns number that is larger than or equal to
+                    the given value.
+
+                      Value >= 0  ...  Result <= Value
+                      Value < 0   ...  Result >= Value
+
+                    For unsigned integers, this is equivalent to grNegInf.
+
+    grFromZero      Away from zero - for positive values, it returns number
+                    that is larger than or equal to given value. For negative
+                    values, it returns number that is smaller than or equal to
+                    the given value.
+
+                      Value >= 0  ...  Result >= Value
+                      Value < 0   ...  Result <= Value
+
+                    For unsigned integers, this is equivalent to grPosInf.
+
+    grAvoidZero
+    grAvoidZeroPos  Avoiding zero towards positive value - for values greater
+                    than zero, it returns number that is larger than or equal
+                    to given value. For values smaller than zero, it returns
+                    number that is smaller than or equal to the given value.
+                    For value of zero it returns closest number larger than
+                    zero.
+
+                      Value > 0  ...  Result >= Value
+                      Value < 0  ...  Result <= Value
+                      Value = 0  ...  Result > Value
+
+    grAvoidZeroNeg  Avoiding zero towards negative value - for values greater
+                    than zero, it returns number that is larger than or equal
+                    to given value. For values smaller than zero, it returns
+                    number that is smaller than or equal to the given value.
+                    For value of zero it returns closest number smaller than
+                    zero.
+
+                      Value > 0  ...  Result >= Value
+                      Value < 0  ...  Result <= Value
+                      Value = 0  ...  Result < Value or an exception
+
+                    WARNING - for unsigned integers, when the given value is
+                              zero, an exception of class EAMRangeError will
+                              always be raised.
+
+    grNearest
+    grNearEven      Returns number that is closest to the given value. If the
+                    value is exatly midway between two selectable numbers
+                    (which can happen only for even granularity), then it
+                    returns the number that is an even multiple of granularity.
+
+    grNearOdd       Returns number that is closest to the given value. If the
+                    value is exatly midway between two selectable numbers
+                    (which can happen only for even granularity), then it
+                    returns the number that is an odd multiple of granularity.
+}
+type
+  TAMGranularityDirection = (grDefault,grPosInf,grNegInf,grToZero,grFromZero,
+                             grAvoidZero,grAvoidZeroPos,grAvoidZeroNeg,
+                             grNearest,grNearEven,grNearOdd);
+
+//------------------------------------------------------------------------------
+
+Function iGranularValue(const Value: Int8; Granularity: Int8; Direction: TAMGranularityDirection = grDefault): Int8; overload;
+Function iGranularValue(const Value: Int16; Granularity: Int16; Direction: TAMGranularityDirection = grDefault): Int16; overload;
+Function iGranularValue(const Value: Int32; Granularity: Int32; Direction: TAMGranularityDirection = grDefault): Int32; overload;
+Function iGranularValue(const Value: Int64; Granularity: Int64; Direction: TAMGranularityDirection = grDefault): Int64; overload;
+
+//------------------------------------------------------------------------------
+
+Function uGranularValue(const Value: UInt8; Granularity: UInt8; Direction: TAMGranularityDirection = grDefault): UInt8; overload;
+Function uGranularValue(const Value: UInt16; Granularity: UInt16; Direction: TAMGranularityDirection = grDefault): UInt16; overload;
+Function uGranularValue(const Value: UInt32; Granularity: UInt32; Direction: TAMGranularityDirection = grDefault): UInt32; overload;
+Function uGranularValue(const Value: UInt64; Granularity: UInt64; Direction: TAMGranularityDirection = grDefault): UInt64; overload;
+
+//------------------------------------------------------------------------------
+
+Function pGranularValue(const Value: Pointer; Granularity: TMemSize; Direction: TAMGranularityDirection = grDefault): Pointer;
+
+//------------------------------------------------------------------------------
+
+Function GranularValue(const Value: Int8; Granularity: Int8; Direction: TAMGranularityDirection = grDefault): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GranularValue(const Value: Int16; Granularity: Int16; Direction: TAMGranularityDirection = grDefault): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GranularValue(const Value: Int32; Granularity: Int32; Direction: TAMGranularityDirection = grDefault): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(DistinctOverloadUInt64E)}
+Function GranularValue(const Value: Int64; Granularity: Int64; Direction: TAMGranularityDirection = grDefault): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+
+Function GranularValue(const Value: UInt8; Granularity: UInt8; Direction: TAMGranularityDirection = grDefault): UInt8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GranularValue(const Value: UInt16; Granularity: UInt16; Direction: TAMGranularityDirection = grDefault): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GranularValue(const Value: UInt32; Granularity: UInt32; Direction: TAMGranularityDirection = grDefault): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(DistinctOverloadUInt64E)}
+Function GranularValue(const Value: UInt64; Granularity: UInt64; Direction: TAMGranularityDirection = grDefault): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function GranularValue(const Value: Pointer; Granularity: TMemSize; Direction: TAMGranularityDirection = grDefault): Pointer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 Indexing value
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  These functions return an index of given value within a virtual values array
+  that starts at Base, and where each item has Stride size. In other words, it
+  returns to which stride the given value falls when counted from base.
+
+  It was originally designed to calculate item index withing an array when only
+  address of this item (or a field within it) is known. This inteded use also
+  prescribes details of its workings, namely:
+
+    The returned index is zero-based, rounded towards negative infinity, and
+    can be negative if value is smaller than base. First stride towards positive
+    infinity from the base has index zero, second has index 1 and so on. In the
+    direction of negative infinity, the first stride has index -1, second -2.
+
+    Value and Base can have any arbitrary value, but Stride must be greater
+    than zero (positive). If you pass zero or lower value, then an exception
+    of class EAMInvalidOperation will be raised.
+
+    The stride gives size of items in terms of numeric points, not as a simple
+    numerical difference. For example, given base of 0 with stride 3, this
+    would mean the first item towards positive infinity occupies values 0, 1
+    and 2.
+
+  It is possible, in rare circumstances (mainy when stride is set to one),
+  for the index to overflow - that is, it becomes negative even if it should be
+  positive or vice versa. When this happens and argument AllowOverflow is set
+  to false (default), then an EAMOverflowError is raised. If AllowOverflow is
+  set to true, then this error is suppressed and an overflowed index is
+  returned.
+}
+
+Function iIndexValue(const Value,Base,Stride: Int8; AllowOverflow: Boolean = False): Int8; overload;
+Function iIndexValue(const Value,Base,Stride: Int16; AllowOverflow: Boolean = False): Int16; overload;
+Function iIndexValue(const Value,Base,Stride: Int32; AllowOverflow: Boolean = False): Int32; overload;
+Function iIndexValue(const Value,Base,Stride: Int64; AllowOverflow: Boolean = False): Int64; overload;
+
+//------------------------------------------------------------------------------
+
+Function uIndexValue(const Value,Base,Stride: UInt8; AllowOverflow: Boolean = False): Int8; overload;
+Function uIndexValue(const Value,Base,Stride: UInt16; AllowOverflow: Boolean = False): Int16; overload;
+Function uIndexValue(const Value,Base,Stride: UInt32; AllowOverflow: Boolean = False): Int32; overload;
+Function uIndexValue(const Value,Base,Stride: UInt64; AllowOverflow: Boolean = False): Int64; overload;
+
+//------------------------------------------------------------------------------
+
+Function pIndexValue(const Value,Base: Pointer; const Stride: TMemSize; AllowOverflow: Boolean = False): TMemOffset;
+
+//------------------------------------------------------------------------------
+
+Function IndexValue(const Value,Base,Stride: Int8; AllowOverflow: Boolean = False): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function IndexValue(const Value,Base,Stride: Int16; AllowOverflow: Boolean = False): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function IndexValue(const Value,Base,Stride: Int32; AllowOverflow: Boolean = False): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(DistinctOverloadUInt64E)}
+Function IndexValue(const Value,Base,Stride: Int64; AllowOverflow: Boolean = False): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+
+Function IndexValue(const Value,Base,Stride: UInt8; AllowOverflow: Boolean = False): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function IndexValue(const Value,Base,Stride: UInt16; AllowOverflow: Boolean = False): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function IndexValue(const Value,Base,Stride: UInt32; AllowOverflow: Boolean = False): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(DistinctOverloadUInt64E)}
+Function IndexValue(const Value,Base,Stride: UInt64; AllowOverflow: Boolean = False): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function IndexValue(const Value,Base: Pointer; const Stride: TMemSize; AllowOverflow: Boolean = False): TMemOffset; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                             Indexing value in array
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Takes given array (Arr parameter) as a set of contiguous intervals, finds
+  interval to which given value (parameter Value) falls and returns its index.
+
+  The array is interpreted as a set of intervals, containing length - 1
+  intervals, where i-th interval can be defined as [Arr[i],Arr[i+1]). Given
+  the definition, the intervals are contiguous (where one ends, the next
+  begins) and have zero-base indexing (first has index zero).
+
+  For example, let's have array [5,10,12,13,20,25] and value 15, This value
+  falls to interval [13,20) (fourth interval), therefore index 3 is returned.
+
+    WARNING - the values in Arr must be strictly growing. They must be ordered
+              from lowest to highest and there can be no two equal values -
+              each end every item must be larger than the prewious one (this
+              does NOT concern the first item, obviously). For performance
+              reasons, this is not checked by default (see ioCheckOrdering
+              option for more info).
+              Failing to provide correct data can result in wrong result being
+              returned, raising of unexpected exception or even to an infinite
+              loop, so be careful what you pass here.
+
+  If the given value does not belong to any interval, or no interval is given
+  (array is empty or has only one item), then -1 is returned.
+
+  Functions with bit width in name (eg. iIndexValueIn_16) are provided for use
+  in very old compilers (namely Delphi 7) because they cannot, under specific
+  circumstances, distinguish which common-name overload to call and fail with
+  "ambiguous overloaded call" error.
+
+  Operation of these function can be altered by passing option flags, which
+  currently include:
+
+    ioRightInclusive
+
+      When this option is activated, then the last given interval includes the
+      last (right-most) value from the array, and is therefore closed from both
+      sides.
+
+      For example in array [0,5,10,15], with this option active, the value 15
+      falls to the last interval (index 2).
+
+      This has also effect when the array contains only one item - with this
+      active the sole item is in itself one full interval.
+
+    ioCheckOrdering
+
+      When included, the function will check whether the given array has proper
+      format (ie. is strictly growing, see abowe).
+
+      If it is in correct format, then the function continues normally, but
+      if problem with the array is found, then the function will return value
+      of Low(Integer) (usually -2147483648).
+
+      This is somewhat expensive operation, so use it only when necessaary
+      (eg. when the array is passed from source that cannot be trusted).
+
+    ioCheckOrderingExc
+
+      This option has meaning only when ioCheckOrdering is also included.
+      If array format check fails and this is active, then, instead of returning
+      Low(Integer), the function will raise an EAMInvalidValue exception.
+}
+type
+  TAMIndexingOption = (ioRightInclusive,ioCheckOrdering,ioCheckOrderingExc);
+  TAMIndexingOptions = set of TAMIndexingOption;
+
+//------------------------------------------------------------------------------
+
+Function iIndexValueIn_8(const Value: Int8; const Arr: array of Int8; Options: TAMIndexingOptions = []): Integer;
+Function iIndexValueIn_16(const Value: Int16; const Arr: array of Int16; Options: TAMIndexingOptions = []): Integer;
+Function iIndexValueIn_32(const Value: Int32; const Arr: array of Int32; Options: TAMIndexingOptions = []): Integer;
+Function iIndexValueIn_64(const Value: Int64; const Arr: array of Int64; Options: TAMIndexingOptions = []): Integer;
+
+Function iIndexValueIn(const Value: Int8; const Arr: array of Int8; Options: TAMIndexingOptions = []): Integer; overload;
+Function iIndexValueIn(const Value: Int16; const Arr: array of Int16; Options: TAMIndexingOptions = []): Integer; overload;
+Function iIndexValueIn(const Value: Int32; const Arr: array of Int32; Options: TAMIndexingOptions = []): Integer; overload;
+Function iIndexValueIn(const Value: Int64; const Arr: array of Int64; Options: TAMIndexingOptions = []): Integer; overload;
+
+//------------------------------------------------------------------------------
+
+Function uIndexValueIn_8(const Value: UInt8; const Arr: array of UInt8; Options: TAMIndexingOptions = []): Integer;
+Function uIndexValueIn_16(const Value: UInt16; const Arr: array of UInt16; Options: TAMIndexingOptions = []): Integer;
+Function uIndexValueIn_32(const Value: UInt32; const Arr: array of UInt32; Options: TAMIndexingOptions = []): Integer;
+Function uIndexValueIn_64(const Value: UInt64; const Arr: array of UInt64; Options: TAMIndexingOptions = []): Integer;
+
+Function uIndexValueIn(const Value: UInt8; const Arr: array of UInt8; Options: TAMIndexingOptions = []): Integer; overload;
+Function uIndexValueIn(const Value: UInt16; const Arr: array of UInt16; Options: TAMIndexingOptions = []): Integer; overload;
+Function uIndexValueIn(const Value: UInt32; const Arr: array of UInt32; Options: TAMIndexingOptions = []): Integer; overload;
+Function uIndexValueIn(const Value: UInt64; const Arr: array of UInt64; Options: TAMIndexingOptions = []): Integer; overload;
+
+//------------------------------------------------------------------------------
+
+Function fIndexValueIn(const Value: Single; const Arr: array of Single; Options: TAMIndexingOptions = []): Integer; overload;
+Function fIndexValueIn(const Value: Double; const Arr: array of Double; Options: TAMIndexingOptions = []): Integer; overload;
+{$IF SizeOf(Extended) = 10}
+Function fIndexValueIn(const Value: Extended; const Arr: array of Extended; Options: TAMIndexingOptions = []): Integer; overload;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function pIndexValueIn(const Value: Pointer; const Arr: array of Pointer; Options: TAMIndexingOptions = []): Integer;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function IndexValueIn(const Value: Int8; const Arr: array of Int8; Options: TAMIndexingOptions = []): Integer; overload;
+Function IndexValueIn(const Value: Int16; const Arr: array of Int16; Options: TAMIndexingOptions = []): Integer; overload;
+Function IndexValueIn(const Value: Int32; const Arr: array of Int32; Options: TAMIndexingOptions = []): Integer; overload;
+{$IF Declared(DistinctOverloadUInt64E)}
+Function IndexValueIn(const Value: Int64; const Arr: array of Int64; Options: TAMIndexingOptions = []): Integer; overload;
+{$IFEND}
+
+Function IndexValueIn(const Value: UInt8; const Arr: array of UInt8; Options: TAMIndexingOptions = []): Integer; overload;
+Function IndexValueIn(const Value: UInt16; const Arr: array of UInt16; Options: TAMIndexingOptions = []): Integer; overload;
+Function IndexValueIn(const Value: UInt32; const Arr: array of UInt32; Options: TAMIndexingOptions = []): Integer; overload;
+{$IF Declared(DistinctOverloadUInt64E)}
+Function IndexValueIn(const Value: UInt64; const Arr: array of UInt64; Options: TAMIndexingOptions = []): Integer; overload;
+{$IFEND}
+
+Function IndexValueIn(const Value: Single; const Arr: array of Single; Options: TAMIndexingOptions = []): Integer; overload;
+Function IndexValueIn(const Value: Double; const Arr: array of Double; Options: TAMIndexingOptions = []): Integer; overload;
+{$IF SizeOf(Extended) = 10}
+Function IndexValueIn(const Value: Extended; const Arr: array of Extended; Options: TAMIndexingOptions = []): Integer; overload;
+{$IFEND}
+
+Function IndexValueIn(const Value: Pointer; const Arr: array of Pointer; Options: TAMIndexingOptions = []): Integer; overload;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Linear interpolation
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  InterpolateLinear
+
+  Linearly interpolates between Y1 and Y2 using value of X1 and X2. It will
+  return value of Y for point given by X coordinate that lies on a straight
+  line that goes through two points with coordinates (X1,Y1) and (X2,Y2).
+
+    NOTE - It is possible to pass X that does not lie between X1 and X2, this
+           way the interpolation is turned into linear extrapolation.
+
+    WARNING - X1 and X2 must NOT be equal, otherwise an EAMInvalidValue
+              exception will be raised.
+              Also note that precission errors within hardware might cause the
+              caclculation to raise other exceptions if the two mentioned
+              values are very close to each other or are very large.
+}
+Function InterpolateLinear(const X1,X2,Y1,Y2: Extended; const X: Extended): Extended; overload;
+
+{
+  InterpolateLinear
+
+  Linearly interpolates between values A and B using normalized range T.
+
+  For T = 0, it will return value A and for T = 1 value of B, but note that
+  this might be affected by precission errors in FPU hardware (ie. in some
+  circumstances the returned value might not be completely equal to A or B).
+  For T in interval (0,1) it will return a value between A and B.
+
+    NOTE - T is not checked to be in the internal (0,1). If T is lower than 0
+           or higher than 1 then the function calculates liner extrapolation.
+}
+Function InterpolateLinear(const A,B: Extended; const T: Extended): Extended; overload;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Linear extrapolation
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  ExtrapolateLinear
+
+  Linearly extrapolates value using two data points ((X1,Y1) and (X2,Y2)).
+  It will return value of Y for point given by X coordinate that lies on a
+  straight line that goes through the two given data points.
+
+    NOTE - It is possible to pass X that lies between X1 and X2, effectively
+           calculating linear interpolation.
+
+    WARNING - X1 and X2 must NOT be equal, otherwise an EAMInvalidValue
+              exception will be raised.
+              Also note that precission errors within hardware might cause the
+              caclculation to raise other exceptions if the two mentioned
+              values are very close to each other or are very large.
+}
+Function ExtrapolateLinear(const X1,X2,Y1,Y2: Extended; const X: Extended): Extended; overload;
+
+{
+  ExtrapolateLinear
+
+  Linearly extrapolates from two given data points (A and B) based on value
+  given by T.
+
+  T is expected to be normalized for interval (A,B), but can otherwise be of
+  any value. For T = 0, it will return a value of B, for T = -1 it will return
+  A, for T = 1 it will return value of 2B - A.
+}
+Function ExtrapolateLinear(const A,B: Extended; const T: Extended): Extended; overload;
+
 
 implementation
 
@@ -3389,6 +3854,56 @@ else
   end;
 {$IFEND}
 end;
+
+//------------------------------------------------------------------------------
+
+// NOTE - overflows are ignored/suppressed here.
+{$IF Declared(NativeUInt64E)}
+{$IFDEF AM_OverflowChecks}{$Q-}{$ENDIF}
+Function SubtractUInt64(const A,B: UInt64): UInt64;
+begin
+Result := UInt64(A - B);
+end;
+{$IFDEF AM_OverflowChecks}{$Q+}{$ENDIF}
+{$ELSE}
+Function SubtractUInt64(const A,B: UInt64): UInt64;{$IFNDEF PurePascal} register; assembler;
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A          (EBP + 16)         RCX           RDI
+               B          (EBP + 8)          RDX           RSI
+          Result           EDX:EAX           RAX           RAX
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    // APX is not a thing yet, so no "SUB  RAX, RDI, RSI" :(
+    SUB     RCX, RDX
+    MOV     RAX, RCX
+  {$ELSE}
+    SUB     RDI, RSI
+    MOV     RAX, RDI
+  {$ENDIF}
+{$ELSE}
+    MOV     EAX, dword ptr [A]
+    MOV     EDX, dword ptr [A + 4]
+
+    SUB     EAX, dword ptr [B]
+    SBB     EDX, dword ptr [B + 4]
+{$ENDIF}
+end;
+{$ELSE}
+var
+  Temp: Int64;
+begin
+Temp := Int64(UInt64Rec(A).Lo) - Int64(UInt64Rec(B).Lo);
+UInt64Rec(Result).Lo := UInt32(Temp);
+If UInt64Rec(Temp).Hi <> 0 then
+  UInt64Rec(Result).Hi := UInt32(Int64(UInt64Rec(A).Hi) - Int64(UInt64Rec(B).Hi) - 1)
+else
+  UInt64Rec(Result).Hi := UInt32(Int64(UInt64Rec(A).Hi) - Int64(UInt64Rec(B).Hi))
+end;
+{$ENDIF}
+{$IFEND}
 
 {===============================================================================
     Public auxiliary funtions - implementation
@@ -10410,7 +10925,7 @@ If B >= 0 then
     else
       Result := UInt64(B);
   end
-else raise EAMInvalidOperation.CreateFmt('uiMin: Value of B (Int32: %d) is too low for UInt64.',[B]);
+else raise EAMInvalidOperation.CreateFmt('uiMin: Value of B (Int64: %d) is too low for UInt64.',[B]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -11784,7 +12299,7 @@ If CompareUInt64(B,UInt64(High(Int32))) <= 0 then
     else
       Result := Int32(B);
   end
-else raise EAMInvalidOperation.CreateFmt('iuMax: Value of B (UInt64: %d) is too high for Int32.',[Int64(B)]);
+else raise EAMInvalidOperation.CreateFmt('iuMax: Value of B (UInt64: %u) is too high for Int32.',[B]);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -18582,6 +19097,122 @@ Result := CvtI2U32(N);
 {$IFEND}
 end;
 
+{-------------------------------------------------------------------------------
+    Cvt*2MI - conversion to TMemOffset
+-------------------------------------------------------------------------------}
+
+Function CvtI2MI(const N: Int8): TMemOffset;
+begin
+Result := TMemOffset(CvtI2PI(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2MI(const N: Int16): TMemOffset;
+begin
+Result := TMemOffset(CvtI2PI(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2MI(const N: Int32): TMemOffset;
+begin
+Result := TMemOffset(CvtI2PI(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2MI(const N: Int64): TMemOffset;
+begin
+Result := TMemOffset(CvtI2PI(N));
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtU2MI(const N: UInt8): TMemOffset;
+begin
+Result := TMemOffset(CvtU2PI(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2MI(const N: UInt16): TMemOffset;
+begin
+Result := TMemOffset(CvtU2PI(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2MI(const N: UInt32): TMemOffset;
+begin
+Result := TMemOffset(CvtU2PI(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2MI(const N: UInt64): TMemOffset;
+begin
+Result := TMemOffset(CvtU2PI(N));
+end;
+
+{-------------------------------------------------------------------------------
+    Cvt*2MU - conversion to TMemSize
+-------------------------------------------------------------------------------}
+
+Function CvtU2MU(const N: UInt8): TMemSize;
+begin
+Result := TMemSize(CvtU2PU(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2MU(const N: UInt16): TMemSize;
+begin
+Result := TMemSize(CvtU2PU(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2MU(const N: UInt32): TMemSize;
+begin
+Result := TMemSize(CvtU2PU(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtU2MU(const N: UInt64): TMemSize;
+begin
+Result := TMemSize(CvtU2PU(N));
+end;
+
+//------------------------------------------------------------------------------
+
+Function CvtI2MU(const N: Int8): TMemSize;
+begin
+Result := TMemSize(CvtI2PU(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2MU(const N: Int16): TMemSize;
+begin
+Result := TMemSize(CvtI2PU(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2MU(const N: Int32): TMemSize;
+begin
+Result := TMemSize(CvtI2PU(N));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CvtI2MU(const N: Int64): TMemSize;
+begin
+Result := TMemSize(CvtI2PU(N));
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -18822,21 +19453,21 @@ asm
     PUSH  EBP
     CALL  @Int64MulAdd
 
-    // check overflow into higher 64bits
+    // check overflow into higher 64 bits
     MOV   EAX, dword ptr [ECX + 8]
     MOV   EDX, dword ptr [ECX + 12]
 
     MOV   EBX, EAX
     OR    EBX, EDX
     JZ    @OverflowTestSignCheck
-    // the higher 64bits are non-zero
+    // the higher 64 bits are non-zero
     AND   EAX, EDX
     CMP   EAX, $FFFFFFFF
     SETNE AL
     JNE   @RoutineEnd
 
 @OverflowTestSignCheck:
-    // if here, the higher 64bits are either all-zero or all-one
+    // if here, the higher 64 bits are either all-zero or all-one
     XOR   EDX, dword ptr [ECX + 4]
     SETS  AL
 
@@ -18845,8 +19476,8 @@ asm
 //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
 @Int64MulAdd:
 {
-    I ... signed 32nit integer
-    U ... unsigned 32 bit integer (note U.Hi is always zero)
+    I ... signed 32bit integer
+    U ... unsigned 32bit integer (note U.Hi is always zero)
 
       I.Lo ... [ESP + 4]    U.Lo ... [ESP + 8]
 
@@ -19408,7 +20039,7 @@ uLongMul(A,B,Result);
 end;
 
 {-------------------------------------------------------------------------------
-    LongMul - common-name overloas (product in result)
+    LongMul - common-name overloads (product in result)
 -------------------------------------------------------------------------------}
 
 Function LongMul(const A,B: Int8): Int16;
@@ -19622,6 +20253,2032 @@ begin
 Result := SignProduct(Int16(AO.SignExponent),Int16(BO.SignExponent));
 end;
 {$IFEND}
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 Granular value
+--------------------------------------------------------------------------------
+===============================================================================}
+{-------------------------------------------------------------------------------
+    iGranularValue - signed integers
+-------------------------------------------------------------------------------}
+
+Function iGranularValue(const Value: Int8; Granularity: Int8; Direction: TAMGranularityDirection = grDefault): Int8;
+
+  Function GranualarLo(const Value,Granularity: Int8): Int8;
+  var
+    FullResult: Int16;
+  begin
+    If not iLongMul(iDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := Int8(FullResult)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: Int8): Int8;
+  var
+    FullResult: Int16;
+  begin
+    If not iLongMul(iDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := Int8(FullResult)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarHi: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function ValueSelect(LoValue: Boolean): Int8;
+  begin
+    If LoValue then
+      Result := GranualarLo(Value,Granularity)
+    else
+      Result := GranualarHi(Value,Granularity)
+  end;
+
+var
+  Reference,Distance: Int8;
+  Quotient,Remainder: Int8;
+begin
+// check granularity
+If (Granularity = 0) or (Granularity <= MinInt8) then
+  raise EAMInvalidOperation.CreateFmt('iGranularValue: Invalid granularity (%d).',[Granularity]);
+// only operate on absolute value of granularity
+If Granularity < 0 then
+  Granularity := -Granularity;
+// and now calculate according to direction  
+case Direction of
+  grDefault,
+  grPosInf:       Result := GranualarHi(Value,Granularity);
+  grNegInf:       Result := GranualarLo(Value,Granularity);
+  grToZero:       Result := ValueSelect(Value >= 0);
+  grFromZero:     Result := ValueSelect(Value < 0);
+  grAvoidZero,
+  grAvoidZeroPos: If Value = 0 then
+                    Result := GranualarHi(1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grAvoidZeroNeg: If Value = 0 then
+                    Result := GranualarLo(-1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                  {
+                    Implementation for these directions might seem convoluted,
+                    but there is reason for it - it is this way to avoid
+                    raising an exception when not needed (ie. value that is
+                    out of range is not taken).
+                  }
+                    Reference := ValueSelect(Value >= 0);
+                    If Value <> Reference then
+                      begin
+                        // get absolute (positive) distance
+                        Distance := Abs(Value - Reference);
+                        If Distance < (Granularity - Distance) then
+                          Result := Reference
+                        else If Distance > (Granularity - Distance) then
+                          // following can raise an exception if the result is out of range
+                          Result := ValueSelect(Value < 0)
+                        else
+                          begin
+                            // distance is exactly half the granularity
+                            iDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := ValueSelect(Value < 0)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('iGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iGranularValue(const Value: Int16; Granularity: Int16; Direction: TAMGranularityDirection = grDefault): Int16;
+
+  Function GranualarLo(const Value,Granularity: Int16): Int16;
+  var
+    FullResult: Int32;
+  begin
+    If not iLongMul(iDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := Int16(FullResult)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: Int16): Int16;
+  var
+    FullResult: Int32;
+  begin
+    If not iLongMul(iDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := Int16(FullResult)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarHi: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function ValueSelect(LoValue: Boolean): Int16;
+  begin
+    If LoValue then
+      Result := GranualarLo(Value,Granularity)
+    else
+      Result := GranualarHi(Value,Granularity)
+  end;
+
+var
+  Reference,Distance: Int16;
+  Quotient,Remainder: Int16;
+begin
+If (Granularity = 0) or (Granularity <= MinInt16) then
+  raise EAMInvalidOperation.CreateFmt('iGranularValue: Invalid granularity (%d).',[Granularity]);
+If Granularity < 0 then
+  Granularity := -Granularity;
+case Direction of
+  grDefault,
+  grPosInf:       Result := GranualarHi(Value,Granularity);
+  grNegInf:       Result := GranualarLo(Value,Granularity);
+  grToZero:       Result := ValueSelect(Value >= 0);
+  grFromZero:     Result := ValueSelect(Value < 0);
+  grAvoidZero,
+  grAvoidZeroPos: If Value = 0 then
+                    Result := GranualarHi(1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grAvoidZeroNeg: If Value = 0 then
+                    Result := GranualarLo(-1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                    Reference := ValueSelect(Value >= 0);
+                    If Value <> Reference then
+                      begin
+                        Distance := Abs(Value - Reference);
+                        If Distance < (Granularity - Distance) then
+                          Result := Reference
+                        else If Distance > (Granularity - Distance) then
+                          Result := ValueSelect(Value < 0)
+                        else
+                          begin
+                            iDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := ValueSelect(Value < 0)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('iGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iGranularValue(const Value: Int32; Granularity: Int32; Direction: TAMGranularityDirection = grDefault): Int32;
+
+  Function GranualarLo(const Value,Granularity: Int32): Int32;
+  var
+    FullResult: Int64;
+  begin
+    If not iLongMul(iDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := Int32(FullResult)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: Int32): Int32;
+  var
+    FullResult: Int64;
+  begin
+    If not iLongMul(iDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := Int32(FullResult)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarHi: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function ValueSelect(LoValue: Boolean): Int32;
+  begin
+    If LoValue then
+      Result := GranualarLo(Value,Granularity)
+    else
+      Result := GranualarHi(Value,Granularity)
+  end;
+
+var
+  Reference,Distance: Int32;
+  Quotient,Remainder: Int32;
+begin
+If (Granularity = 0) or (Granularity <= MinInt32) then
+  raise EAMInvalidOperation.CreateFmt('iGranularValue: Invalid granularity (%d).',[Granularity]);
+If Granularity < 0 then
+  Granularity := -Granularity;
+case Direction of
+  grDefault,
+  grPosInf:       Result := GranualarHi(Value,Granularity);
+  grNegInf:       Result := GranualarLo(Value,Granularity);
+  grToZero:       Result := ValueSelect(Value >= 0);
+  grFromZero:     Result := ValueSelect(Value < 0);
+  grAvoidZero,
+  grAvoidZeroPos: If Value = 0 then
+                    Result := GranualarHi(1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grAvoidZeroNeg: If Value = 0 then
+                    Result := GranualarLo(-1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                    Reference := ValueSelect(Value >= 0);
+                    If Value <> Reference then
+                      begin
+                        Distance := Abs(Value - Reference);
+                        If Distance < (Granularity - Distance) then
+                          Result := Reference
+                        else If Distance > (Granularity - Distance) then
+                          Result := ValueSelect(Value < 0)
+                        else
+                          begin
+                            iDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := ValueSelect(Value < 0)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('iGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iGranularValue(const Value: Int64; Granularity: Int64; Direction: TAMGranularityDirection = grDefault): Int64;
+
+  Function GranualarLo(const Value,Granularity: Int64): Int64;
+  var
+    FullResult: Int128;
+  begin
+    If not iLongMul(iDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := Int64(FullResult.Lo)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: Int64): Int64;
+  var
+    FullResult: Int128;
+  begin
+    If not iLongMul(iDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := Int64(FullResult.Lo)
+    else
+      raise EAMRangeError.Create('iGranularValue.GranualarHi: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function ValueSelect(LoValue: Boolean): Int64;
+  begin
+    If LoValue then
+      Result := GranualarLo(Value,Granularity)
+    else
+      Result := GranualarHi(Value,Granularity)
+  end;
+
+var
+  Reference,Distance: Int64;
+  Quotient,Remainder: Int64;
+begin
+If (Granularity = 0) or (Granularity <= MinInt64) then
+  raise EAMInvalidOperation.CreateFmt('iGranularValue: Invalid granularity (%d).',[Granularity]);
+If Granularity < 0 then
+  Granularity := -Granularity;
+case Direction of
+  grDefault,
+  grPosInf:       Result := GranualarHi(Value,Granularity);
+  grNegInf:       Result := GranualarLo(Value,Granularity);
+  grToZero:       Result := ValueSelect(Value >= 0);
+  grFromZero:     Result := ValueSelect(Value < 0);
+  grAvoidZero,
+  grAvoidZeroPos: If Value = 0 then
+                    Result := GranualarHi(1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grAvoidZeroNeg: If Value = 0 then
+                    Result := GranualarLo(-1,Granularity)
+                  else
+                    Result := ValueSelect(Value < 0);
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                    Reference := ValueSelect(Value >= 0);
+                    If Value <> Reference then
+                      begin
+                        Distance := Abs(Value - Reference);
+                        If Distance < (Granularity - Distance) then
+                          Result := Reference
+                        else If Distance > (Granularity - Distance) then
+                          Result := ValueSelect(Value < 0)
+                        else
+                          begin
+                            iDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := ValueSelect(Value < 0)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('iGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    uGranularValue - unsigned integers
+-------------------------------------------------------------------------------}
+
+Function uGranularValue(const Value: UInt8; Granularity: UInt8; Direction: TAMGranularityDirection = grDefault): UInt8;
+
+  Function GranualarLo(const Value,Granularity: UInt8): UInt8;
+  var
+    FullResult: UInt16;
+  begin
+    If not uLongMul(uDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := UInt8(FullResult)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: UInt8): UInt8;
+  var
+    FullResult: UInt16;
+  begin
+    If not uLongMul(uDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := UInt8(FullResult)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+var
+  Reference,Distance: UInt8;
+  Quotient,Remainder: UInt8;
+begin
+If Granularity = 0 then
+  raise EAMInvalidOperation.CreateFmt('uGranularValue: Invalid granularity (%u).',[Granularity]);
+case Direction of
+  grDefault,
+  grPosInf,
+  grFromZero:     Result := GranualarHi(Value,Granularity);
+  grNegInf,
+  grToZero:       Result := GranualarLo(Value,Granularity);
+  grAvoidZero,
+  grAvoidZeroPos: Result := GranualarHi(uIfThen(Value = 0,1,Value),Granularity);
+  grAvoidZeroNeg: If Value <> 0 then
+                    Result := GranualarHi(Value,Granularity)
+                  else
+                    raise EAMRangeError.Create('uGranularValue: Invalid value (0).');
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                    Reference := GranualarLo(Value,Granularity);
+                    If Value <> Reference then
+                      begin
+                        Distance := Value - Reference;
+                        If Distance < (Granularity - Distance) then
+                          Result := Reference
+                        else If Distance > (Granularity - Distance) then
+                          Result := GranualarHi(Value,Granularity)
+                        else
+                          begin
+                            uDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := GranualarHi(Value,Granularity)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('uGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uGranularValue(const Value: UInt16; Granularity: UInt16; Direction: TAMGranularityDirection = grDefault): UInt16;
+
+  Function GranualarLo(const Value,Granularity: UInt16): UInt16;
+  var
+    FullResult: UInt32;
+  begin
+    If not uLongMul(uDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := UInt16(FullResult)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: UInt16): UInt16;
+  var
+    FullResult: UInt32;
+  begin
+    If not uLongMul(uDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := UInt16(FullResult)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+var
+  Reference,Distance: UInt16;
+  Quotient,Remainder: UInt16;
+begin
+If Granularity = 0 then
+  raise EAMInvalidOperation.CreateFmt('uGranularValue: Invalid granularity (%u).',[Granularity]);
+case Direction of
+  grDefault,
+  grPosInf,
+  grFromZero:     Result := GranualarHi(Value,Granularity);
+  grNegInf,
+  grToZero:       Result := GranualarLo(Value,Granularity);
+  grAvoidZero,
+  grAvoidZeroPos: Result := GranualarHi(uIfThen(Value = 0,1,Value),Granularity);
+  grAvoidZeroNeg: If Value <> 0 then
+                    Result := GranualarHi(Value,Granularity)
+                  else
+                    raise EAMRangeError.Create('uGranularValue: Invalid value (0).');
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                    Reference := GranualarLo(Value,Granularity);
+                    If Value <> Reference then
+                      begin
+                        Distance := Value - Reference;
+                        If Distance < (Granularity - Distance) then
+                          Result := Reference
+                        else If Distance > (Granularity - Distance) then
+                          Result := GranualarHi(Value,Granularity)
+                        else
+                          begin
+                            uDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := GranualarHi(Value,Granularity)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('uGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uGranularValue(const Value: UInt32; Granularity: UInt32; Direction: TAMGranularityDirection = grDefault): UInt32;
+
+  Function GranualarLo(const Value,Granularity: UInt32): UInt32;
+  var
+    FullResult: UInt64;
+  begin
+    If not uLongMul(uDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := UInt32(FullResult)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: UInt32): UInt32;
+  var
+    FullResult: UInt64;
+  begin
+    If not uLongMul(uDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := UInt32(FullResult)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+var
+  Reference,Distance: UInt32;
+  Quotient,Remainder: UInt32;
+begin
+If Granularity = 0 then
+  raise EAMInvalidOperation.CreateFmt('uGranularValue: Invalid granularity (%d).',[Int64(Granularity)]);
+case Direction of
+  grDefault,
+  grPosInf,
+  grFromZero:     Result := GranualarHi(Value,Granularity);
+  grNegInf,
+  grToZero:       Result := GranualarLo(Value,Granularity);
+  grAvoidZero,
+  grAvoidZeroPos: Result := GranualarHi(uIfThen(Value = 0,1,Value),Granularity);
+  grAvoidZeroNeg: If Value <> 0 then
+                    Result := GranualarHi(Value,Granularity)
+                  else
+                    raise EAMRangeError.Create('uGranularValue: Invalid value (0).');
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                    Reference := GranualarLo(Value,Granularity);
+                    If Value <> Reference then
+                      begin
+                        Distance := Value - Reference;
+                        If Distance < (Granularity - Distance) then
+                          Result := Reference
+                        else If Distance > (Granularity - Distance) then
+                          Result := GranualarHi(Value,Granularity)
+                        else
+                          begin
+                            uDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := GranualarHi(Value,Granularity)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('uGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uGranularValue(const Value: UInt64; Granularity: UInt64; Direction: TAMGranularityDirection = grDefault): UInt64;
+
+  Function GranualarLo(const Value,Granularity: UInt64): UInt64;
+  var
+    FullResult: UInt128;
+  begin
+    If not uLongMul(uDivFloor(Value,Granularity),Granularity,FullResult) then
+      Result := UInt64(FullResult.Lo)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+//   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---
+
+  Function GranualarHi(const Value,Granularity: UInt64): UInt64;
+  var
+    FullResult: UInt128;
+  begin
+    If not uLongMul(uDivCeil(Value,Granularity),Granularity,FullResult) then
+      Result := UInt64(FullResult.Lo)
+    else
+      raise EAMRangeError.Create('uGranularValue.GranualarLo: Granular value out of bounds.');
+  end;
+
+var
+  Reference,Distance: UInt64;
+  Quotient,Remainder: UInt64;
+begin
+If Granularity = 0 then
+  raise EAMInvalidOperation.CreateFmt('uGranularValue: Invalid granularity (%u).',[Granularity]);
+case Direction of
+  grDefault,
+  grPosInf,
+  grFromZero:     Result := GranualarHi(Value,Granularity);
+  grNegInf,
+  grToZero:       Result := GranualarLo(Value,Granularity);
+  grAvoidZero,
+  grAvoidZeroPos: Result := GranualarHi(uIfThen(Value = 0,1,Value),Granularity);
+  grAvoidZeroNeg: If Value <> 0 then
+                    Result := GranualarHi(Value,Granularity)
+                  else
+                    raise EAMRangeError.Create('uGranularValue: Invalid value (0).');
+  grNearest,
+  grNearEven,
+  grNearOdd:      begin
+                    Reference := GranualarLo(Value,Granularity);
+                    If CompareUInt64(Value,Reference) <> 0 then
+                      begin
+                        Distance := SubtractUInt64(Value,Reference);
+                        If CompareUInt64(Distance,SubtractUInt64(Granularity,Distance)) < 0 then
+                          Result := Reference
+                        else If CompareUInt64(Distance,SubtractUInt64(Granularity,Distance)) > 0 then
+                          Result := GranualarHi(Value,Granularity)
+                        else
+                          begin
+                            uDivMod(Reference,Granularity,Quotient,Remainder);
+                            If ((Quotient and 1) = 0) xor (Direction in [grNearest,grNearEven]) then
+                              Result := GranualarHi(Value,Granularity)
+                            else
+                              Result := Reference;
+                          end;
+                      end
+                    else Result := Reference;
+                  end;
+else
+  raise EAMInvalidValue.CreateFmt('uGranularValue: Unknown direction (%d).',[Ord(Direction)]);
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    pGranularValue - pointers
+-------------------------------------------------------------------------------}
+
+Function pGranularValue(const Value: Pointer; Granularity: TMemSize; Direction: TAMGranularityDirection = grDefault): Pointer;
+var
+{
+  This goes without warning in FPC, unlike direct typecasting between pointers
+  and integrs.
+}
+  IntValue:   PtrUInt absolute Value;
+  IntResult:  PtrUInt absolute Result;
+begin
+IntResult := uGranularValue(IntValue,PtrUInt(Granularity),Direction);
+end;
+
+{-------------------------------------------------------------------------------
+    GranularValue - common-name overloads
+-------------------------------------------------------------------------------}
+
+Function GranularValue(const Value: Int8; Granularity: Int8; Direction: TAMGranularityDirection = grDefault): Int8;
+begin
+Result := iGranularValue(Value,Granularity,Direction);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GranularValue(const Value: Int16; Granularity: Int16; Direction: TAMGranularityDirection = grDefault): Int16;
+begin
+Result := iGranularValue(Value,Granularity,Direction);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GranularValue(const Value: Int32; Granularity: Int32; Direction: TAMGranularityDirection = grDefault): Int32;
+begin
+Result := iGranularValue(Value,Granularity,Direction);
+end;
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GranularValue(const Value: Int64; Granularity: Int64; Direction: TAMGranularityDirection = grDefault): Int64;
+begin
+Result := iGranularValue(Value,Granularity,Direction);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function GranularValue(const Value: UInt8; Granularity: UInt8; Direction: TAMGranularityDirection = grDefault): UInt8;
+begin
+Result := uGranularValue(Value,Granularity,Direction);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GranularValue(const Value: UInt16; Granularity: UInt16; Direction: TAMGranularityDirection = grDefault): UInt16;
+begin
+Result := uGranularValue(Value,Granularity,Direction);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GranularValue(const Value: UInt32; Granularity: UInt32; Direction: TAMGranularityDirection = grDefault): UInt32;
+begin
+Result := uGranularValue(Value,Granularity,Direction);
+end;
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GranularValue(const Value: UInt64; Granularity: UInt64; Direction: TAMGranularityDirection = grDefault): UInt64;
+begin
+Result := uGranularValue(Value,Granularity,Direction);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function GranularValue(const Value: Pointer; Granularity: TMemSize; Direction: TAMGranularityDirection = grDefault): Pointer;
+begin
+Result := pGranularValue(Value,Granularity,Direction);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 Indexing value
+--------------------------------------------------------------------------------
+===============================================================================}
+{-------------------------------------------------------------------------------
+    iIndexValue - signed integers
+-------------------------------------------------------------------------------}
+
+{$IFDEF AM_OverflowChecks}{$Q-}{$ENDIF} // (Value - Base) can easily overflow
+
+Function iIndexValue(const Value,Base,Stride: Int8; AllowOverflow: Boolean = False): Int8;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('iIndexValue: Invalid stride (%d).',[Stride]);
+If Value <> Base then
+  begin
+    Result := iDivFloor(Int8(Value - Base),Stride);
+    // check whether the resulting index was wrapped around (ie. overflowed)
+    If not AllowOverflow then
+      If (Value < Base) xor (Result < 0) then
+        raise EAMOverflowError.Create('iIndexValue: Resulting index overflowed.');
+  end
+else Result := 0;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iIndexValue(const Value,Base,Stride: Int16; AllowOverflow: Boolean = False): Int16;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('iIndexValue: Invalid stride (%d).',[Stride]);
+If Value <> Base then
+  begin
+    Result := iDivFloor(Int16(Value - Base),Stride);
+    If not AllowOverflow then
+      If (Value < Base) xor (Result < 0) then
+        raise EAMOverflowError.Create('iIndexValue: Resulting index overflowed.');
+  end
+else Result := 0;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iIndexValue(const Value,Base,Stride: Int32; AllowOverflow: Boolean = False): Int32;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('iIndexValue: Invalid stride (%d).',[Stride]);
+If Value <> Base then
+  begin
+    Result := iDivFloor(Int32(Value - Base),Stride);
+    If not AllowOverflow then
+      If (Value < Base) xor (Result < 0) then
+        raise EAMOverflowError.Create('iIndexValue: Resulting index overflowed.');
+  end
+else Result := 0;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iIndexValue(const Value,Base,Stride: Int64; AllowOverflow: Boolean = False): Int64;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('iIndexValue: Invalid stride (%d).',[Stride]);
+If Value <> Base then
+  begin
+    Result := iDivFloor(Int64(Value - Base),Stride);
+    If not AllowOverflow then
+      If (Value < Base) xor (Result < 0) then
+        raise EAMOverflowError.Create('iIndexValue: Resulting index overflowed.');
+  end
+else Result := 0;
+end;
+
+{-------------------------------------------------------------------------------
+    uIndexValue - unsigned integers
+-------------------------------------------------------------------------------}
+
+Function uIndexValue(const Value,Base,Stride: UInt8; AllowOverflow: Boolean = False): Int8;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('uIndexValue: Invalid stride (%u).',[Stride]);
+If Value <> Base then
+  begin
+    Result := Int8(uDivFloor(UInt8(Value - Base),Stride));
+    If not AllowOverflow then
+      If (Value < Base) xor (Result < 0) then
+        raise EAMOverflowError.Create('uIndexValue: Resulting index overflowed.');    
+  end
+else Result := 0;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uIndexValue(const Value,Base,Stride: UInt16; AllowOverflow: Boolean = False): Int16;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('uIndexValue: Invalid stride (%u).',[Stride]);
+If Value <> Base then
+  begin
+    Result := Int16(uDivFloor(UInt16(Value - Base),Stride));
+    If not AllowOverflow then
+      If (Value < Base) xor (Result < 0) then
+        raise EAMOverflowError.Create('uIndexValue: Resulting index overflowed.');    
+  end
+else Result := 0;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uIndexValue(const Value,Base,Stride: UInt32; AllowOverflow: Boolean = False): Int32;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('uIndexValue: Invalid stride (%d).',[Int64(Stride)]);
+If Value <> Base then
+  begin
+    Result := Int32(uDivFloor(UInt32(Value - Base),Stride));
+    If not AllowOverflow then
+      If (Value < Base) xor (Result < 0) then
+        raise EAMOverflowError.Create('uIndexValue: Resulting index overflowed.');    
+  end
+else Result := 0;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uIndexValue(const Value,Base,Stride: UInt64; AllowOverflow: Boolean = False): Int64;
+begin
+If Stride <= 0 then
+  raise EAMInvalidOperation.CreateFmt('uIndexValue: Invalid stride (%u).',[Stride]);
+If Value <> Base then
+  begin
+    Result := Int64(uDivFloor(UInt64(Value - Base),Stride));
+    If not AllowOverflow then
+      If (CompareUInt64(Value,Base) < 0) xor (Result < 0) then
+        raise EAMOverflowError.Create('uIndexValue: Resulting index overflowed.');
+  end
+else Result := 0;
+end;
+
+{$IFDEF AM_OverflowChecks}{$Q+}{$ENDIF}
+
+{-------------------------------------------------------------------------------
+    pIndexValue - pointers
+-------------------------------------------------------------------------------}
+
+Function pIndexValue(const Value,Base: Pointer; const Stride: TMemSize; AllowOverflow: Boolean = False): TMemOffset;
+var
+  IntValue: PtrUInt absolute Value;
+  IntBase:  PtrUInt absolute Base;
+begin
+Result := TMemOffset(uIndexValue(IntValue,IntBase,PtrUInt(Stride),AllowOverflow));
+end;
+
+{-------------------------------------------------------------------------------
+    IndexValue - common-name overloads
+-------------------------------------------------------------------------------}
+
+Function IndexValue(const Value,Base,Stride: Int8; AllowOverflow: Boolean = False): Int8;
+begin
+Result := iIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValue(const Value,Base,Stride: Int16; AllowOverflow: Boolean = False): Int16;
+begin
+Result := iIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValue(const Value,Base,Stride: Int32; AllowOverflow: Boolean = False): Int32;
+begin
+Result := iIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValue(const Value,Base,Stride: Int64; AllowOverflow: Boolean = False): Int64;
+begin
+Result := iIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function IndexValue(const Value,Base,Stride: UInt8; AllowOverflow: Boolean = False): Int8;
+begin
+Result := uIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValue(const Value,Base,Stride: UInt16; AllowOverflow: Boolean = False): Int16;
+begin
+Result := uIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValue(const Value,Base,Stride: UInt32; AllowOverflow: Boolean = False): Int32;
+begin
+Result := uIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValue(const Value,Base,Stride: UInt64; AllowOverflow: Boolean = False): Int64;
+begin
+Result := uIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function IndexValue(const Value,Base: Pointer; const Stride: TMemSize; AllowOverflow: Boolean = False): TMemOffset;
+begin
+Result := pIndexValue(Value,Base,Stride,AllowOverflow);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                             Indexing value in array
+--------------------------------------------------------------------------------
+===============================================================================}
+{-------------------------------------------------------------------------------
+    iIndexValueIn - signed integers
+-------------------------------------------------------------------------------}
+
+Function iIndexValueIn_8(const Value: Int8; const Arr: array of Int8; Options: TAMIndexingOptions = []): Integer;
+{
+  Following code is almost completely the same for all overloads - only thing
+  different is name of the function in exception message and some comparisons
+  in UInt64 variant.
+
+  That being said, it cannot be moved to a common function called from them -
+  it IS possible to implement, but that would require some heavy overhead when
+  converting to a common type.
+
+  Another possibility would be to include it from a template file, but I want
+  to avoid that. I have some experience with this mechanism, and it is not
+  always sunshine, rainbow and bunnies. >:/
+
+  Ideal would be some sort of script or template managed by pre-processor in
+  the compiler, but that does no exist for pascal, so...
+
+  Just remember to keep the code in sync.
+}
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    // check ordering of the given array, if that is requested
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('iIndexValueIn_8: Given array is not properly ordered.');
+        end;
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      // right-most (last) item included and the given value is equal to it
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      // general case for arrays longer than 1
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+        {
+          Given value falls within the bounding values.
+
+          32 as a limit from which a binary search is used was selected pretty
+          much arbitrarily. That being said, I have done some tests and binary
+          search starts to be faster between 20 and 30 items, depending on base
+          type.
+
+          So why not use binary always? Because for short lists linear search
+          is statistically faster.
+        }
+          If Length(Arr) < 32 then
+            begin
+              // linear search
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              // binary search, note we are searching for range, not match
+              L := Low(Arr);
+              R := Pred(High(Arr)); // exclude last item
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function iIndexValueIn_16(const Value: Int16; const Arr: array of Int16; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('iIndexValueIn_16: Given array is not properly ordered.');
+        end;
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function iIndexValueIn_32(const Value: Int32; const Arr: array of Int32; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('iIndexValueIn_32: Given array is not properly ordered.');
+        end;
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function iIndexValueIn_64(const Value: Int64; const Arr: array of Int64; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('iIndexValueIn_64: Given array is not properly ordered.');
+        end;  
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//==============================================================================
+
+Function iIndexValueIn(const Value: Int8; const Arr: array of Int8; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_8(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iIndexValueIn(const Value: Int16; const Arr: array of Int16; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_16(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iIndexValueIn(const Value: Int32; const Arr: array of Int32; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_32(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function iIndexValueIn(const Value: Int64; const Arr: array of Int64; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_64(Value,Arr,Options);
+end;
+
+{-------------------------------------------------------------------------------
+    uIndexValueIn - unsigned integers
+-------------------------------------------------------------------------------}
+
+Function uIndexValueIn_8(const Value: UInt8; const Arr: array of UInt8; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('uIndexValueIn_8: Given array is not properly ordered.');
+        end;
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function uIndexValueIn_16(const Value: UInt16; const Arr: array of UInt16; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('uIndexValueIn_16: Given array is not properly ordered.');
+        end;
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function uIndexValueIn_32(const Value: UInt32; const Arr: array of UInt32; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('uIndexValueIn_32: Given array is not properly ordered.');
+        end;
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function uIndexValueIn_64(const Value: UInt64; const Arr: array of UInt64; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If CompareUInt64(Arr[i],Arr[Succ(i)]) >= 0 then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('uIndexValueIn_64: Given array is not properly ordered.');
+        end;
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]{no need to use CompareUInt64 here}) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (CompareUInt64(Value,Arr[Low(Arr)]) >= 0) and
+         (CompareUInt64(Value,Arr[High(Arr)]) < 0) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If CompareUInt64(Value,Arr[i]) >= 0 then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If CompareUInt64(Value,Arr[M]) < 0 then
+                    R := Pred(M)
+                  else If CompareUInt64(Value,Arr[Succ(M)]) >= 0 then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+//==============================================================================
+
+Function uIndexValueIn(const Value: UInt8; const Arr: array of UInt8; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_8(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uIndexValueIn(const Value: UInt16; const Arr: array of UInt16; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_16(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uIndexValueIn(const Value: UInt32; const Arr: array of UInt32; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_32(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function uIndexValueIn(const Value: UInt64; const Arr: array of UInt64; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_64(Value,Arr,Options);
+end;
+
+{-------------------------------------------------------------------------------
+    fIndexValueIn - real numbers
+-------------------------------------------------------------------------------}
+
+Function fIndexValueIn(const Value: Single; const Arr: array of Single; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('fIndexValueIn: Given array is not properly ordered.');
+        end;  
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function fIndexValueIn(const Value: Double; const Arr: array of Double; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('fIndexValueIn: Given array is not properly ordered.');
+        end;  
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+
+{$IF SizeOf(Extended) = 10}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function fIndexValueIn(const Value: Extended; const Arr: array of Extended; Options: TAMIndexingOptions = []): Integer;
+
+  Function CheckOrdering: Boolean;
+  var
+    i:  Integer;
+  begin
+    Result := True;
+    If Length(Arr) > 1 then
+      For i := Low(Arr) to Pred(High(Arr)) do
+        If Arr[i] >= Arr[Succ(i)] then
+          begin
+            Result := False;
+            Break{For i};
+          end;
+  end;
+
+var
+  i,L,R,M:  Integer;
+begin
+Result := -1;
+If Length(Arr) > 0 then
+  begin
+    If ioCheckOrdering in Options then
+      If not CheckOrdering then
+        begin
+          If not(ioCheckOrderingExc in Options) then
+            begin
+              Result := Low(Integer);
+              Exit;
+            end
+          else raise EAMInvalidValue.Create('fIndexValueIn: Given array is not properly ordered.');
+        end;  
+    If (ioRightInclusive in Options) and (Value = Arr[High(Arr)]) then
+      Result := iIfThen(Length(Arr) > 1,Pred(High(Arr)),Low(Arr))
+    else If Length(Arr) > 1 then
+      If (Value >= Arr[Low(Arr)]) and (Value < Arr[High(Arr)]) then
+        begin
+          If Length(Arr) < 32 then
+            begin
+              For i := Pred(High(Arr)) downto Low(Arr) do
+                If Value >= Arr[i] then
+                  begin
+                    Result := i;
+                    Break{For i};
+                  end;
+            end
+          else
+            begin
+              L := Low(Arr);
+              R := Pred(High(Arr));
+              while L <= R do
+                begin
+                  M := L + ((R - L) div 2);
+                  If Value < Arr[M] then
+                    R := Pred(M)
+                  else If Value >= Arr[Succ(M)] then
+                    L := Succ(M)
+                  else
+                    begin
+                      Result := M;
+                      Break{while};
+                    end;                  
+                end;
+            end;
+        end;
+  end;
+end;
+{$IFEND}
+
+{-------------------------------------------------------------------------------
+    pIndexValueIn - pointers
+-------------------------------------------------------------------------------}
+
+{$If not Defined(AM_ForceStackFrames) and not Defined(PurePascal)}
+  {$W+} // force creation of stack frames, we need them in assembly code
+{$IFEND}
+
+Function pIndexValueIn(const Value: Pointer; const Arr: array of Pointer; Options: TAMIndexingOptions = []): Integer;
+{$IFNDEF PurePascal}
+asm
+{
+  Do not touch anything - leave parameters where they are and how they are,
+  revert whatever has function prolog done with the stack and just jump to
+  a proper integer function.
+}
+{$IFDEF x64}
+    MOV   RSP, RBP 
+    POP   RBP
+    JMP   uIndexValueIn_64
+{$ELSE}
+    MOV   ESP, EBP
+    POP   EBP
+    JMP   uIndexValueIn_32
+{$ENDIF}
+end;
+{$ELSE}
+var
+  IntValue: PtrUInt absolute Value;
+  IntArr:   array of PtrUInt;
+begin
+{
+  Avoid typecasting pointers to integers, FPC does not like it. Also, we cannot
+  overlay IntArr over the Arr argument because open arrays and dynamic arrays
+  have different memory layout (internally, Arr is just a pointer to the first
+  element of the passed array and length is passed in a hidden parameter,
+  whereas non-empty dynamic arrays have their length stored at the same memory
+  location as data just before the first item).
+
+  Is there any pure-pascal way of how to pass the array without conversion?
+}
+IntArr := nil;
+If Length(Arr) > 0 then
+  begin
+    SetLength(IntArr,Length(Arr));
+    Move(Arr[Low(Arr)],IntArr[Low(IntArr)],Length(Arr) * SizeOf(Pointer));
+  end;
+Result := uIndexValueIn(IntValue,IntArr,Options);
+end;
+{$ENDIF}
+
+{$If not Defined(AM_ForceStackFrames) and not Defined(PurePascal)}
+  {$W-} // restore stack frames generation settings
+{$IFEND}
+
+{-------------------------------------------------------------------------------
+    IndexValueIn - common-name overloads
+-------------------------------------------------------------------------------}
+
+Function IndexValueIn(const Value: Int8; const Arr: array of Int8; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_8(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: Int16; const Arr: array of Int16; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_16(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: Int32; const Arr: array of Int32; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_32(Value,Arr,Options);
+end;
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: Int64; const Arr: array of Int64; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := iIndexValueIn_64(Value,Arr,Options);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function IndexValueIn(const Value: UInt8; const Arr: array of UInt8; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_8(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: UInt16; const Arr: array of UInt16; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_16(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: UInt32; const Arr: array of UInt32; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_32(Value,Arr,Options);
+end;
+
+{$IF Declared(DistinctOverloadUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: UInt64; const Arr: array of UInt64; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := uIndexValueIn_64(Value,Arr,Options);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function IndexValueIn(const Value: Single; const Arr: array of Single; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := fIndexValueIn(Value,Arr,Options);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: Double; const Arr: array of Double; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := fIndexValueIn(Value,Arr,Options);
+end;
+
+{$IF SizeOf(Extended) = 10}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function IndexValueIn(const Value: Extended; const Arr: array of Extended; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := fIndexValueIn(Value,Arr,Options);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function IndexValueIn(const Value: Pointer; const Arr: array of Pointer; Options: TAMIndexingOptions = []): Integer;
+begin
+Result := pIndexValueIn(Value,Arr,Options);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Linear interpolation
+--------------------------------------------------------------------------------
+===============================================================================}
+
+Function InterpolateLinear(const X1,X2,Y1,Y2: Extended; const X: Extended): Extended;
+begin
+If X1 <> X2 then
+  Result :=  (Y2 - Y1) * ((X - X1) / (X2 - X1)) + Y1
+else
+  raise EAMInvalidValue.Create('InterpolateLinear: Values X1 and X2 are equal, cannot interpolate.');
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterpolateLinear(const A,B: Extended; const T: Extended): Extended;
+begin
+Result := (B - A) * T + A;
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Linear extrapolation
+--------------------------------------------------------------------------------
+===============================================================================}
+
+Function ExtrapolateLinear(const X1,X2,Y1,Y2: Extended; const X: Extended): Extended; 
+begin
+If X1 <> X2 then
+  Result :=  (Y2 - Y1) * ((X - X1) / (X2 - X1)) + Y1
+else
+  raise EAMInvalidValue.Create('ExtrapolateLinear: Values X1 and X2 are equal, cannot extrapolate.');
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ExtrapolateLinear(const A,B: Extended; const T: Extended): Extended;
+begin
+Result := (B - A) * T + B;
+end;
 
 end.
 
