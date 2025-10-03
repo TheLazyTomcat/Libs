@@ -31,9 +31,9 @@
 
   Version 1.1.5 (2024-04-14)
 
-  Last change 2024-04-28
+  Last change 2025-10-03
 
-  ©2017-2024 František Milt
+  ©2017-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -2800,7 +2800,7 @@ Function UIM_Float16Utils_GetFuncImpl(Func: TUIM_Float16Utils_Function): TUIM_Fl
 var
   SelectedImplID: TUIMIdentifier;
 begin
-If varImplManager.FindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
+If varImplManager.RoutingFindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
   Result := TUIM_Float16Utils_Implementation(SelectedImplID)
 else
   raise EF16UNoImplementation.Create('UIM_Float16Utils_GetFuncImpl: No implementation selected.');
@@ -2811,11 +2811,11 @@ end;
 Function UIM_Float16Utils_SetFuncImpl(Func: TUIM_Float16Utils_Function; NewImpl: TUIM_Float16Utils_Implementation): TUIM_Float16Utils_Implementation;
 begin
 Result := UIM_Float16Utils_GetFuncImpl(Func);
-varImplManager.FindObj(TUIMIdentifier(Func)).Select(TUIMIdentifier(NewImpl));
+varImplManager.RoutingFindObj(TUIMIdentifier(Func)).Select(TUIMIdentifier(NewImpl));
 // make sure GetMXCSR and SetMXCSR have the same implementation selected
 case Func of
-  fnGetMXCSR: varImplManager.FindObj(TUIMIdentifier(fnSetMXCSR)).Select(TUIMIdentifier(NewImpl));
-  fnSetMXCSR: varImplManager.FindObj(TUIMIdentifier(fnGetMXCSR)).Select(TUIMIdentifier(NewImpl));
+  fnGetMXCSR: varImplManager.RoutingFindObj(TUIMIdentifier(fnSetMXCSR)).Select(TUIMIdentifier(NewImpl));
+  fnSetMXCSR: varImplManager.RoutingFindObj(TUIMIdentifier(fnGetMXCSR)).Select(TUIMIdentifier(NewImpl));
 end;
 end;
 
@@ -2843,7 +2843,7 @@ MXCSR_MASK_Init(not UIM_CheckASMSupport(fnGetMXCSR));
 varImplManager := TImplementationManager.Create;
 For i := Low(TUIM_Float16Utils_Function) to High(TUIM_Float16Utils_Function) do
   begin
-    with varImplManager.AddObj(TUIMIdentifier(i),ImplsVar[i]^) do
+    with varImplManager.RoutingAddObj(TUIMIdentifier(i),ImplsVar[i]^) do
       begin
         Add(TUIMIdentifier(imNone),NilPtr);
         Add(TUIMIdentifier(imPascal),ImplsPas[i],[ifSelect]);

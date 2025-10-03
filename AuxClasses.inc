@@ -11,11 +11,11 @@
 
     This file contains main classes template used by AuxClasses library.
 
-  Version 1.2.3 (2024-10-04)
+  Version 1.3 (2025-10-01)
 
-  Last change 2024-10-04
+  Last change 2025-10-01
 
-  ©2018-2024 František Milt
+  ©2018-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -58,22 +58,24 @@
 {$IFDEF AC_Include_Declaration}
 {===============================================================================
 --------------------------------------------------------------------------------
-                            TCustom(Interfaced)Object
+                        TCustom((Simple)Interfaced)Object
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)Object  - class declaration
+    TCustom((Simple)Interfaced)Object  - class declaration
 ===============================================================================}
 {
   Normal object only with added fields/properties that can be used by user for
   any purpose, and also some methods.
 }
 type
-{$IFDEF AC_Include_Interfaced}
+{$IF Defined(AC_Include_Interfaced)}
   TCustomInterfacedObject = class(TInterfacedObject)
+{$ELSEIF Defined(AC_Include_SInterfaced)}
+  TCustomSimpleInterfacedObject = class(TSimpleInterfacedObject)
 {$ELSE}
   TCustomObject = class(TObject)
-{$ENDIF}
+{$IFEND}
   protected
     fUserIntData: PtrInt;
     fUserPtrData: Pointer;
@@ -95,11 +97,11 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                       TCustom(Interfaced)RefCountedObject
+                   TCustom((Simple)Interfaced)RefCountedObject
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)RefCountedObject - class declaration
+    TCustom((Simple)Interfaced)RefCountedObject - class declaration
 ===============================================================================}
 {
   Reference counted object.
@@ -110,11 +112,13 @@ type
   entry to this function is 1 (ie. it reaches 0 in this call).
 }
 type
-{$IFDEF AC_Include_Interfaced}
+{$IF Defined(AC_Include_Interfaced)}
   TCustomInterfacedRefCountedObject = class(TCustomInterfacedObject)
+{$ELSEIF Defined(AC_Include_SInterfaced)}
+  TCustomSimpleInterfacedRefCountedObject = class(TCustomSimpleInterfacedObject)
 {$ELSE}
   TCustomRefCountedObject = class(TCustomObject)
-{$ENDIF}
+{$IFEND}
   protected
     fReferenceCount:  Int32;
     fFreeOnRelease:   Boolean;
@@ -129,11 +133,11 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                          TCustom(Interfaced)ListObject
+                      TCustom((Simple)Interfaced)ListObject
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)ListObject - class declaration
+    TCustom((Simple)Interfaced)ListObject - class declaration
 ===============================================================================}
 {
   Implements methods for advanced parametrized growing and shrinking of any
@@ -142,11 +146,13 @@ type
   (both getters and setters) and LowIndex and HighIndex functions.
 }
 type
-{$IFDEF AC_Include_Interfaced}
+{$IF Defined(AC_Include_Interfaced)}
   TCustomInterfacedListObject = class(TCustomInterfacedObject)
+{$ELSEIF Defined(AC_Include_SInterfaced)}
+  TCustomSimpleInterfacedListObject = class(TCustomSimpleInterfacedObject)
 {$ELSE}
   TCustomListObject = class(TCustomObject)
-{$ENDIF}
+{$IFEND}
   protected
     fListGrowSettings:  TListGrowSettings;
     Function GetCapacity: Integer; virtual; abstract;
@@ -160,7 +166,8 @@ type
     Function LowIndex: Integer; virtual; abstract;
     Function HighIndex: Integer; virtual; abstract;
     Function CheckIndex(Index: Integer): Boolean; virtual;
-    procedure CopyGrowSettings(Source: {$IFDEF AC_Include_Interfaced}TCustomInterfacedListObject{$ELSE}TCustomListObject{$ENDIF}); virtual;
+    procedure CopyGrowSettings(Source: {$IF Defined(AC_Include_Interfaced)}TCustomInterfacedListObject
+      {$ELSEIF Defined(AC_Include_SInterfaced)}TCustomSimpleInterfacedListObject{$ELSE}TCustomListObject{$IFEND}); virtual;
     property ListGrowSettings: TListGrowSettings read fListGrowSettings write fListGrowSettings;
     property GrowInit: Integer read fListGrowSettings.GrowInit write fListGrowSettings.GrowInit;
     property GrowMode: TGrowMode read fListGrowSettings.GrowMode write fListGrowSettings.GrowMode;
@@ -175,22 +182,24 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                       TCustom(Interfaced)MultiListObject
+                   TCustom((Simple)Interfaced)MultiListObject
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)MultiListObject - class declaration
+    TCustom((Simple)Interfaced)MultiListObject - class declaration
 ===============================================================================}
 {
-  Very similar to TCustom(Interfaced)ListObject, but this class can support
-  multiple separate lists that are selected by integer index.
+  Very similar to TCustom((Simple)Interfaced)ListObject, but this class can
+  support multiple separate lists that are selected by integer index.
 }
 type
-{$IFDEF AC_Include_Interfaced}
+{$IF Defined(AC_Include_Interfaced)}
   TCustomInterfacedMultiListObject = class(TCustomInterfacedObject)
+{$ELSEIF Defined(AC_Include_SInterfaced)}
+  TCustomSimpleInterfacedMultiListObject = class(TCustomSimpleInterfacedObject)
 {$ELSE}
   TCustomMultiListObject = class(TCustomObject)
-{$ENDIF}
+{$IFEND}
   private
     Function StaticClassName: String;
   protected
@@ -229,7 +238,8 @@ type
     Function LowIndex(List: Integer): Integer; virtual; abstract;
     Function HighIndex(List: Integer): Integer; virtual; abstract;
     Function CheckIndex(List,Index: Integer): Boolean; virtual;
-    procedure CopyGrowSettings(Source: {$IFDEF AC_Include_Interfaced}TCustomInterfacedMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}); virtual;
+    procedure CopyGrowSettings(Source: {$IF Defined(AC_Include_Interfaced)}TCustomInterfacedMultiListObject
+      {$ELSEIF Defined(AC_Include_SInterfaced)}TCustomSimpleInterfacedMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}); virtual;
     property ListCount: Integer read GetListCount write SetListCount;
     property ListGrowSettings[List: Integer]: TListGrowSettings read GetListGrowSettings write SetListGrowSettings;
     property ListGrowSettingsPtrs[List: Integer]: PListGrowSettings read GetListGrowSettingsPtr;
@@ -244,14 +254,22 @@ type
     property Count[List: Integer]: Integer read GetCount write SetCount;
   end;
 
-{$IFDEF AC_Include_Interfaced}
+{$IF Defined(AC_Include_Interfaced)}
 type
   // shorter aliases
   TCustomIObject = TCustomInterfacedObject;
   TCustomIRefCountedObject = TCustomInterfacedRefCountedObject;
   TCustomIListObject = TCustomInterfacedListObject;
   TCustomIMultiListObject = TCustomInterfacedMultiListObject;
-{$ENDIF}
+
+{$ELSEIF Defined(AC_Include_SInterfaced)}
+type
+  // shorter aliases
+  TCustomSIObject = TCustomSimpleInterfacedObject;
+  TCustomSIRefCountedObject = TCustomSimpleInterfacedRefCountedObject;
+  TCustomSIListObject = TCustomSimpleInterfacedListObject;
+  TCustomSIMultiListObject = TCustomSimpleInterfacedMultiListObject;
+{$IFEND}
 
 {$ENDIF}
 
@@ -265,32 +283,36 @@ type
 
 {$IFDEF AC_Include_Implementation}
 
-{$IFDEF AC_Include_Interfaced}
+{$UNDEF AC_I_I}
+{$UNDEF AC_I_SI}
+{$IF Defined(AC_Include_Interfaced)}
   {$DEFINE AC_I_I}
-{$ELSE}
-  {$UNDEF AC_I_I}
-{$ENDIF}
+{$ELSEIF Defined(AC_Include_SInterfaced)}
+  {$DEFINE AC_I_SI}
+{$IFEND}
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                            TCustom(Interfaced)Object
+                        TCustom((Simple)Interfaced)Object
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)Object - class implementation
+    TCustom((Simple)Interfaced)Object - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)Object - protected methods
+    TCustom((Simple)Interfaced)Object - protected methods
 -------------------------------------------------------------------------------}
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(ExceptionClass: ExceptClass; const Method,Msg: String; const Args: array of const);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(ExceptionClass: ExceptClass; const Method,Msg: String; const Args: array of const);
 begin
 raise ExceptionClass.CreateFmt(Format('%s.%s: %s',[InstanceString,Method,Msg]),Args);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(ExceptionClass: ExceptClass; const Method,Msg: String);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(ExceptionClass: ExceptClass; const Method,Msg: String);
 begin
 RaiseError(ExceptionClass,Method,Msg,[]);
 end;
@@ -298,51 +320,58 @@ end;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(const Method,Msg: String; const Args: array of const);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(const Method,Msg: String; const Args: array of const);
 begin
 RaiseError(Exception,Method,Msg,Args);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(const Method,Msg: String);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(const Method,Msg: String);
 begin
 RaiseError(Exception,Method,Msg,[]);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(ExceptionClass: ExceptClass; const Msg: String; const Args: array of const);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(ExceptionClass: ExceptClass; const Msg: String; const Args: array of const);
 begin
 raise ExceptionClass.CreateFmt(Format('%s: %s',[InstanceString,Msg]),Args);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(ExceptionClass: ExceptClass; const Msg: String);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(ExceptionClass: ExceptClass; const Msg: String);
 begin
 RaiseError(ExceptionClass,Msg,[]);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(const Msg: String; const Args: array of const);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(const Msg: String; const Args: array of const);
 begin
 RaiseError(Exception,Msg,Args);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-procedure {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.RaiseError(const Msg: String);
+procedure {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  RaiseError(const Msg: String);
 begin
 RaiseError(Exception,Msg,[]);
 end;
 
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)Object - public methods
+    TCustom((Simple)Interfaced)Object - public methods
 -------------------------------------------------------------------------------}
 
-constructor {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.Create;
+constructor {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  Create;
 begin
 inherited;
 fUserIntData := 0;
@@ -351,7 +380,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIObject{$ELSE}TCustomObject{$ENDIF}.InstanceString: String;
+Function {$IF Defined(AC_I_I)}TCustomIObject{$ELSEIF Defined(AC_I_SI)}TCustomSIObject{$ELSE}TCustomObject{$IFEND}.
+  InstanceString: String;
 begin
 Result := GetInstanceString(Self);
 end;
@@ -359,26 +389,28 @@ end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                       TCustom(Interfaced)RefCountedObject
+                   TCustom((Simple)Interfaced)RefCountedObject
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)RefCountedObject - class implementation
+    TCustom((Simple)Interfaced)RefCountedObject - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)RefCountedObject - protected methods
+    TCustom((Simple)Interfaced)RefCountedObject - protected methods
 -------------------------------------------------------------------------------}
 
-Function {$IFDEF AC_I_I}TCustomIRefCountedObject{$ELSE}TCustomRefCountedObject{$ENDIF}.GetReferenceCount: Int32;
+Function {$IF Defined(AC_I_I)}TCustomIRefCountedObject{$ELSEIF Defined(AC_I_SI)}TCustomSIRefCountedObject{$ELSE}TCustomRefCountedObject{$IFEND}.
+  GetReferenceCount: Int32;
 begin
 Result := InterlockedExchangeAdd(fReferenceCount,0);
 end;
 
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)RefCountedObject - public methods
+    TCustom((Simple)Interfaced)RefCountedObject - public methods
 -------------------------------------------------------------------------------}
 
-constructor {$IFDEF AC_I_I}TCustomIRefCountedObject{$ELSE}TCustomRefCountedObject{$ENDIF}.Create;
+constructor {$IF Defined(AC_I_I)}TCustomIRefCountedObject{$ELSEIF Defined(AC_I_SI)}TCustomSIRefCountedObject{$ELSE}TCustomRefCountedObject{$IFEND}.
+  Create;
 begin
 inherited Create;
 fReferenceCount := 0;
@@ -387,14 +419,16 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIRefCountedObject{$ELSE}TCustomRefCountedObject{$ENDIF}.Acquire: Int32;
+Function {$IF Defined(AC_I_I)}TCustomIRefCountedObject{$ELSEIF Defined(AC_I_SI)}TCustomSIRefCountedObject{$ELSE}TCustomRefCountedObject{$IFEND}.
+  Acquire: Int32;
 begin
 Result := InterlockedExchangeAdd(fReferenceCount,1) + 1;
 end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIRefCountedObject{$ELSE}TCustomRefCountedObject{$ENDIF}.Release: Int32;
+Function {$IF Defined(AC_I_I)}TCustomIRefCountedObject{$ELSEIF Defined(AC_I_SI)}TCustomSIRefCountedObject{$ELSE}TCustomRefCountedObject{$IFEND}.
+  Release: Int32;
 begin
 Result := InterlockedExchangeAdd(fReferenceCount,-1) - 1;
 If fFreeOnRelease and (Result <= 0) then
@@ -404,17 +438,18 @@ end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                          TCustom(Interfaced)ListObject
+                      TCustom((Simple)Interfaced)ListObject
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)ListObject - class implementation
+    TCustom((Simple)Interfaced)ListObject - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)ListObject - protected methods
+    TCustom((Simple)Interfaced)ListObject - protected methods
 -------------------------------------------------------------------------------}
 
-procedure {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF}.Grow(MinDelta: Integer = 1);
+procedure {$IF Defined(AC_I_I)}TCustomIListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIListObject{$ELSE}TCustomListObject{$IFEND}.
+  Grow(MinDelta: Integer = 1);
 var
   Delta:  Integer;
 begin
@@ -424,7 +459,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF}.Shrink;
+procedure {$IF Defined(AC_I_I)}TCustomIListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIListObject{$ELSE}TCustomListObject{$IFEND}.
+  Shrink;
 var
   NewCap: Integer;
 begin
@@ -433,10 +469,11 @@ If ResolveShrinkCapacity(Capacity,Count,fListGrowSettings,NewCap) then
 end;
 
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)ListObject - public methods
+    TCustom((Simple)Interfaced)ListObject - public methods
 -------------------------------------------------------------------------------}
 
-constructor {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF}.Create;
+constructor {$IF Defined(AC_I_I)}TCustomIListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIListObject{$ELSE}TCustomListObject{$IFEND}.
+  Create;
 begin
 inherited;
 fListGrowSettings := AC_LIST_GROW_SETTINGS_DEF;
@@ -444,48 +481,61 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF}.CheckIndex(Index: Integer): Boolean;
+Function {$IF Defined(AC_I_I)}TCustomIListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIListObject{$ELSE}TCustomListObject{$IFEND}.
+  CheckIndex(Index: Integer): Boolean;
 begin
 Result := (Index >= LowIndex) and (Index <= HighIndex);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF}.CopyGrowSettings(Source: {$IFDEF AC_I_I}TCustomIListObject{$ELSE}TCustomListObject{$ENDIF});
+procedure {$IF Defined(AC_I_I)}TCustomIListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIListObject{$ELSE}TCustomListObject{$IFEND}.
+  CopyGrowSettings(Source: {$IF Defined(AC_I_I)}TCustomIListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIListObject{$ELSE}TCustomListObject{$IFEND});
 begin
 fListGrowSettings := Source.ListGrowSettings;
 end;
 
 
+
 {===============================================================================
 --------------------------------------------------------------------------------
-                       TCustom(Interfaced)MultiListObject
+                   TCustom((Simple)Interfaced)MultiListObject
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TCustom(Interfaced)MultiListObject - class implementation
+    TCustom((Simple)Interfaced)MultiListObject - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)MultiListObject - private methods
+    TCustom((Simple)Interfaced)MultiListObject - private methods
 -------------------------------------------------------------------------------}
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.StaticClassName: String;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  StaticClassName: String;
 begin
-Result := {$IFDEF AC_I_I}'TCustomInterfacedMultiListObject'{$ELSE}'TCustomMultiListObject'{$ENDIF};
+Result :=
+{$IF Defined(AC_I_I)}
+  'TCustomInterfacedMultiListObject'
+{$ELSEIF Defined(AC_I_SI)}
+  'TCustomSimpleInterfacedMultiListObject'
+{$ELSE}
+  'TCustomMultiListObject'
+{$IFEND};
 end;
 
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)MultiListObject - protected methods
+    TCustom((Simple)Interfaced)MultiListObject - protected methods
 -------------------------------------------------------------------------------}
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListCount: Integer;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListCount: Integer;
 begin
 Result := Length(fListGrowSettings);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListCount(Value: Integer);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListCount(Value: Integer);
 var
   OldCount: Integer;
   i:        Integer;
@@ -502,7 +552,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings(List: Integer): TListGrowSettings;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings(List: Integer): TListGrowSettings;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List]
@@ -512,7 +563,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings(List: Integer; Value: TListGrowSettings);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings(List: Integer; Value: TListGrowSettings);
 begin
 If CheckList(List) then
   fListGrowSettings[List] := Value
@@ -522,7 +574,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettingsPtr(List: Integer): PListGrowSettings;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettingsPtr(List: Integer): PListGrowSettings;
 begin
 If CheckList(List) then
   Result := Addr(fListGrowSettings[List])
@@ -532,7 +585,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings_GrowInit(List: Integer): Integer;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings_GrowInit(List: Integer): Integer;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List].GrowInit
@@ -542,7 +596,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings_GrowInit(List: Integer; Value: Integer);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings_GrowInit(List: Integer; Value: Integer);
 begin
 If CheckList(List) then
   fListGrowSettings[List].GrowInit := Value
@@ -552,7 +607,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings_GrowMode(List: Integer): TGrowMode;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings_GrowMode(List: Integer): TGrowMode;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List].GrowMode
@@ -562,7 +618,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings_GrowMode(List: Integer; Value: TGrowMode);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings_GrowMode(List: Integer; Value: TGrowMode);
 begin
 If CheckList(List) then
   fListGrowSettings[List].GrowMode := Value
@@ -572,7 +629,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings_GrowFactor(List: Integer): Double;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings_GrowFactor(List: Integer): Double;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List].GrowFactor
@@ -582,7 +640,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings_GrowFactor(List: Integer; Value: Double);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings_GrowFactor(List: Integer; Value: Double);
 begin
 If CheckList(List) then
   fListGrowSettings[List].GrowFactor := Value
@@ -592,7 +651,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings_GrowLimit(List: Integer): Integer;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings_GrowLimit(List: Integer): Integer;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List].GrowLimit
@@ -602,7 +662,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings_GrowLimit(List: Integer; Value: Integer);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings_GrowLimit(List: Integer; Value: Integer);
 begin
 If CheckList(List) then
   fListGrowSettings[List].GrowLimit := Value
@@ -612,7 +673,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings_ShrinkMode(List: Integer): TShrinkMode;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings_ShrinkMode(List: Integer): TShrinkMode;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List].ShrinkMode
@@ -622,7 +684,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings_ShrinkMode(List: Integer; Value: TShrinkMode);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings_ShrinkMode(List: Integer; Value: TShrinkMode);
 begin
 If CheckList(List) then
   fListGrowSettings[List].ShrinkMode := Value
@@ -632,7 +695,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings_ShrinkFactor(List: Integer): Double;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings_ShrinkFactor(List: Integer): Double;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List].ShrinkFactor
@@ -642,7 +706,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings_ShrinkFactor(List: Integer; Value: Double);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings_ShrinkFactor(List: Integer; Value: Double);
 begin
 If CheckList(List) then
   fListGrowSettings[List].ShrinkFactor := Value
@@ -652,7 +717,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.GetListGrowSettings_ShrinkLimit(List: Integer): Integer;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  GetListGrowSettings_ShrinkLimit(List: Integer): Integer;
 begin
 If CheckList(List) then
   Result := fListGrowSettings[List].ShrinkLimit
@@ -662,7 +728,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.SetListGrowSettings_ShrinkLimit(List: Integer; Value: Integer);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  SetListGrowSettings_ShrinkLimit(List: Integer; Value: Integer);
 begin
 If CheckList(List) then
   fListGrowSettings[List].ShrinkLimit := Value
@@ -672,7 +739,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.Grow(List: Integer; MinDelta: Integer = 1);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  Grow(List: Integer; MinDelta: Integer = 1);
 var
   Delta:  Integer;
 begin
@@ -686,7 +754,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.Shrink(List: Integer);
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  Shrink(List: Integer);
 var
   NewCap: Integer;
 begin
@@ -699,10 +768,11 @@ else raise EACIndexOutOfBounds.CreateFmt('%s.Shrink: List index (%d) out of boun
 end;
 
 {-------------------------------------------------------------------------------
-    TCustom(Interfaced)MultiListObject - public methods
+    TCustom((Simple)Interfaced)MultiListObject - public methods
 -------------------------------------------------------------------------------}
 
-constructor {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.Create(ListCount: Integer);
+constructor {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  Create(ListCount: Integer);
 begin
 inherited Create;
 SetListCount(ListCount)
@@ -710,7 +780,8 @@ end;
 
 //------------------------------------------------------------------------------
 
-destructor {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.Destroy;
+destructor {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  Destroy;
 begin
 SetLength(fListGrowSettings,0);
 inherited;
@@ -718,35 +789,40 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.LowList: Integer;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  LowList: Integer;
 begin
 Result := Low(fListGrowSettings);
 end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.HighList: Integer;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  HighList: Integer;
 begin
 Result := High(fListGrowSettings);
 end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.CheckList(List: Integer): Boolean;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  CheckList(List: Integer): Boolean;
 begin
 Result := (List >= LowList) and (List <= HighList);
 end;
 
 //------------------------------------------------------------------------------
 
-Function {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.CheckIndex(List,Index: Integer): Boolean;
+Function {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  CheckIndex(List,Index: Integer): Boolean;
 begin
 Result := (Index >= LowIndex(List)) and (Index <= HighIndex(List));
 end;
 
 //------------------------------------------------------------------------------
 
-procedure {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF}.CopyGrowSettings(Source: {$IFDEF AC_I_I}TCustomIMultiListObject{$ELSE}TCustomMultiListObject{$ENDIF});
+procedure {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}.
+  CopyGrowSettings(Source: {$IF Defined(AC_I_I)}TCustomIMultiListObject{$ELSEIF Defined(AC_I_SI)}TCustomSIMultiListObject{$ELSE}TCustomMultiListObject{$IFEND});
 var
   i:  Integer;
 begin
@@ -757,4 +833,5 @@ If Self.ListCount = Source.ListCount then
   end
 else raise EACIncompatibleClass.CreateFmt('%s.CopyGrowSettings: List count mismatch (%d,%d).',[StaticClassName,Self.ListCount,Source.ListCount]);
 end;
+
 {$ENDIF}

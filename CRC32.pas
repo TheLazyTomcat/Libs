@@ -30,9 +30,9 @@
 
   Version 1.7.3 (2023-04-14)
 
-  Last change 2024-05-02
+  Last change 2025-10-03
 
-  ©2011-2024 František Milt
+  ©2011-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -721,7 +721,7 @@ var
   SelectedImplID: TUIMIdentifier;
 begin
 // do not call inherited
-If fImplManager.FindObj(0).Selected(SelectedImplID) then
+If fImplManager.RoutingFindObj(0).Selected(SelectedImplID) then
   Result := THashImplementation(SelectedImplID)
 else
   raise ECRC32NoImplementation.Create('TCRC32BaseHash.GetHashImplementation: No implementation selected.');
@@ -732,7 +732,7 @@ end;
 procedure TCRC32BaseHash.SetHashImplementation(Value: THashImplementation);
 begin
 // do not call inherited
-fImplManager.FindObj(0).Select(TUIMIdentifier(Value));
+fImplManager.RoutingFindObj(0).Select(TUIMIdentifier(Value));
 end;
 
 //------------------------------------------------------------------------------
@@ -899,7 +899,7 @@ procedure TCRC32BaseHash.Initialize;
 begin
 inherited;
 fImplManager := TImplementationManager.Create;
-with fImplManager.AddObj(0,TMethod(fProcessBuffer)) do
+with fImplManager.RoutingAddObj(0,TMethod(fProcessBuffer)) do
   begin
     Add(TUIMIdentifier(hiPascal),@TCRC32BaseHash.ProcessBuffer_PAS,Self,[ifSelect]);
   {$IFDEF PurePascal}
@@ -1502,7 +1502,7 @@ procedure TCRC32CHash.Initialize;
 begin
 inherited;
 {$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
-with fImplManager.FindObj(0) do
+with fImplManager.RoutingFindObj(0) do
   begin
     Replace(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_ACC,Self);
     If AccelerationSupported then

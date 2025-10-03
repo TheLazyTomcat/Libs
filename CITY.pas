@@ -37,9 +37,9 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2024-04-28
+  Last change 2025-10-03
 
-  ©2016-2023 František Milt
+  ©2016-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com

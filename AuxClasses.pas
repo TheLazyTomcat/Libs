@@ -9,11 +9,11 @@
 
   Auxiliary classes and other class-related things
 
-  Version 1.2.3 (2024-10-04)
+  Version 1.3 (2025-10-01)
 
-  Last change 2024-10-04
+  Last change 2025-10-01
 
-  ©2018-2024 František Milt
+  ©2018-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -93,6 +93,7 @@ unit AuxClasses;
 {$UNDEF AC_Include_Declaration}
 {$UNDEF AC_Include_Implementation}
 {$UNDEF AC_Include_Interfaced}
+{$UNDEF AC_Include_SInterfaced}
 
 interface
 
@@ -214,7 +215,28 @@ Function GetInstanceString(Instance: TObject): String;
                                Classes declaration
 --------------------------------------------------------------------------------
 ===============================================================================}
+{
+  TSimpleInterfacedObject
 
+  This class is intended as an ancestor for classes that wants to implement
+  interfaces but without the automatic reference counting.
+
+  Method QueryInterface is fully implemented, _AddRef and _Release do nothing
+  and always return 1.
+}
+type
+  TSimpleInterfacedObject = class(TObject,IInterface)
+  protected
+  {$IFDEF FPC}
+    Function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+  {$ELSE}
+    Function QueryInterface(const IID: TGUID; out Obj): HResult; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+  {$ENDIF}
+    Function _AddRef: Integer; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+    Function _Release: Integer; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+  end;
+
+//==============================================================================
 // classes based on TObject
 {$DEFINE AC_Include_Declaration}
   {$INCLUDE '.\AuxClasses.inc'}
@@ -225,6 +247,13 @@ Function GetInstanceString(Instance: TObject): String;
   {$DEFINE AC_Include_Interfaced}
     {$INCLUDE '.\AuxClasses.inc'}
   {$UNDEF AC_Include_Interfaced}
+{$UNDEF AC_Include_Declaration}
+
+// classes based on TSimpleInterfacedObject
+{$DEFINE AC_Include_Declaration}
+  {$DEFINE AC_Include_SInterfaced}
+    {$INCLUDE '.\AuxClasses.inc'}
+  {$UNDEF AC_Include_SInterfaced}
 {$UNDEF AC_Include_Declaration}
 
 implementation
@@ -339,6 +368,34 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 
+{$IFDEF FPC}
+Function TSimpleInterfacedObject.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+{$ELSE}
+Function TSimpleInterfacedObject.QueryInterface(const IID: TGUID; out Obj): HResult; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+{$ENDIF}
+begin
+If GetInterface(IID,Obj) then
+  Result := S_OK
+else
+  Result := E_NOINTERFACE;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleInterfacedObject._AddRef: Integer; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+begin
+Result := 1;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleInterfacedObject._Release: Integer; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
+begin
+Result := 1;
+end;
+
+//==============================================================================
+
 // classes based on TObject
 {$DEFINE AC_Include_Implementation}
   {$INCLUDE '.\AuxClasses.inc'}
@@ -349,6 +406,13 @@ end;
   {$DEFINE AC_Include_Interfaced}
     {$INCLUDE '.\AuxClasses.inc'}
   {$UNDEF AC_Include_Interfaced}
+{$UNDEF AC_Include_Implementation}
+
+// classes based on TSimpleInterfacedObject
+{$DEFINE AC_Include_Implementation}
+  {$DEFINE AC_Include_SInterfaced}
+    {$INCLUDE '.\AuxClasses.inc'}
+  {$UNDEF AC_Include_SInterfaced}
 {$UNDEF AC_Include_Implementation}
 
 end.

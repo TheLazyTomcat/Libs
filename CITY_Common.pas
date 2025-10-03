@@ -13,9 +13,9 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2024-04-28
+  Last change 2025-10-03
 
-  ©2016-2023 František Milt
+  ©2016-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -705,7 +705,7 @@ Function UIM_CityHash_GetFuncImpl(Func: TUIM_CityHash_Function): TUIM_CityHash_I
 var
   SelectedImplID: TUIMIdentifier;
 begin
-If varImplManager.FindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
+If varImplManager.RoutingFindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
   Result := TUIM_CityHash_Implementation(SelectedImplID)
 else
   raise ECITYNoImplementation.Create('TUIM_CityHash_GetFuncImpl: No implementation selected.');
@@ -716,7 +716,7 @@ end;
 Function UIM_CityHash_SetFuncImpl(Func: TUIM_CityHash_Function; NewImpl: TUIM_CityHash_Implementation): TUIM_CityHash_Implementation;
 begin
 Result := UIM_CityHash_GetFuncImpl(Func);
-varImplManager.FindObj(TUIMIdentifier(Func)).Select(TUIMIdentifier(NewImpl));
+varImplManager.RoutingFindObj(TUIMIdentifier(Func)).Select(TUIMIdentifier(NewImpl));
 end;
 
 {===============================================================================
@@ -737,7 +737,7 @@ begin
 varImplManager := TImplementationManager.Create;
 For i := Low(TUIM_CityHash_Function) to High(TUIM_CityHash_Function) do
   begin
-    with varImplManager.AddObj(TUIMIdentifier(i),ImplsVar[i]^) do
+    with varImplManager.RoutingAddObj(TUIMIdentifier(i),ImplsVar[i]^) do
       begin
         Add(TUIMIdentifier(imNone),NilPtr);
         Add(TUIMIdentifier(imPascal),ImplsPas[i],[ifSelect]);
