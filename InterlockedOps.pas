@@ -45,9 +45,9 @@
     thread(s). Whatever the function returns is a state that was valid during
     the internal lock.
 
-  Version 1.6 (2025-04-06)
+  Version 1.7 (2025-10-06)
 
-  Last change 2025-04-06
+  Last change 2025-10-06
 
   ©2021-2025 František Milt
 
@@ -289,6 +289,86 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
+                          Simple interlocked increment
+--------------------------------------------------------------------------------
+===============================================================================}
+{-------------------------------------------------------------------------------
+
+  InterlockedInc
+
+    Atomically increments variable (pointed to by) I by one. Result indicates
+    whether the incremented value is zero (True) or non-zero (False).
+
+-------------------------------------------------------------------------------}
+
+Function InterlockedInc8(I: Pointer): Boolean; register; assembler;
+Function InterlockedInc16(I: Pointer): Boolean; register; assembler;
+Function InterlockedInc32(I: Pointer): Boolean; register; assembler;
+{$IFDEF IncludeVal64}
+Function InterlockedInc64(I: Pointer): Boolean; register; assembler;
+{$ENDIF}
+Function InterlockedIncPtr(I: Pointer): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function InterlockedInc(var I: UInt8): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedInc(var I: Int8): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function InterlockedInc(var I: UInt16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedInc(var I: Int16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function InterlockedInc(var I: UInt32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedInc(var I: Int32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{$IFDEF IncludeVal64}
+Function InterlockedInc(var I: UInt64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedInc(var I: Int64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$ENDIF}
+
+Function InterlockedInc(var I: Pointer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                          Simple interlocked decrement
+--------------------------------------------------------------------------------
+===============================================================================}
+{-------------------------------------------------------------------------------
+
+  InterlockedDec
+
+    Atomically decrements variable (pointed to by) I by one. Result indicates
+    whether the decremented value is zero (True) or non-zero (False).
+
+-------------------------------------------------------------------------------}
+
+Function InterlockedDec8(I: Pointer): Boolean; register; assembler;
+Function InterlockedDec16(I: Pointer): Boolean; register; assembler;
+Function InterlockedDec32(I: Pointer): Boolean; register; assembler;
+{$IFDEF IncludeVal64}
+Function InterlockedDec64(I: Pointer): Boolean; register; assembler;
+{$ENDIF}
+Function InterlockedDecPtr(I: Pointer): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function InterlockedDec(var I: UInt8): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedDec(var I: Int8): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function InterlockedDec(var I: UInt16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedDec(var I: Int16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function InterlockedDec(var I: UInt32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedDec(var I: Int32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{$IFDEF IncludeVal64}
+Function InterlockedDec(var I: UInt64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function InterlockedDec(var I: Int64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$ENDIF}
+
+Function InterlockedDec(var I: Pointer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{===============================================================================
+--------------------------------------------------------------------------------
                              Interlocked increment
 --------------------------------------------------------------------------------
 ===============================================================================}
@@ -315,7 +395,7 @@ Function InterlockedIncrement(var I: UInt8): UInt8; overload;{$IFDEF CanInline} 
 Function InterlockedIncrement(var I: Int8): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 Function InterlockedIncrement(var I: UInt16): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function InterlockedIncrement(var I: Int16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}  
+Function InterlockedIncrement(var I: Int16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 Function InterlockedIncrement(var I: UInt32): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function InterlockedIncrement(var I: Int32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
@@ -1921,7 +2001,7 @@ uses
   SimpleCPUID;
 {$ENDIF}
 
-// following cannot go any higner because of older FPC (internal error 200501152)
+// following cannot go any higher because of older FPC (internal error 200501152)
 {$IF SizeOf(Pointer) = 8}
   {$DEFINE Ptr64}
 {$ELSEIF SizeOf(Pointer) <> 4}
@@ -1947,13 +2027,369 @@ asm
     SAR   RCX, 3
     MOV   RAX, RCX
   {$ELSE}
-    SAR   RDI,3
+    SAR   RDI, 3
     MOV   RAX, RDI
   {$ENDIF}
 {$ELSE}
     SAR   EAX, 3
 {$ENDIF}
 end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                          Simple interlocked increment
+--------------------------------------------------------------------------------
+===============================================================================}
+
+Function InterlockedInc8(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  INC   byte ptr [RCX]
+  {$ELSE}
+    LOCK  INC   byte ptr [RDI]
+  {$ENDIF}
+{$ELSE}
+    LOCK  INC   byte ptr [EAX]
+{$ENDIF}
+          SETZ  AL
+end;
+
+//------------------------------------------------------------------------------
+
+Function InterlockedInc16(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  INC   word ptr [RCX]
+  {$ELSE}
+    LOCK  INC   word ptr [RDI]
+  {$ENDIF}
+{$ELSE}
+    LOCK  INC   word ptr [EAX]
+{$ENDIF}
+          SETZ  AL
+end;
+
+//------------------------------------------------------------------------------
+
+Function InterlockedInc32(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  INC   dword ptr [RCX]
+  {$ELSE}
+    LOCK  INC   dword ptr [RDI]
+  {$ENDIF}
+{$ELSE}
+    LOCK  INC   dword ptr [EAX]
+{$ENDIF}
+          SETZ  AL
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF IncludeVal64}
+
+Function InterlockedInc64(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  INC   qword ptr [RCX]
+  {$ELSE}
+    LOCK  INC   qword ptr [RDI]
+  {$ENDIF}
+          SETZ  AL
+{$ELSE}// code from InterlockedIncrement64 -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          PUSH  EBX
+          PUSH  EDI
+
+          MOV   EDI, EAX
+
+    @TryOutStart:
+
+          MOV   EAX, dword ptr [EDI]
+          MOV   EDX, dword ptr [EDI + 4]
+
+          MOV   EBX, EAX
+          MOV   ECX, EDX
+
+          ADD   EBX, 1
+          ADC   ECX, 0
+
+    LOCK  CMPXCHG8B qword ptr [EDI]
+
+          JNZ   @TryOutStart
+
+          // incremented value is in ECX:EBX, see whether it is zero
+          OR    ECX, EBX
+          SETZ  AL
+
+          POP   EDI
+          POP   EBX
+
+{$ENDIF}
+end;
+
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function InterlockedIncPtr(I: Pointer): Boolean;
+begin
+{$IFDEF Ptr64}
+Result := InterlockedInc64(I);
+{$ELSE}
+Result := InterlockedInc32(I);
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function InterlockedInc(var I: UInt8): Boolean;
+begin
+Result := InterlockedInc8(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedInc(var I: Int8): Boolean;
+begin
+Result := InterlockedInc8(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedInc(var I: UInt16): Boolean;
+begin
+Result := InterlockedInc16(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedInc(var I: Int16): Boolean;
+begin
+Result := InterlockedInc16(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedInc(var I: UInt32): Boolean;
+begin
+Result := InterlockedInc32(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedInc(var I: Int32): Boolean;
+begin
+Result := InterlockedInc32(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF IncludeVal64}
+
+Function InterlockedInc(var I: UInt64): Boolean;
+begin
+Result := InterlockedInc64(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedInc(var I: Int64): Boolean;
+begin
+Result := InterlockedInc64(@I);
+end;
+
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedInc(var I: Pointer): Boolean;
+begin
+Result := InterlockedIncPtr(@I);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                          Simple interlocked decrement
+--------------------------------------------------------------------------------
+===============================================================================}
+
+Function InterlockedDec8(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  DEC   byte ptr [RCX]
+  {$ELSE}
+    LOCK  DEC   byte ptr [RDI]
+  {$ENDIF}
+{$ELSE}
+    LOCK  DEC   byte ptr [EAX]
+{$ENDIF}
+          SETZ  AL
+end;
+
+//------------------------------------------------------------------------------
+
+Function InterlockedDec16(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  DEC   word ptr [RCX]
+  {$ELSE}
+    LOCK  DEC   word ptr [RDI]
+  {$ENDIF}
+{$ELSE}
+    LOCK  DEC   word ptr [EAX]
+{$ENDIF}
+          SETZ  AL
+end;
+
+//------------------------------------------------------------------------------
+
+Function InterlockedDec32(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  DEC   dword ptr [RCX]
+  {$ELSE}
+    LOCK  DEC   dword ptr [RDI]
+  {$ENDIF}
+{$ELSE}
+    LOCK  DEC   dword ptr [EAX]
+{$ENDIF}
+          SETZ  AL
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF IncludeVal64}
+
+Function InterlockedDec64(I: Pointer): Boolean;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    LOCK  DEC   qword ptr [RCX]
+  {$ELSE}
+    LOCK  DEC   qword ptr [RDI]
+  {$ENDIF}
+          SETZ  AL
+{$ELSE}// code from InterlockedDecrement64 -  -  -  -  -  -  -  -  -  -  -  -  -
+
+          PUSH  EBX
+          PUSH  EDI
+
+          MOV   EDI, EAX
+
+    @TryOutStart:
+
+          MOV   EAX, dword ptr [EDI]
+          MOV   EDX, dword ptr [EDI + 4]
+
+          MOV   EBX, EAX
+          MOV   ECX, EDX
+
+          SUB   EBX, 1
+          SBB   ECX, 0
+
+    LOCK  CMPXCHG8B qword ptr [EDI]
+
+          JNZ   @TryOutStart
+
+          OR    ECX, EBX
+          SETZ  AL
+
+          POP   EDI
+          POP   EBX
+
+{$ENDIF}
+end;
+
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function InterlockedDecPtr(I: Pointer): Boolean;
+begin
+{$IFDEF Ptr64}
+Result := InterlockedDec64(I);
+{$ELSE}
+Result := InterlockedDec32(I);
+{$ENDIF}
+end;
+
+//==============================================================================
+
+Function InterlockedDec(var I: UInt8): Boolean;
+begin
+Result := InterlockedDec8(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedDec(var I: Int8): Boolean;
+begin
+Result := InterlockedDec8(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedDec(var I: UInt16): Boolean;
+begin
+Result := InterlockedDec16(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedDec(var I: Int16): Boolean;
+begin
+Result := InterlockedDec16(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedDec(var I: UInt32): Boolean;
+begin
+Result := InterlockedDec32(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedDec(var I: Int32): Boolean;
+begin
+Result := InterlockedDec32(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+{$IFDEF IncludeVal64}
+
+Function InterlockedDec(var I: UInt64): Boolean;
+begin
+Result := InterlockedDec64(@I);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedDec(var I: Int64): Boolean;
+begin
+Result := InterlockedDec64(@I);
+end;
+
+{$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function InterlockedDec(var I: Pointer): Boolean;
+begin
+Result := InterlockedDecPtr(@I);
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------

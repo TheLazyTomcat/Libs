@@ -31,7 +31,7 @@
 
   Version 1.1.5 (2024-04-14)
 
-  Last change 2025-10-03
+  Last change 2025-10-08
 
   ©2017-2025 František Milt
 
@@ -70,7 +70,16 @@
     WinFileInfo - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
-unit Float16Utils;
+{*******************************************************************************
+
+  As of 2025-10-08, this unit is deprecated and should not be used.
+
+  Its complete functionality is now included in library FloatUtils:
+
+    github.com/TheLazyTomcat/Lib.FloatUtils
+
+*******************************************************************************}
+unit Float16Utils deprecated;
 {
   Float16Utils_PurePascal
 

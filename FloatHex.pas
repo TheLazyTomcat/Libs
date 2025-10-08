@@ -18,11 +18,11 @@
     irrespective of how it is declared (in 64bit windows programs, it is
     usually declared as a simple alias for type double (64bits)).
 
-  Version 2.1.1 (2024-04-14)
+  Version 2.1.2 (2025-10-08)
 
-  Last change 2024-04-28
+  Last change 2025-10-08
 
-  ©2015-2024 František Milt
+  ©2015-2025 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -41,7 +41,7 @@
   Dependencies:
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
-    Float80Utils  - github.com/TheLazyTomcat/Lib.Float80Utils
+    FloatUtils    - github.com/TheLazyTomcat/Lib.FloatUtils
 
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol FloatHex_UseAuxExceptions for details).
@@ -49,6 +49,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect     - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
@@ -91,7 +92,7 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, Float80Utils{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
+  AuxTypes, FloatUtils{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
 type
   // library-specific exceptions, unused atm.
@@ -554,7 +555,7 @@ Function Float80ToHex(Value: Float80): String;
 var
   Overlay:  TFloat80Overlay absolute Value;
 begin
-Result := IntToHex(Overlay.Part_16,4) + IntToHex(Overlay.Part_64,16);
+Result := IntToHex(Overlay.SignExponent,4) + IntToHex(Overlay.Mantissa,16);
 end;
 
 //------------------------------------------------------------------------------
@@ -565,8 +566,8 @@ var
   Overlay:  TFloat80Overlay absolute Result;
 begin
 Temp := RectifyHexString(HexString,20);
-Overlay.Part_16 := UInt16(StrToInt(Copy(Temp,1,5)));
-Overlay.Part_64 := UInt64(StrToInt64('$' + Copy(Temp,6,16)));
+Overlay.SignExponent := UInt16(StrToInt(Copy(Temp,1,5)));
+Overlay.Mantissa := UInt64(StrToInt64('$' + Copy(Temp,6,16)));
 end;
  
 //------------------------------------------------------------------------------
@@ -600,7 +601,7 @@ begin
 {$IFDEF Extended64}
 Float64ToFloat80(@Value,@Overlay);
 {$ENDIF}
-Result := IntToHex(Overlay.Part_16,4) + IntToHex(Overlay.Part_64,16);
+Result := IntToHex(Overlay.SignExponent,4) + IntToHex(Overlay.Mantissa,16);
 end;
 
 //------------------------------------------------------------------------------
@@ -611,8 +612,8 @@ var
   Overlay:  TFloat80Overlay {$IFNDEF Extended64}absolute Result{$ENDIF};
 begin
 Temp := RectifyHexString(HexString,20);
-Overlay.Part_16 := UInt16(StrToInt(Copy(Temp,1,5)));
-Overlay.Part_64 := UInt64(StrToInt64('$' + Copy(Temp,6,16)));
+Overlay.SignExponent := UInt16(StrToInt(Copy(Temp,1,5)));
+Overlay.Mantissa := UInt64(StrToInt64('$' + Copy(Temp,6,16)));
 {$IFDEF Extended64}
 Float80ToFloat64(@Overlay,@Result);
 {$ENDIF}
