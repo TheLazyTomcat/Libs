@@ -9,16 +9,17 @@
 
   FloatUtils
 
-    Main purpose of this library is to provide some general utilities for work
-    with floating point number types. It combines functionality from libraries
-    Float80Utils and Float16Utils (which are now deprecated) and adds some new
-    things.
+    Main purpose of this library is to provide some general utilities for
+    work with floating point numbers. It combines functionality from libraries
+    Float80Utils and Float16Utils (which are now deprecated) and adds some
+    new things.
 
-    Currently, four fp types are supported - 16bit half precision, 32bit single
-    precision, 64bit double precision and 80bit double extended precision
-    floating point numbers. There are no plans for more types, but if there
-    will be any demand, support for real48, float128, float256 and bfloat16
-    might be added.
+    Currently, four floating point types are supported (all conforming to
+    IEEE 754 standard) - 16bit half precision (binary16), 32bit single
+    precision (binary32), 64bit double precision (binary64) and 80bit double
+    extended precision floating point numbers. There are no plans for more
+    types, but if there will be any demand, support for real48, float128,
+    float256 and bfloat16 might be added.
     For supported types, it provides explicit conversions to and from closest
     generally supported types (half <-> single, single <-> double, double <->
     extended), encoding and decoding (extraction of and building from number
@@ -34,11 +35,14 @@
     Conversions might seem to be pointless, especially for single <-> double,
     but they are here to provide working implementation on systems that does
     not support given types (this goes mainly for float16 and float80 on Win64)
-    or when fine control over the conversion is required. 
+    or when fine control over the conversion is required.
 
-  Version 1.0b - F16C needs testing (2025-10-08)
+      NOTE - Conversions to and from half precision floating point numbers
+             still need some testing (mainly exceptions raising).
 
-  Last change 2025-10-08
+  Version 1.0 (2025-11-01)
+
+  Last change 2025-11-01
 
   ©2025 František Milt
 
@@ -165,6 +169,7 @@ type
   EFUInvalidFlag   = class(EFUException);
   EFUInvalidValue  = class(EFUException);
   EFUInvalidState  = class(EFUException);
+  EFUStateMismatch = class(EFUException);
 
 {
   EFUEmulationException is a common class for exceptions raised in code that is
@@ -1031,10 +1036,10 @@ procedure X87ExceptionsRaise;{$IFDEF CanInlineFPC} inline;{$ENDIF}
              to 0, control word to $1332), so there is no need to explicitly
              init it.
 
-      NOTE - the two states do not share information. If you make change in
-             one state and then switch implementation routing, the changes
-             will not be propagated and the conversion will now use different
-             state with possibly different settings.
+      NOTE - the two states do not automatically share information. If you make
+             change in one state and then switch implementation routing, the
+             changes will not be propagated and the conversion will now use
+             different state with possibly different settings.
 
       WARNING - the states are instantiated per-thread, meaning each thread
                 has its own setting - change made in one thread is not seen
@@ -1063,10 +1068,10 @@ type
   this common ancestor implements properties that can be used to discern which
   error states were encountered:
 
-    PendingException   - lists all floating point exceptions that were set in
+    PendingExceptions  - lists all floating point exceptions that were set in
                          status word when the object was instantiated
 
-    MaskedException    - pending floating point exceptions that are masked (ie.
+    MaskedExceptions   - pending floating point exceptions that are masked (ie.
                          are ignored)
 
     UnmaskedExceptions - unmasked floating point exceptions, note that this set
@@ -1099,8 +1104,8 @@ type
   public
     property StatusWord: UInt16 read fStatusWord;
     property ControlWord: UInt16 read fControlWord;
-    property PendingException: TF80CFlagExceptions read fPendingExcs;
-    property MaskedException: TF80CFlagExceptions read fMaskedExcs;
+    property PendingExceptions: TF80CFlagExceptions read fPendingExcs;
+    property MaskedExceptions: TF80CFlagExceptions read fMaskedExcs;
     property UnmaskedExceptions: TF80CFlagExceptions read fUnmaskedExcs;
     property RaisedExceptions: TF80CRaiseExceptions read fRaisedExcs;
   end;
@@ -1595,7 +1600,7 @@ Function AVXControlAndStatusMaskGet: UInt32;{$IFDEF CanInlineFPC} inline;{$ENDIF
   on modern hardware and if you plan to use it, you should still check its
   support.
   That being said, setting it to true will not raise an exception even on
-  hardware that dos not support it, as in that case it will masked-out by
+  hardware that dos not support it, as in that case it will be masked-out by
   MXCSR mask before being written.
 }
 Function SSEControlAndStatusSupportsDAZ: Boolean;{$IFDEF CanInlineFPC} inline;{$ENDIF}
@@ -1912,7 +1917,7 @@ procedure AVXExceptionsClear;{$IFDEF CanInline} inline;{$ENDIF}
   16bit floats are implemented in two forms - in assembly and in pure pascal
   code. Pascal code uses only integer arithmetics and logical operations,
   assembly uses instruction set extension F16C provided by newer processors.
-  You can select which implementation will by used using UIM functions (see
+  You can select which implementation will be used using UIM functions (see
   further) - but make sure your CPU can run the assembly implementation
   (UIM_FloatUtils_SupportedFuncImpl can be used for that).
 
@@ -1957,15 +1962,15 @@ type
   As is the case for x87 exceptions, multiple different floating point
   exceptions might be signaled at the same time - there is even a possibility
   of unmasked pending exceptions that originated from code before the faulting
-  instructions, this is because vector instructions do not check for and raise
+  instruction, this is because vector instructions do not check for and raise
   pending unmasked exceptions, they only raise whatever they "produce". This
   class provides properties that can be used to discern which error states were
   encountered:
 
-    PendingException   - floating point exceptions that were set in control and
+    PendingExceptions  - floating point exceptions that were set in control and
                          status register when the object was instantiated
 
-    MaskedException    - pending floating point exceptions that are currently
+    MaskedExceptions   - pending floating point exceptions that are currently
                          masked
 
     RaisedExceptions   - exceptions that were pending and unmasked when the
@@ -1989,8 +1994,8 @@ type
     procedure Initialize; override;
   public
     property ControlAndStatus: UInt32 read fControlAndStatus;
-    property PendingException: TF16CFlagExceptions read fPendingExcs;
-    property MaskedException: TF16CFlagExceptions read fMaskedExcs;
+    property PendingExceptions: TF16CFlagExceptions read fPendingExcs;
+    property MaskedExceptions: TF16CFlagExceptions read fMaskedExcs;
     property RaisedExceptions: TF16CRaiseExceptions read fRaisedExcs;
   end;
 
@@ -2234,7 +2239,7 @@ procedure F16CExceptionsClear;
   point numbers (Half, Float16) and single precision (32bit) floating point
   numbers (Single, Float32).
 
-  These are here becuase there are, as far as I know, no compilers that can
+  These are here because there are, as far as I know, no compilers that can
   do this implicitly, mainly because the 16bit float type is not supported by
   broadly available hardware.
   That being said, newer x86 processors implement instruction set extentions
@@ -2291,7 +2296,8 @@ Function SingleToHalf(const Value: Single): Half; overload;
 //------------------------------------------------------------------------------
 {
   Following functions are expecting pointers to packed vector of four singles
-  (SinglePtr, Float32Ptr) and packed vector of four halfs (HalfPtr, Float16Ptr).
+  (SingleVec4Ptr, Float32Vec4Ptr) and packed vector of four halfs (HalfVec4Ptr,
+  Float16Vec4Ptr).
 
   Pascal implementation merely does four consecutive conversions, but in
   assembly, all four conversions are done in a single instruction. This is
@@ -2512,8 +2518,8 @@ type
     procedure Initialize; override;
   public
     property ControlAndStatus: TFXCControlAndStatus read fControlAndStatus;
-    property PendingException: TFXCFlagExceptions read fPendingExcs;
-    property MaskedException: TFXCFlagExceptions read fMaskedExcs;
+    property PendingExceptions: TFXCFlagExceptions read fPendingExcs;
+    property MaskedExceptions: TFXCFlagExceptions read fMaskedExcs;
     property UnmaskedExceptions: TFXCFlagExceptions read fUnmaskedExcs;
     property RaisedExceptions: TFXCRaiseExceptions read fRaisedExcs;
   end;
@@ -2626,7 +2632,7 @@ procedure FXCControlAndStatusSet(NewValue: TFXCControlAndStatus);
 
   Initializes currently used FXC state, irrespective of its nature.
 
-  For more details, you can refer to following functions...
+  For more details, you can refer to following functions:
 
       X87EnvironmentInit
       F80CEnvironmentInit
@@ -2651,7 +2657,7 @@ procedure FXCEnvironmentInit;
       SSEControlAndStatusInit/AVXControlAndStatusInit
       F16CControlAndStatusInit
 
-  Note that in some cases (X87), this function can raise pending unmasked
+  Note that in some cases (x87), this function can raise pending unmasked
   exceptions.
 }
 procedure FXCControlAndStatusInit;
@@ -2862,8 +2868,8 @@ procedure FXCExceptionsClear;
   operation, it does nothing - no exceptions are raised even if there are
   unmasked pending exceptions in the current state.
 
-  Note that when an eception is raised, then the state is reinitialized. This
-  clears exception flags and can affect other bits and fields within the state.
+  Note that when an exception is raised, then the state is reinitialized. This
+  clears exception flags and affects other bits and fields within the state.
 }
 procedure FXCExceptionsRaise;
 
@@ -2873,10 +2879,10 @@ procedure FXCExceptionsRaise;
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  Foolowing functions can be used for explicit conversion between single
+  Following functions can be used for explicit conversion between single
   precision (32bit, float32) and double precision (64bit, float64) floating
   point numbers.
-  These conversion are fully supported by the programming language itself,
+  These conversions are fully supported by the programming language itself,
   but there might be situations where one does not want to use the implicit
   conversions - eg. to have more control over specific settings.
 
@@ -2901,6 +2907,310 @@ Function Float64ToFloat32(Value: Float64): Float32; overload;{$IFDEF CanInlineFP
 
 procedure DoubletoSingle(DoublePtr,SinglePtr: Pointer); overload;{$IFDEF CanInlineFPC} inline;{$ENDIF}
 Function DoubletoSingle(Value: Double): Single; overload;{$IFDEF CanInlineFPC} inline;{$ENDIF}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              State synchronization
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Conversion routines (eg. from and to half-precision floating point numbers)
+  provided by this library are controlled using semiglobal states (each state
+  is global within the context of executing thread, not trully global for the
+  entire process). Each conversion can operate either using hardware state or
+  its own emulated state. Emulated states are separate for each conversion
+  flavour (eg. F16C state is distinct from FXC state), whereas hardware states,
+  given their nature, are shared between conversions that are using the same
+  hardware (ie. there is only one SSE/AVX unit, so everyone is using that one).
+
+  State synchronization mechanism is here to provide means of comparing two
+  states and potentially copying settings from one state to another, no matter
+  their nature.
+}
+{
+  TFUStateSyncTarget
+
+  This enumeration type is used to identify source and/or destination state
+  (in-here termed targets) when doing the synchronization action.
+
+  Individual values can be ambiguous ir unambiguous. Unambiguous values always
+  identify the same target, whereas ambiguous can identify different targets
+  depending on other circumstances - function StateSyncResolveTarget can be
+  used to convert ambiguous target to unambiguous (refer to its description
+  for more details, ie. which targets are ambiguous and to which unambiguous
+  targets they resolve under which circumstances).
+
+  Two targets (and therefore states) can be either compatible or incompatible.
+  When comparing or copying settings between compatible targets, then all used
+  (ie. used by at least one conversion process) flags and fields within those
+  states are compared or copied (unused are ignored or preserved in the
+  destination). Between incompatible targets, only the common flags and fields
+  are compared or copied - these are currently all exception flags, all
+  exception masks and rounding mode, nothing more.
+  You can use funtion StateSyncCompatibleTargets to test whether two given
+  targets are compatible or not.
+
+  At this moment, there are following two groups of mutualy compatible targets
+  (all targets within one group are compatible, between groups none are - note
+  that only unambiguous targets are listed, ambiguous targets always resolve
+  to one of them so they are not listed):
+
+    * sstF80CEmulated, sstF80CNative, sstFXCEmulatedX87, sstFXCNativeX87,
+      sstX87
+
+        Targets within this group can compare or exchange all exception flags,
+        all exception masks, rounding mode, precision mode, stack fault, FPU
+        busy and exception summary status flags and C1 condition code.
+
+    * sstF16CEmulated, sstF16CNative, sstFXCEmulatedSSE, sstFXCNativeSSE,
+      sstSSE, sstAVX
+
+        These targets can compare or exchange all exception flags, all
+        exception masks, rounding mode and DAZ and FTZ control flags.
+
+  "CntrState" or "counter-state" here means natural counterpart for currently
+  used state (eg. native SSE state for emulated SSE state).
+}
+type
+  TFUStateSyncTarget = (sstF80CState,sstF16CState,sstFXCState,sstF80CCntrState,
+                        sstF16CCntrState,sstFXCCntrState,sstF80CEmulated,
+                        sstF16CEmulated,sstFXCEmulatedX87,sstFXCEmulatedSSE,
+                        sstF80CNative,sstF16CNative,sstFXCNativeX87,
+                        sstFXCNativeSSE,sstX87,sstSSE,sstAVX);
+
+{
+  StateSyncResolveTarget
+
+  Resolves ambiguous targets to unambiguous targets based on several global
+  variables. If unambiguous value is given, then it is returned without change.
+
+  Following value swaps are performed in current implementation:
+
+    sstF80CState     ... F80CEmulated = True  -> sstF80CEmulated
+                         F80CEmulated = False -> sstF80CNative (sstX87)
+
+    sstF16CState     ... F16CEmulated = True  -> sstF16CEmulated
+                         F16CEmulated = False -> sstF16CNative (sstAVX)
+
+    sstFXCState      ... FXCModeOfOperation = modPascalX87   -> sstFXCEmulatedX87
+                         FXCModeOfOperation = modAssemblyX87 -> sstFXCNativeX87 (sstX87)
+                         FXCModeOfOperation = modPascalSSE   -> sstFXCEmulatedSSE
+                         FXCModeOfOperation = modAssemblySSE -> sstFXCNativeSSE (sstSSE)
+
+    sstF80CAntiState ... F80CEmulated = True  -> sstF80CNative (sstX87)
+                         F80CEmulated = False -> sstF80CEmulated
+
+    sstF16CAntiState ... F16CEmulated = True  -> sstF16CNative (sstAVX)
+                         F16CEmulated = False -> sstF16CEmulated
+
+    sstFXCAntiState  ... FXCModeOfOperation = modPascalX87   -> sstFXCNativeX87 (sstX87)
+                         FXCModeOfOperation = modAssemblyX87 -> sstFXCEmulatedX87
+                         FXCModeOfOperation = modPascalSSE   -> sstFXCNativeSSE (sstSSE)
+                         FXCModeOfOperation = modAssemblySSE -> sstFXCEmulatedSSE
+
+  Argument FinalTarget, when set to true, will cause that native targets (eg.
+  sstFXCNativeX87) are resolved to their final hardware targets (for mentioned
+  sstFXCNativeX87 it would be sstX87) - above, these final targets are listed
+  in brackets.
+}
+Function StateSyncResolveTarget(SyncTarget: TFUStateSyncTarget; FinalTarget: Boolean = False): TFUStateSyncTarget;
+
+{
+  StateSyncCompatibleTargets
+
+  Indicates whether two given targets are compatible (True returned) or not
+  (False) - see description of type TFUStateSyncTarget for explanation of
+  compatibility.
+
+  Ambiguous targets are automatically resolved before compatibility check and
+  can therefore be used for arguments.
+}
+Function StateSyncCompatibleTargets(SyncTargetA,SyncTargetB: TFUStateSyncTarget): Boolean;
+
+{
+  StateSyncDistinctTargets
+
+  Inidicates whether the two given targets identify two distinct states, taking
+  into account ambiguity of some targets and also fact that SSE and AVX units
+  are using the same control and status register (MXCSR), meaning their states
+  are technically one and the same (and so here targets sstSSE and sstAVX are
+  also seen to be the same).
+
+  Ambiguous targets can be used without any limitation.
+}
+Function StateSyncDistinctTargets(SyncTargetA,SyncTargetB: TFUStateSyncTarget): Boolean;
+
+//------------------------------------------------------------------------------
+{
+  TFUStateSyncBufferPayloadType
+
+  Simple enum that is used to mark what type of data a TFUStateSyncBuffer
+  variable holds.
+}
+type
+  TFUStateSyncBufferPayloadType = (bptX87,bptMXCSR);
+
+{
+  TFUStateSyncBuffer
+
+  This type is used as a storage space for state that is being compared or
+  copied to some other state.
+  
+  Do not directly access its fields as it can be changed in the future (exempt
+  from this rule is field SourceTarget - it is guaranteed to be always present,
+  so you are explicitly allowed to use it).
+
+    WARNING - do not use this buffer for streaming or IO, it is meant only as
+              an immediate storage.
+}
+type
+  TFUStateSyncBuffer = record
+    SourceTarget:     TFUStateSyncTarget;
+    case PayloadType: TFUStateSyncBufferPayloadType of
+      bptX87:   (StatusWord:        UInt16;
+                 ControlWord:       UInt16);
+      bptMXCSR: (ControlAndStatus:  UInt32);
+  end;
+  PFUStateSyncBuffer = ^TFUStateSyncBuffer;
+
+{
+  StateSyncSave
+
+  Stores information (settings) from state selected by SyncTarget into provided
+  storage buffer.
+
+  Ambiguous targets can be used as they are automatically resolved.
+}
+procedure StateSyncSave(SyncTarget: TFUStateSyncTarget; out Buffer: TFUStateSyncBuffer);
+
+{
+  StateSyncLoad
+
+  Loads compatible settings from provided storage buffer into state selected
+  by SyncTarget. Make sure the buffer was previously filled by StateSyncSave,
+  otherwise behavior of this function is undefined and how the selected state
+  will be changed is completely unpredictable.
+
+    WARNING - what settings are stored in the buffer depends on what state
+              was previously saved there - be aware of that, because loading
+              it into incompatible state might not have expected effect as
+              not all used fields will be updated/changed.
+              You can use function StateSyncCompatibleTargets on buffer field
+              SourceTarget (unless you changed it) to discern whether the
+              buffer is compatible with SyncTarget or not. 
+
+  Note that loading the buffer does not invalidate its content, it can be used
+  as many time as needed (eg. loaded into several different states or kept as
+  state backup).
+
+  Ambiguous targets are automatically resolved.
+}
+procedure StateSyncLoad(SyncTarget: TFUStateSyncTarget; const Buffer: TFUStateSyncBuffer);
+
+{
+  StateSyncCompare
+
+  Compares compatible settings from provided storage buffer with corresponding
+  bits and fields in the state selected by SyncTarget. If all settings match,
+  then True is returned. If any setting differs, then False is returned.
+
+  Ambiguous targets are automatically resolved.
+}
+Function StateSyncCompare(SyncTarget: TFUStateSyncTarget; const Buffer: TFUStateSyncBuffer): Boolean;
+
+//------------------------------------------------------------------------------
+{
+  TFUStateSyncAction
+
+  This enumeration is used to select which action should be performed when
+  doing states synchronization.
+
+    ssaCompare
+
+      The two synchronized states are compared. If they match, true is returned,
+      otherwise false is returned.
+      The states are not compared in their entirety - depending on whether they
+      are compatible or not, only selected flags and fields are compared (see
+      TFUStateSyncTarget for compatibility info).
+
+    ssaCompareStrict
+
+      Same as ssaCompare, but in case the states do not match an exception of
+      class EFUStateMismatch is raised.
+
+    ssaCopyToCurrent
+
+      Copies selected settings (see compatibility info in description of type
+      TFUStateSyncTarget) from source target to destination target. Flags and
+      fields not copied are preserved in the destination state.
+
+    ssaCopyFromCurrent
+
+      Copies selected settings from destination target to source target (yes,
+      that way). Flags and fields not copied are preserved in the source state.
+
+  The enumerations are named this way ("to current", "from current") because
+  primary interface of this entire section (functions F*CStateSynchronize)
+  is working with implicit targets, not explicitly selected ones - there, the
+  implicit target is the "current".
+
+    NOTE - all functions working around this type (ie. *StateSynchronize
+           functions) are just macros using StateSyncSave, StateSyncLoad
+           and StateSyncCompare.
+}
+type
+  TFUStateSyncAction = (ssaCompare,ssaCompareStrict,ssaCopyToCurrent,
+                        ssaCopyFromCurrent);
+
+{
+  StateSynchronize
+
+  Performs synchronizing action prescribed by argument SyncAction on the two
+  given targets. For return values and other information about the actions,
+  see description of type TFUStateSyncAction.
+
+  Ambiguous targets are automatically resolved.
+}
+Function StateSynchronize(SyncDestination: TFUStateSyncTarget; SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean;
+
+//------------------------------------------------------------------------------
+{
+  F80CStateSynchronize
+
+  First overload executes selected synchronization action on state that is
+  currently used for float80 conversions (F80C). Destination target is the used
+  state, source is its currently unused counterpart (eg. if emulated state is
+  being used, then source target is x87 FPU state).
+
+  Second overload works the same, but source target is explicitly selected by
+  argument SyncSource.
+
+  Ambiguous targets are automatically resolved.
+}
+Function F80CStateSynchronize(SyncAction: TFUStateSyncAction): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function F80CStateSynchronize(SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{
+  F16CStateSynchronize
+
+  Works the same as F80CStateSynchronize, except that these functions are
+  working on a state used by float16 conversions (F16C).
+
+  Ambiguous targets are automatically resolved.
+}
+Function F16CStateSynchronize(SyncAction: TFUStateSyncAction): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function F16CStateSynchronize(SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{
+  FXCStateSynchronize
+
+  Works the same as F80CStateSynchronize, but these functions are working on
+  a state used by float32 <-> float64 conversions (FXC).
+
+  Ambiguous targets are automatically resolved.
+}
+Function FXCStateSynchronize(SyncAction: TFUStateSyncAction): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function FXCStateSynchronize(SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -3276,6 +3586,8 @@ Function Neg(const Value: Float80): Float80; overload;
           fnX87FloatDataGet
           fnX87ExceptionsClear
           fnX87ExceptionsRaise
+          fnX87SaveEnvironment
+          fnX87LoadEnvironment
 
       fnFloat80Conversions  - conversion from/to double extended (80bit) floats:
 
@@ -3300,11 +3612,11 @@ Function Neg(const Value: Float80): Float80; overload;
           fnFloat32ToFloat64
           fnFloat64ToFloat32
 
-  So, when changing implementation, just use one of the four groups and UIM
+  So, when changing implementation, just use one of the five groups and UIM
   will select it for all functions in that group in one step.
-  Also note that groups fnFloat80Conversions and fnFloat16Conversions are
-  changing specific global variables, meaning changing these groups instead
-  of their individual functions is even more important.
+  Also note that groups fnFloat80Conversions, fnFloat16Conversions and
+  fnFloatXConversions are changing specific global variables, meaning changing
+  these groups instead of their individual functions is even more important.
 
   If you use the group enum in UIM_FloatUtils_GetFuncImpl, it will return
   selected implemetation of the first function within that group - be aware
@@ -3319,6 +3631,7 @@ type
     fnX87StatusWordGet,fnX87ControlWordGet,fnX87ControlWordSet,
     fnX87EnvironmentInit,fnX87FloatDataGet,
     fnX87ExceptionsClear,fnX87ExceptionsRaise,
+    fnX87SaveEnvironment,fnX87LoadEnvironment,
     fnFloat64ToFloat80,fnFloat80ToFloat64,
     fnVECControlAndStatusGet,fnVECControlAndStatusSet,fnVECFloatDataGet,
     fnFloat16ToFloat32,fnFloat32ToFloat16,
@@ -3347,6 +3660,14 @@ Function UIM_FloatUtils_SupportedFuncImpl(Func: TUIM_FloatUtils_Function): TUIM_
 {
   Returns value indicating what implementation of the selected function is
   executed when calling the function.
+
+  If Func is set to a function group and StrictGroupCheck is set to True, then
+  the entire group is checked whether all functions in that group are currently
+  set to the same implementation - if this check fails, then EUIMInvalidState
+  exception is raised. When StrictGroupCheck is false then no such check is
+  performed.
+  If Func is set to a specific function instead of group, then StrictGroupCheck
+  parameter is ignored.
 }
 Function UIM_FloatUtils_GetFuncImpl(Func: TUIM_FloatUtils_Function; StrictGroupCheck: Boolean = False): TUIM_FloatUtils_Implementation;
 
@@ -3356,6 +3677,14 @@ Function UIM_FloatUtils_GetFuncImpl(Func: TUIM_FloatUtils_Function; StrictGroupC
   If you select implementation that the given function does not offer (ie. is
   not indicated by UIM_FloatUtils_AvailableFuncImpl), then an exception of type
   EUIMInvalidIdentifier is raised.
+
+  If Func is set to a function group and StrictGroupCheck is set to True, then
+  the entire group is checked whether all functions in that group are currently
+  set to the same implementation - if this check fails, then EUIMInvalidState
+  exception is raised and implementation is not changed. When StrictGroupCheck
+  is false then no such check is performed.
+  If Func is set to a specific function instead of group, then StrictGroupCheck
+  parameter is ignored.
 
   Returned value is the previous routing.
 
@@ -3449,29 +3778,39 @@ end;
 //------------------------------------------------------------------------------
 
 Function X87ControlWordGet_ASM: UInt16; register; assembler;
-var
-  Temp: UInt16;
 asm
-    FNSTCW  word ptr [Temp]
-    MOV     AX, word ptr [Temp]
+{$IFDEF x64}
+    SUB     RSP, 8
+    FNSTCW  word ptr [RSP]
+    MOV     AX, word ptr [RSP]
+    ADD     RSP, 8
+{$ELSE}
+    SUB     ESP, 4  // create temporary storage on stack
+    FNSTCW  word ptr [ESP]
+    MOV     AX, word ptr [ESP]
+    ADD     ESP, 4  // clear the stack
+{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 procedure X87ControlWordSet_ASM(NewValue: UInt16); register; assembler;
-var
-  Temp: UInt16;
 asm
 {$IFDEF x64}
+    SUB     RSP, 8
   {$IFDEF Windows}
-    MOV     word ptr [Temp], CX
+    MOV     word ptr [RSP], CX
   {$ELSE}
-    MOV     word ptr [Temp], DI
+    MOV     word ptr [RSP], DI
   {$ENDIF}
+    FLDCW   word ptr [RSP]
+    ADD     RSP, 8
 {$ELSE}
-    MOV     word ptr [Temp], AX
+    SUB     ESP, 4
+    MOV     word ptr [ESP], AX
+    FLDCW   word ptr [ESP]
+    ADD     ESP, 4
 {$ENDIF}
-    FLDCW   word ptr [Temp]
 end;
 
 //------------------------------------------------------------------------------
@@ -3485,8 +3824,57 @@ end;
 
 procedure X87FloatDataGet_ASM(Storage: Pointer); register; assembler;
 asm
-    FNSAVE  [Storage] // this will initialize FPU...
-    FRSTOR  [Storage] // ...so we restore it again
+{$IFDEF x64}
+  {$IFDEF Windows}
+    FNSAVE  [RCX]
+    FRSTOR  [RCX]
+  {$ELSE}
+    FNSAVE  [RDI]
+    FRSTOR  [RDI]
+  {$ENDIF}
+{$ELSE}
+    FNSAVE  [EAX] // this will initialize FPU...
+    FRSTOR  [EAX] // ...so we restore it again
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure X87SaveEnvironment_ASM(Storage: Pointer); register; assembler;
+asm
+{
+  Instruction FNSTENV masks all exceptions after storing the environment, so,
+  to preserve the state as it was before, we immediately load back the stored
+  control word (conveniently it is at offset 0, so we can use the same pointer)
+  with the original exception mask bitset.
+}
+{$IFDEF x64}
+  {$IFDEF Windows}
+    FNSTENV [RCX]
+    FLDCW   word ptr [RCX]
+  {$ELSE}
+    FNSTENV [RDI]
+    FLDCW   word ptr [RDI]
+  {$ENDIF}
+{$ELSE}
+    FNSTENV [EAX]
+    FLDCW   word ptr [EAX]
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure X87LoadEnvironment_ASM(Storage: Pointer); register; assembler;
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    FLDENV  [RCX]
+  {$ELSE}
+    FLDENV  [RDI]
+  {$ENDIF}
+{$ELSE}
+    FLDENV  [EAX]
+{$ENDIF}
 end;
 
 {$ENDIF}
@@ -3535,6 +3923,24 @@ raise EFUUnsupportedOp.Create('X87FloatDataGet_PAS: x87 FPU operation not suppor
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+procedure X87SaveEnvironment_PAS(Storage: Pointer); register;
+begin
+raise EFUUnsupportedOp.Create('X87SaveEnvironment_PAS: x87 FPU operation not supported.');
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+procedure X87LoadEnvironment_PAS(Storage: Pointer); register;
+begin
+raise EFUUnsupportedOp.Create('X87LoadEnvironment_PAS: x87 FPU operation not supported.');
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 //==============================================================================
 var
   VAR_X87StatusWordGet:   Function: UInt16; register = X87StatusWordGet_PAS;
@@ -3542,6 +3948,8 @@ var
   VAR_X87ControlWordSet:  procedure(NewValue: UInt16); register = X87ControlWordSet_PAS;
   VAR_X87EnvironmentInit: procedure; register = X87EnvironmentInit_PAS;
   VAR_X87FloatDataGet:    procedure(Storage: Pointer); register = X87FloatDataGet_PAS;
+  VAR_X87SaveEnvironment: procedure(Storage: Pointer); register = X87SaveEnvironment_PAS;
+  VAR_X87LoadEnvironment: procedure(Storage: Pointer); register = X87LoadEnvironment_PAS;
 
 //==============================================================================
 
@@ -3632,6 +4040,20 @@ else
         FloatData.Regs[Index].Data.Overlay := TFloat80Overlay(FSAVEStorage.Stack[i]);
       end;
   end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure X87SaveEnvironment(Storage: Pointer);
+begin
+VAR_X87SaveEnvironment(Storage);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure X87LoadEnvironment(Storage: Pointer);
+begin
+VAR_X87LoadEnvironment(Storage);
 end;
 
 {===============================================================================
@@ -5948,19 +6370,19 @@ try
   Get number of registers and their width based on supported extensions and
   then load them accordingly. Select largest supported extension first.
 }
-  If Info.SupportedExtensions.AVX512F then
+  If Info.SupportedExtensions.AVX512.Supported or Info.SupportedExtensions.AVX10.Vec512 then
     begin
       FloatData.RegisterCount := {$IFDEF x64}32{$ELSE}8{$ENDIF};
       FloatData.RegisterWidth := 512;
       VECFloatDataGet_AVX512(@FloatData.Registers);
     end
-  else If Info.SupportedExtensions.AVX{also true for AVX2} then
+  else If Info.SupportedExtensions.AVX or Info.SupportedExtensions.AVX10.Vec256 then
     begin
       FloatData.RegisterCount := {$IFDEF x64}16{$ELSE}8{$ENDIF};
       FloatData.RegisterWidth := 256;
       VECFloatDataGet_AVX(@FloatData.Registers);
     end
-  else If Info.SupportedExtensions.SSE{also true for all other SSE versions} then
+  else If Info.SupportedExtensions.SSE or Info.SupportedExtensions.AVX10.Vec128 then
     begin
       FloatData.RegisterCount := {$IFDEF x64}16{$ELSE}8{$ENDIF};
       FloatData.RegisterWidth := 128;
@@ -9323,6 +9745,418 @@ end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
+                              State synchronization
+--------------------------------------------------------------------------------
+===============================================================================}
+type
+  TFUX87StateEnvironmentImage = packed record
+    CW,p1:  UInt16;   // control word, padding
+    SW,p2:  UInt16;   // status word, padding
+    TW,p3:  UInt16;   // tag word, padding
+    FIP:    UInt32;   // instruction pointer offset
+    FCS:    UInt16;   // instruction pointer selector
+    FOP:    UInt16;   // last instruction opcode
+    FDP:    UInt32;   // data pointer offset
+    FDS,p4: UInt16;   // data pointer selector, padding
+  end; {should be 28 bytes in size}
+
+const
+  // masks for assignment/comparison of compatible targets
+  SYNC_X87SW_MASK_COMP = UInt16(
+      X87SW_EFLAG_All or
+      X87SW_ConditionCode_C1 or
+      X87SW_FPUBusy or
+      X87SW_ExceptionSummary or
+      X87SW_StackFault);
+  SYNC_X87CW_MASK_COMP = UInt16(
+      X87CW_EMASK_ALL or
+      X87CW_Precision or
+      X87CW_Rounding);
+
+  SYNC_MXCSR_MASK_COMP = UInt32(
+      MXCSR_EFLAG_All or
+      MXCSR_EMASK_All or
+      MXCSR_Rounding or
+      MXCSR_DenormalsAreZeros or
+      MXCSR_FlushToZero);
+
+{
+  Masks for assignment/comparison of incompatible targets (only bits and fields
+  common to both x87 control and status words and MXCSR register).
+}
+  SYNC_X87SW_MASK_INCOMP = UInt16(
+      X87SW_EFLAG_All);
+  SYNC_X87CW_MASK_INCOMP = UInt16(
+      X87CW_EMASK_ALL or
+      X87CW_Rounding);
+
+  SYNC_MXCSR_MASK_INCOMP = UInt32(
+      MXCSR_EFLAG_All or
+      MXCSR_EMASK_All or
+      MXCSR_Rounding);
+
+{===============================================================================
+    State synchronization - implementation
+===============================================================================}
+
+Function StateSyncResolveTarget(SyncTarget: TFUStateSyncTarget; FinalTarget: Boolean = False): TFUStateSyncTarget;
+
+  Function TargetIfThen(Condition: Boolean; OnTrue,OnFalse: TFUStateSyncTarget): TFUStateSyncTarget;
+  begin
+    If Condition then
+      Result := OnTrue
+    else
+      Result := OnFalse;
+  end;
+
+begin
+case SyncTarget of
+  sstF80CState:     Result := TargetIfThen(F80CEmulated,sstF80CEmulated,TargetIfThen(FinalTarget,sstX87,sstF80CNative));
+  sstF16CState:     Result := TargetIfThen(F16CEmulated,sstF16CEmulated,TargetIfThen(FinalTarget,sstAVX,sstF16CNative));
+  sstFXCState:      case FXCModeOfOperation of
+                      modAssemblyX87: Result := TargetIfThen(FinalTarget,sstX87,sstFXCNativeX87);
+                      modPascalSSE:   Result := sstFXCEmulatedSSE;
+                      modAssemblySSE: Result := TargetIfThen(FinalTarget,sstSSE,sstFXCNativeSSE);
+                    else
+                     {modPascalX87}
+                      Result := sstFXCEmulatedX87;
+                    end;
+  sstF80CCntrState: Result := TargetIfThen(not F80CEmulated,sstF80CEmulated,TargetIfThen(FinalTarget,sstX87,sstF80CNative));
+  sstF16CCntrState: Result := TargetIfThen(not F16CEmulated,sstF16CEmulated,TargetIfThen(FinalTarget,sstAVX,sstF16CNative));
+  sstFXCCntrState:  case FXCModeOfOperation of
+                      modAssemblyX87: Result := sstFXCEmulatedX87;
+                      modPascalSSE:   Result := TargetIfThen(FinalTarget,sstSSE,sstFXCNativeSSE);
+                      modAssemblySSE: Result := sstFXCEmulatedSSE;
+                    else
+                     {modPascalX87}
+                      Result := TargetIfThen(FinalTarget,sstX87,sstFXCNativeX87);
+                    end;
+  sstF80CNative,
+  sstFXCNativeX87:  Result := TargetIfThen(FinalTarget,sstX87,SyncTarget);
+  sstF16CNative:    Result := TargetIfThen(FinalTarget,sstAVX,SyncTarget);
+  sstFXCNativeSSE:  Result := TargetIfThen(FinalTarget,sstSSE,SyncTarget);
+else
+  Result := SyncTarget;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StateSyncCompatibleTargets(SyncTargetA,SyncTargetB: TFUStateSyncTarget): Boolean;
+const
+  CompGroupA = [sstF80CEmulated,sstF80CNative,sstFXCEmulatedX87,sstFXCNativeX87,sstX87];
+  CompGroupB = [sstF16CEmulated,sstF16CNative,sstFXCEmulatedSSE,sstFXCNativeSSE,sstSSE,sstAVX];
+begin
+SyncTargetA := StateSyncResolveTarget(SyncTargetA);
+SyncTargetB := StateSyncResolveTarget(SyncTargetB);
+If SyncTargetA <> SyncTargetB then
+  Result := ([SyncTargetA,SyncTargetB] <= CompGroupA) or ([SyncTargetA,SyncTargetB] <= CompGroupB)
+else
+  Result := True;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StateSyncDistinctTargets(SyncTargetA,SyncTargetB: TFUStateSyncTarget): Boolean;
+begin
+SyncTargetA := StateSyncResolveTarget(SyncTargetA,True);
+SyncTargetB := StateSyncResolveTarget(SyncTargetB,True);
+{
+  Technically SSE and AVX states are the same - both these vector units are
+  using MXCSR register for their control and status.
+}
+Result := (SyncTargetA <> SyncTargetB) and not([SyncTargetA,SyncTargetB] <= [sstSSE,sstAVX]);
+end;
+
+//==============================================================================
+
+procedure StateSyncSave(SyncTarget: TFUStateSyncTarget; out Buffer: TFUStateSyncBuffer);
+
+  procedure EncodeBuffer(StatusWord,ControlWord: UInt16); overload;
+  begin
+    Buffer.PayloadType := bptX87;
+    Buffer.StatusWord := StatusWord;
+    Buffer.ControlWord := ControlWord;
+  end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  procedure EncodeBuffer(ControlAndStatus: UInt32); overload;
+  begin
+    Buffer.PayloadType := bptMXCSR;
+    Buffer.ControlAndStatus := ControlAndStatus;
+  end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+var
+  X87StateEnvImage: TFUX87StateEnvironmentImage;
+begin
+SyncTarget := StateSyncResolveTarget(SyncTarget);
+Buffer.SourceTarget := SyncTarget;
+case SyncTarget of
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF80CEmulated:    with F80CGetStatePtr^ do
+                        EncodeBuffer(StatusWord,ControlWord);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF16CEmulated:    EncodeBuffer(F16CGetStatePtr^.ControlAndStatus);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstFXCEmulatedX87:  with FXCGetStatePtr^ do
+                        EncodeBuffer(StatusWord,ControlWord);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstFXCEmulatedSSE:  EncodeBuffer(FXCGetStatePtr^.ControlAndStatus);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF80CNative,
+  sstFXCNativeX87,
+  sstX87:             begin
+                        X87SaveEnvironment(@X87StateEnvImage);
+                        EncodeBuffer(X87StateEnvImage.SW,X87StateEnvImage.CW);
+                      end;
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF16CNative,
+  sstFXCNativeSSE,
+  sstSSE,sstAVX:      EncodeBuffer(SSEControlAndStatusGet);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+else
+  raise EFUInvalidValue.CreateFmt('StateSyncSave: Unknown synchronization target (%d).',[Ord(SyncTarget)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure StateSyncLoad(SyncTarget: TFUStateSyncTarget; const Buffer: TFUStateSyncBuffer);
+
+  procedure DecodeBuffer(var StatusWord,ControlWord: UInt16); overload;
+  begin
+    case Buffer.PayloadType of
+      bptMXCSR: begin
+        StatusWord := (StatusWord and not SYNC_X87SW_MASK_INCOMP) or
+          UInt16(Buffer.ControlAndStatus and MXCSR_EFLAG_ALL);
+        ControlWord := (ControlWord and not SYNC_X87CW_MASK_INCOMP) or
+          UInt16((Buffer.ControlAndStatus and MXCSR_EMASK_ALL) shr 7) or
+          UInt16((Buffer.ControlAndStatus and MXCSR_Rounding) shr 3);
+      end;
+    else
+     {bptX87}
+      StatusWord := (StatusWord and not SYNC_X87SW_MASK_COMP) or
+        (Buffer.StatusWord and SYNC_X87SW_MASK_COMP);
+      ControlWord := (ControlWord and not SYNC_X87CW_MASK_COMP) or
+        (Buffer.ControlWord and SYNC_X87CW_MASK_COMP);
+    end;
+  end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  procedure DecodeBuffer(var ControlAndStatus: UInt32); overload;
+  begin
+    case Buffer.PayloadType of
+      bptMXCSR:
+        ControlAndStatus := (ControlAndStatus and not SYNC_MXCSR_MASK_COMP) or
+          (Buffer.ControlAndStatus and SYNC_MXCSR_MASK_COMP);
+    else
+     {bptX87}
+      ControlAndStatus := (ControlAndStatus and not SYNC_MXCSR_MASK_INCOMP) or
+        UInt32(Buffer.StatusWord and X87SW_EFLAG_ALL) or
+        UInt32((Buffer.ControlWord and X87CW_EMASK_ALL) shl 7) or
+        UInt32((Buffer.ControlWord and X87CW_Rounding) shl 3)
+    end;
+  end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+var
+  X87StateEnvImage: TFUX87StateEnvironmentImage;
+  ControlAndStatus: UInt32;
+begin
+SyncTarget := StateSyncResolveTarget(SyncTarget);
+case SyncTarget of
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF80CEmulated:    with F80CGetStatePtr^ do
+                        DecodeBuffer(StatusWord,ControlWord);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF16CEmulated:    DecodeBuffer(F16CGetStatePtr^.ControlAndStatus);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstFXCEmulatedX87:  with FXCGetStatePtr^ do
+                        DecodeBuffer(StatusWord,ControlWord);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstFXCEmulatedSSE:  DecodeBuffer(FXCGetStatePtr^.ControlAndStatus);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF80CNative,
+  sstFXCNativeX87,
+  sstX87:             begin
+                        X87SaveEnvironment(@X87StateEnvImage);
+                        DecodeBuffer(X87StateEnvImage.SW,X87StateEnvImage.CW);
+                        X87LoadEnvironment(@X87StateEnvImage);
+                      end;
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF16CNative,
+  sstFXCNativeSSE,
+  sstSSE,sstAVX:      begin
+                        ControlAndStatus := SSEControlAndStatusGet;
+                        DecodeBuffer(ControlAndStatus);
+                        SSEControlAndStatusSet(ControlAndStatus);
+                      end;
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+else
+  raise EFUInvalidValue.CreateFmt('StateSyncLoad: Unknown synchronization target (%d).',[Ord(SyncTarget)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StateSyncCompare(SyncTarget: TFUStateSyncTarget; const Buffer: TFUStateSyncBuffer): Boolean;
+
+  Function CompareBuffer(StatusWord,ControlWord: UInt16): Boolean; overload;
+  begin
+    case Buffer.PayloadType of
+      bptMXCSR: begin
+        Result :=
+          ((StatusWord and SYNC_X87SW_MASK_INCOMP) =
+           UInt16(Buffer.ControlAndStatus and MXCSR_EFLAG_All)) and
+         ((ControlWord and SYNC_X87CW_MASK_INCOMP) =
+          (UInt16((Buffer.ControlAndStatus and MXCSR_EMASK_ALL) shr 7) or
+           UInt16((Buffer.ControlAndStatus and MXCSR_Rounding) shr 3)));
+      end;
+    else
+     {bptX87}
+      Result :=
+        ((StatusWord and SYNC_X87SW_MASK_COMP) =
+         (Buffer.StatusWord and SYNC_X87SW_MASK_COMP)) and
+        ((ControlWord and SYNC_X87CW_MASK_COMP) =
+         (Buffer.ControlWord and SYNC_X87CW_MASK_COMP));
+    end;
+  end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  Function CompareBuffer(ControlAndStatus: UInt32): Boolean; overload;
+  begin
+    case Buffer.PayloadType of
+      bptMXCSR:
+        Result :=
+          (ControlAndStatus and SYNC_MXCSR_MASK_COMP) =
+          (Buffer.ControlAndStatus and SYNC_MXCSR_MASK_COMP)
+    else
+     {bptX87}
+      Result := (ControlAndStatus and SYNC_MXCSR_MASK_INCOMP) =
+        (UInt32(Buffer.StatusWord and X87SW_EFLAG_ALL) or
+         UInt32((Buffer.ControlWord and X87CW_EMASK_ALL) shl 7) or
+         UInt32((Buffer.ControlWord and X87CW_Rounding) shl 3));
+    end;
+  end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+var
+  X87StateEnvImage: TFUX87StateEnvironmentImage;
+begin
+SyncTarget := StateSyncResolveTarget(SyncTarget);
+case SyncTarget of
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF80CEmulated:    with F80CGetStatePtr^ do
+                        Result := CompareBuffer(StatusWord,ControlWord);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF16CEmulated:    Result := CompareBuffer(F16CGetStatePtr^.ControlAndStatus);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstFXCEmulatedX87:  with FXCGetStatePtr^ do
+                        Result := CompareBuffer(StatusWord,ControlWord);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstFXCEmulatedSSE:  Result := CompareBuffer(FXCGetStatePtr^.ControlAndStatus);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF80CNative,
+  sstFXCNativeX87,
+  sstX87:             begin
+                        X87SaveEnvironment(@X87StateEnvImage);
+                        Result := CompareBuffer(X87StateEnvImage.SW,X87StateEnvImage.CW);
+                      end;
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+  sstF16CNative,
+  sstFXCNativeSSE,
+  sstSSE,sstAVX:      Result := CompareBuffer(SSEControlAndStatusGet);
+  //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+else
+  raise EFUInvalidValue.CreateFmt('StateSyncCompare: Unknown synchronization target (%d).',[Ord(SyncTarget)]);
+end;
+end;
+
+//==============================================================================
+
+Function StateSynchronize(SyncDestination: TFUStateSyncTarget; SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean;
+var
+  StateSyncBuffer:  TFUStateSyncBuffer;
+begin
+case SyncAction of
+  ssaCompare,
+  ssaCompareStrict:   begin
+    StateSyncSave(SyncSource,StateSyncBuffer);
+    Result := StateSyncCompare(SyncDestination,StateSyncBuffer);
+    If not Result and (SyncAction = ssaCompareStrict) then
+      raise EFUStateMismatch.Create('SyncDestination: States do not match.');
+  end;
+  ssaCopyToCurrent:   begin
+    StateSyncSave(SyncSource,StateSyncBuffer);
+    StateSyncLoad(SyncDestination,StateSyncBuffer);
+    Result := True;
+  end;
+  ssaCopyFromCurrent: begin
+    // swap source and destination
+    StateSyncSave(SyncDestination,StateSyncBuffer);
+    StateSyncLoad(SyncSource,StateSyncBuffer);
+    Result := True;
+  end;
+else
+  raise EFUInvalidValue.CreateFmt('StateSynchronize: Unknown synchronization action (%d).',[Ord(SyncAction)]);
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    State synchronization - F80C implementation
+-------------------------------------------------------------------------------}
+
+Function F80CStateSynchronize(SyncAction: TFUStateSyncAction): Boolean;
+begin
+Result := StateSynchronize(sstF80CState,sstF80CCntrState,SyncAction);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function F80CStateSynchronize(SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean;
+begin
+Result := StateSynchronize(sstF80CState,SyncSource,SyncAction);
+end;
+
+{-------------------------------------------------------------------------------
+    State synchronization - F16C implementation
+-------------------------------------------------------------------------------}
+
+Function F16CStateSynchronize(SyncAction: TFUStateSyncAction): Boolean;
+begin
+Result := StateSynchronize(sstF16CState,sstF16CCntrState,SyncAction);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function F16CStateSynchronize(SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean;
+begin
+Result := StateSynchronize(sstF16CState,SyncSource,SyncAction);
+end;
+
+{-------------------------------------------------------------------------------
+    State synchronization - FXC implementation
+-------------------------------------------------------------------------------}
+
+Function FXCStateSynchronize(SyncAction: TFUStateSyncAction): Boolean;
+begin
+Result := StateSynchronize(sstFXCState,sstFXCCntrState,SyncAction);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function FXCStateSynchronize(SyncSource: TFUStateSyncTarget; SyncAction: TFUStateSyncAction): Boolean;
+begin
+Result := StateSynchronize(sstFXCState,SyncSource,SyncAction);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
                                  Floats mapping
 --------------------------------------------------------------------------------
 ===============================================================================}
@@ -10406,7 +11240,8 @@ try
   Support[sgX87]  := Info.SupportedExtensions.X87 and not Info.SupportedExtensions.EmulatedX87;
   Support[sgVec]  := Info.SupportedExtensions.SSE {applies to all SSE versions} or
                      Info.SupportedExtensions.AVX {also applies to AVX2 and AVX extensions} or
-                     Info.SupportedExtensions.AVX512F {later add check for AVX10};
+                     Info.SupportedExtensions.AVX512.Supported or
+                     Info.SupportedExtensions.AVX10.Supported;
   Support[sgF16C] := Info.SupportedExtensions.F16C;
   Support[sgSSE2] := Info.SupportedExtensions.SSE2;
 finally
@@ -10450,6 +11285,16 @@ AddRouting(varImplManager,TUIMIdentifier(fnX87ExceptionsRaise),@VAR_X87Exception
   ImplInfo(TUIMIdentifier(imPascal),@X87ExceptionsRaise_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87ExceptionsRaise_ASM,Support[sgX87]),
   ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ExceptionsRaise_ASM,Support[sgX87]){$ENDIF}],1);
+AddRouting(varImplManager,TUIMIdentifier(fnX87SaveEnvironment),@VAR_X87SaveEnvironment,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@X87SaveEnvironment_PAS){$IFNDEF PurePascal},
+  ImplInfo(TUIMIdentifier(imAssembly),@X87SaveEnvironment_ASM,Support[sgX87]),
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87SaveEnvironment_ASM,Support[sgX87]){$ENDIF}],1);
+AddRouting(varImplManager,TUIMIdentifier(fnX87LoadEnvironment),@VAR_X87LoadEnvironment,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@X87LoadEnvironment_PAS){$IFNDEF PurePascal},
+  ImplInfo(TUIMIdentifier(imAssembly),@X87LoadEnvironment_ASM,Support[sgX87]),
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87LoadEnvironment_ASM,Support[sgX87]){$ENDIF}],1);
 
 varImplManager.RoutingGroupBegin(TUIMIdentifier(fnFloat80Conversions));
 AddRouting(varImplManager,TUIMIdentifier(fnFloat64ToFloat80),@VAR_Float64ToFloat80,[
