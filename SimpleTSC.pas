@@ -98,7 +98,7 @@
 
   Version 1.2 (2024-05-18)
 
-  Last change 2025-03-05
+  Last change 2025-11-02
 
   ©2023-2025 František Milt
 
@@ -1852,7 +1852,7 @@ var
 
 Function GetCurrentProcessorNumberCPUID: DWORD; stdcall;
 var
-  CPUIDResult:  TCPUIDResult;
+  CPUIDResult:  TCPUIDLeafData;
   Temp:         Integer;
 begin
 If VAR_ProcessorIDMap.Available then
@@ -3229,7 +3229,7 @@ var
   InitialMask:  TSTSCProcessorMask;
   AffinityMask: TSTSCProcessorMask;
   i:            Integer;
-  CPUIDResult:  TCPUIDResult;
+  CPUIDResult:  TCPUIDLeafData;
 begin
 FillChar(VAR_ProcessorIDMap,SizeOf(VAR_ProcessorIDMap),0);
 If CPUIDSupported then

@@ -46,7 +46,7 @@
 
   Version 1.3.5 (2025-08-13)
 
-  Last change (2025-08-13)
+  Last change (2025-11-02)
 
   ©2024-2025 František Milt
 
@@ -3826,9 +3826,48 @@ type
       3: (Bytes: array [0..7] of UInt8);
   end;
 {$IFEND}
+
 //------------------------------------------------------------------------------
 
-Function CompareUInt64(const A,B: UInt64): Integer;
+Function CompareUInt64(const A,B: UInt64): Integer;{$IFNDEF PurePascal} register; assembler;
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+                        win32 & lin32       win64         lin64
+               A          (EBP + 16)         RCX           RDI
+               B          (EBP + 8)          RDX           RSI
+          Result             EAX             EAX           EAX
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+asm
+      XOR     EAX, EAX
+{$IFDEF x64}
+  {$IFDEF Windows}
+      CMP     RCX, RDX
+  {$ELSE}
+      CMP     RDI, RSI
+  {$ENDIF}
+      SETA    AL
+      JAE     @RoutineEnd
+      DEC     EAX
+{$ELSE}
+      // compare higher 32 bits
+      MOV     EDX, dword ptr [A + 4]
+      CMP     EDX, dword ptr [B + 4]
+      JZ      @CompLow
+      SETA    AL
+      JAE     @RoutineEnd
+      DEC     EAX
+      JMP     @RoutineEnd
+
+  @CompLow:
+      // compare lower 32 bits
+      MOV     EDX, dword ptr [A]
+      CMP     EDX, dword ptr [B]
+      SETA    AL
+      JAE     @RoutineEnd
+      DEC     EAX  
+{$ENDIF}
+  @RoutineEnd:
+end;
+{$ELSE}
 begin
 {$IF Declared(NativeUInt64E)}
 If A > B then
@@ -3854,6 +3893,7 @@ else
   end;
 {$IFEND}
 end;
+{$ENDIF}
 
 //------------------------------------------------------------------------------
 

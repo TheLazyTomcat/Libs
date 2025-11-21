@@ -18,7 +18,7 @@
 
   Version 1.5 (2025-08-06)
 
-  Last change 2025-08-06
+  Last change 2025-11-11
 
   ©2020-2025 František Milt
 
@@ -995,7 +995,7 @@ Function ContextGetOptions(var Context: TDLULibraryContext; Options: TDLUOptions
 Function ContextSetOptions(var Context: TDLULibraryContext; NewOptions: TDLUOptions; Options: TDLUOptions = []): TDLUOptions;
 
 {
-  ContextSetOptions
+  ContextGetOption
 
   Returns state of selected Option within context-stored options. If the option
   is active, then True is returned, false otherwise.
@@ -1013,7 +1013,7 @@ Function ContextSetOptions(var Context: TDLULibraryContext; NewOptions: TDLUOpti
 Function ContextGetOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): Boolean;
 
 {
-  ContextSetOptions
+  ContextSetOption
 
   Sets selected Option in context-stored options of given context to a value
   selected in NewState. When NewState is set to true, then the selected option
@@ -1033,7 +1033,7 @@ Function ContextGetOption(var Context: TDLULibraryContext; Option: TDLUOption; O
 Function ContextSetOption(var Context: TDLULibraryContext; Option: TDLUOption; NewState: Boolean; Options: TDLUOptions = []): Boolean;
 
 {
-  ContextSetOptions
+  ContextIncludeOption
 
   Enables selected Option in context-stored options of given context, returning
   previous value of those options.
@@ -1051,7 +1051,7 @@ Function ContextSetOption(var Context: TDLULibraryContext; Option: TDLUOption; N
 Function ContextIncludeOption(var Context: TDLULibraryContext; Option: TDLUOption; Options: TDLUOptions = []): TDLUOptions;
 
 {
-  ContextSetOptions
+  ContextExcludeOption
 
   Disables selected Option in context-stored options of given context, returning
   previous value of those options.
