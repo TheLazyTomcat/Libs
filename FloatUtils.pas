@@ -42,9 +42,9 @@
 
   Version 1.0 (2025-11-01)
 
-  Last change 2025-11-01
+  Last change 2026-02-26
 
-  ©2025 František Milt
+  ©2025-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -11250,126 +11250,146 @@ end;
 {$ENDIF}
 // fill the routing list and select default implementations (pascal/pascalX87)
 varImplManager.RoutingGroupBegin(TUIMIdentifier(fnX87FPUAccess));
-AddRouting(varImplManager,TUIMIdentifier(fnX87StatusWordGet),@VAR_X87StatusWordGet,[
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87StatusWordGet),@VAR_X87StatusWordGet,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87StatusWordGet_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87StatusWordGet_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87StatusWordGet_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87ControlWordGet),@VAR_X87ControlWordGet,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87StatusWordGet_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87ControlWordGet),@VAR_X87ControlWordGet,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87ControlWordGet_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87ControlWordGet_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ControlWordGet_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87ControlWordSet),@VAR_X87ControlWordSet,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ControlWordGet_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87ControlWordSet),@VAR_X87ControlWordSet,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87ControlWordSet_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87ControlWordSet_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ControlWordSet_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87EnvironmentInit),@VAR_X87EnvironmentInit,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ControlWordSet_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87EnvironmentInit),@VAR_X87EnvironmentInit,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87EnvironmentInit_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87EnvironmentInit_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87EnvironmentInit_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87FloatDataGet),@VAR_X87FloatDataGet,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87EnvironmentInit_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87FloatDataGet),@VAR_X87FloatDataGet,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87FloatDataGet_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87FloatDataGet_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87FloatDataGet_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87ExceptionsClear),@VAR_X87ExceptionsClear,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87FloatDataGet_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87ExceptionsClear),@VAR_X87ExceptionsClear,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87ExceptionsClear_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87ExceptionsClear_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ExceptionsClear_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87ExceptionsRaise),@VAR_X87ExceptionsRaise,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ExceptionsClear_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87ExceptionsRaise),@VAR_X87ExceptionsRaise,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87ExceptionsRaise_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87ExceptionsRaise_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ExceptionsRaise_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87SaveEnvironment),@VAR_X87SaveEnvironment,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87ExceptionsRaise_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87SaveEnvironment),@VAR_X87SaveEnvironment,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87SaveEnvironment_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87SaveEnvironment_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87SaveEnvironment_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnX87LoadEnvironment),@VAR_X87LoadEnvironment,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87SaveEnvironment_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnX87LoadEnvironment),@VAR_X87LoadEnvironment,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@X87LoadEnvironment_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@X87LoadEnvironment_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87LoadEnvironment_ASM,Support[sgX87]){$ENDIF}],1);
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@X87LoadEnvironment_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
 
 varImplManager.RoutingGroupBegin(TUIMIdentifier(fnFloat80Conversions));
-AddRouting(varImplManager,TUIMIdentifier(fnFloat64ToFloat80),@VAR_Float64ToFloat80,[
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat64ToFloat80),@VAR_Float64ToFloat80,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@Float64ToFloat80_PAS),
   ImplInfo(TUIMIdentifier(imPascalX87),@Float64ToFloat80_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@Float64ToFloat80_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@Float64ToFloat80_ASM,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnFloat80ToFloat64),@VAR_Float80ToFloat64,[
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@Float64ToFloat80_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat80ToFloat64),@VAR_Float80ToFloat64,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@Float80ToFloat64_PAS),
   ImplInfo(TUIMIdentifier(imPascalX87),@Float80ToFloat64_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@Float80ToFloat64_ASM,Support[sgX87]),
-  ImplInfo(TUIMIdentifier(imAssemblyX87),@Float80ToFloat64_ASM,Support[sgX87]){$ENDIF}],1);
+  ImplInfo(TUIMIdentifier(imAssemblyX87),@Float80ToFloat64_ASM,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascal));
 
 varImplManager.RoutingGroupBegin(TUIMIdentifier(fnVECAccess));
-AddRouting(varImplManager,TUIMIdentifier(fnVECControlAndStatusGet),@VAR_VECControlAndStatusGet,[
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnVECControlAndStatusGet),@VAR_VECControlAndStatusGet,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@VECControlAndStatusGet_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@VECControlAndStatusGet_ASM,Support[sgVec]),
-  ImplInfo(TUIMIdentifier(imAssemblySSE),@VECControlAndStatusGet_ASM,Support[sgVec]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnVECControlAndStatusSet),@VAR_VECControlAndStatusSet,[
+  ImplInfo(TUIMIdentifier(imAssemblySSE),@VECControlAndStatusGet_ASM,Support[sgVec]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnVECControlAndStatusSet),@VAR_VECControlAndStatusSet,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@VECControlAndStatusSet_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@VECControlAndStatusSet_ASM,Support[sgVec]),
-  ImplInfo(TUIMIdentifier(imAssemblySSE),@VECControlAndStatusSet_ASM,Support[sgVec]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnVECFloatDataGet),@VAR_VECFloatDataGet,[
+  ImplInfo(TUIMIdentifier(imAssemblySSE),@VECControlAndStatusSet_ASM,Support[sgVec]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnVECFloatDataGet),@VAR_VECFloatDataGet,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@VECFloatDataGet_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@VECFloatDataGet_ASM,Support[sgVec]),
-  ImplInfo(TUIMIdentifier(imAssemblySSE),@VECFloatDataGet_ASM,Support[sgVec]){$ENDIF}],1);
+  ImplInfo(TUIMIdentifier(imAssemblySSE),@VECFloatDataGet_ASM,Support[sgVec]){$ENDIF}],
+  TUIMIdentifier(imPascal));
 
 varImplManager.RoutingGroupBegin(TUIMIdentifier(fnFloat16Conversions));
-AddRouting(varImplManager,TUIMIdentifier(fnFloat16ToFloat32),@VAR_Float16ToFloat32,[
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat16ToFloat32),@VAR_Float16ToFloat32,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@Float16ToFloat32_PAS),
   ImplInfo(TUIMIdentifier(imPascalSSE),@Float16ToFloat32_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@Float16ToFloat32_ASM,Support[sgF16C]),
-  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float16ToFloat32_ASM,Support[sgF16C]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnFloat32ToFloat16),@VAR_Float32ToFloat16,[
+  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float16ToFloat32_ASM,Support[sgF16C]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat32ToFloat16),@VAR_Float32ToFloat16,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@Float32ToFloat16_PAS),
   ImplInfo(TUIMIdentifier(imPascalSSE),@Float32ToFloat16_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@Float32ToFloat16_ASM,Support[sgF16C]),
-  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float32ToFloat16_ASM,Support[sgF16C]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnFloat16ToFloat32Vec4),@VAR_Float16ToFloat32Vec4,[
+  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float32ToFloat16_ASM,Support[sgF16C]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat16ToFloat32Vec4),@VAR_Float16ToFloat32Vec4,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@Float16ToFloat32Vec4_PAS),
   ImplInfo(TUIMIdentifier(imPascalSSE),@Float16ToFloat32Vec4_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@Float16ToFloat32Vec4_ASM,Support[sgF16C]),
-  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float16ToFloat32Vec4_ASM,Support[sgF16C]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnFloat32ToFloat16Vec4),@VAR_Float32ToFloat16Vec4,[
+  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float16ToFloat32Vec4_ASM,Support[sgF16C]){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat32ToFloat16Vec4),@VAR_Float32ToFloat16Vec4,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascal),@Float32ToFloat16Vec4_PAS),
   ImplInfo(TUIMIdentifier(imPascalSSE),@Float32ToFloat16Vec4_PAS){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssembly),@Float32ToFloat16Vec4_ASM,Support[sgF16C]),
-  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float32ToFloat16Vec4_ASM,Support[sgF16C]){$ENDIF}],1);
+  ImplInfo(TUIMIdentifier(imAssemblySSE),@Float32ToFloat16Vec4_ASM,Support[sgF16C]){$ENDIF}],
+  TUIMIdentifier(imPascal));
 
 varImplManager.RoutingGroupBegin(TUIMIdentifier(fnFloatXConversions));
-AddRouting(varImplManager,TUIMIdentifier(fnFloat32ToFloat64),@VAR_Float32ToFloat64,[
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat32ToFloat64),@VAR_Float32ToFloat64,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascalX87),@Float32ToFloat64_PAS_X87),
   ImplInfo(TUIMIdentifier(imPascalSSE),@Float32ToFloat64_PAS_SSE),
   ImplInfo(TUIMIdentifier(imPascal),@Float32ToFloat64_PAS_X87){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssemblyX87),@Float32ToFloat64_ASM_X87,Support[sgX87]),
   ImplInfo(TUIMIdentifier(imAssemblySSE),@Float32ToFloat64_ASM_SSE,Support[sgSSE2]),
-  ImplInfo(TUIMIdentifier(imAssembly),@Float32ToFloat64_ASM_X87,Support[sgX87]){$ENDIF}],1);
-AddRouting(varImplManager,TUIMIdentifier(fnFloat64ToFloat32),@VAR_Float64ToFloat32,[
+  ImplInfo(TUIMIdentifier(imAssembly),@Float32ToFloat64_ASM_X87,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascalX87));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnFloat64ToFloat32),@VAR_Float64ToFloat32,[
   ImplInfo(TUIMIdentifier(imNone),NilPtr),
   ImplInfo(TUIMIdentifier(imPascalX87),@Float64ToFloat32_PAS_X87),
   ImplInfo(TUIMIdentifier(imPascalSSE),@Float64ToFloat32_PAS_SSE),
   ImplInfo(TUIMIdentifier(imPascal),@Float64ToFloat32_PAS_X87){$IFNDEF PurePascal},
   ImplInfo(TUIMIdentifier(imAssemblyX87),@Float64ToFloat32_ASM_X87,Support[sgX87]),
   ImplInfo(TUIMIdentifier(imAssemblySSE),@Float64ToFloat32_ASM_SSE,Support[sgSSE2]),
-  ImplInfo(TUIMIdentifier(imAssembly),@Float64ToFloat32_ASM_X87,Support[sgX87]){$ENDIF}],1);
+  ImplInfo(TUIMIdentifier(imAssembly),@Float64ToFloat32_ASM_X87,Support[sgX87]){$ENDIF}],
+  TUIMIdentifier(imPascalX87));
 varImplManager.RoutingGroupEnd;
 {$IFNDEF PurePascal}
 // following is compiled only in non-pure-pacal mode
