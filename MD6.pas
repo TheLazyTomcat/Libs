@@ -32,9 +32,9 @@
 
   Version 2.0.1 (2025-04-09)
 
-  Last change 2025-04-12
+  Last change 2026-02-25
 
-  ©2022-2025 František Milt
+  ©2022-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -68,6 +68,7 @@
   Indirect dependencies:
     AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
+    ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
     WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo

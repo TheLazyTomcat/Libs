@@ -128,9 +128,9 @@
 
   Version 1.3.2 (2024-05-02)
 
-  Last change 2025-03-04
+  Last change 2026-02-25
 
-  ©2016-2025 František Milt
+  ©2016-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -158,6 +158,7 @@
   Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
+    ListUtils   - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect     - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils

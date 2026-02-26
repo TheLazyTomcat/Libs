@@ -84,9 +84,9 @@
 
   Internal compatibility version 1
 
-  Last change 2025-03-04
+  Last change 2026-02-26
 
-  ©2024-2025 František Milt
+  ©2024-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -117,6 +117,7 @@
   Indirect dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils

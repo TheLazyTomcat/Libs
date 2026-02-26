@@ -67,9 +67,9 @@
 
   Version 2.2 (2025-03-04)
 
-  Last change 2025-03-08
+  Last change 2026-02-25
 
-  ©2024-2025 František Milt
+  ©2024-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -107,6 +107,7 @@
     AuxMath             - github.com/TheLazyTomcat/Lib.AuxMath
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect

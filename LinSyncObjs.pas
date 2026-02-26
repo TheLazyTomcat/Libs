@@ -32,9 +32,9 @@
 
   Version 1.2 (2025-03-06)
 
-  Last change 2025-03-06
+  Last change 2026-02-25
 
-  ©2022-2025 František Milt
+  ©2022-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -70,6 +70,7 @@
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1
     SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream  - github.com/TheLazyTomcat/Lib.StaticMemoryStream

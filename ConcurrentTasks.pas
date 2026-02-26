@@ -50,9 +50,9 @@
 
   Version 1.2.1 (2024-05-03)
 
-  Last change 2025-03-04
+  Last change 2026-02-25
 
-  ©2017-2025 František Milt
+  ©2017-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -89,6 +89,7 @@
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     MemVector           - github.com/TheLazyTomcat/Lib.MemVector
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1

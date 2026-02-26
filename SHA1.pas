@@ -11,9 +11,9 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2023-05-01
+  Last change 2026-02-26
 
-  ©2015-2023 František Milt
+  ©2015-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -38,6 +38,7 @@
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
+    ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect

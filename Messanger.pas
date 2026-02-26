@@ -43,9 +43,9 @@
 
   Version 2.0.4 (2024-05-03)
 
-  Last change 2024-10-04
+  Last change 2026-02-25
 
-  ©2016-2024 František Milt
+  ©2016-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -66,6 +66,7 @@
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
     CrossSyncObjs - github.com/TheLazyTomcat/Lib.CrossSyncObjs
+    ListUtils     - github.com/TheLazyTomcat/Lib.ListUtils
     MemVector     - github.com/TheLazyTomcat/Lib.MemVector
 
   Library AuxExceptions is required only when rebasing local exception classes
@@ -777,7 +778,8 @@ Function BuildMessage(Recipient: TMsgrEndpointID; P1,P2,P3,P4: TMsgrParam; Prior
 implementation
 
 uses
-  {$IFDEF Windows}Windows{$ELSE}Linux, SysCall{$ENDIF};
+  {$IFDEF Windows}Windows{$ELSE}Linux, SysCall{$ENDIF},
+  ListUtils;
 
 {===============================================================================
     Auxiliary functions - implementation

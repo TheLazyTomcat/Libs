@@ -9,11 +9,11 @@
 
   Auxiliary classes and other class-related things
 
-  Version 1.3 (2025-10-01)
+  Version 1.4 (2026-02-25)
 
-  Last change 2025-10-01
+  Last change 2026-02-25
 
-  ©2018-2025 František Milt
+  ©2018-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -32,9 +32,12 @@
   Dependencies:
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes      - github.com/TheLazyTomcat/Lib.AuxTypes
+    ListUtils     - github.com/TheLazyTomcat/Lib.ListUtils
 
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol AuxClasses_UseAuxExceptions for details).
+
+  Library AuxExceptions might also be required as an indirect dependency.
 
   Indirect dependencies:
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
@@ -99,7 +102,7 @@ interface
 
 uses
   SysUtils,
-  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
+  AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF}, ListUtils;
 
 {===============================================================================
     Library-specific exceptions
@@ -107,6 +110,7 @@ uses
 type
   EACException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
+  EACInvalidValue      = class(EACException);
   EACIndexOutOfBounds  = class(EACException);
   EACIncompatibleClass = class(EACException);
 
@@ -155,54 +159,6 @@ type
 
   TOpenEvent    = TOpenArrayEvent;
   TOpenCallback = TOpenArrayCallback;
-
-{===============================================================================
-    List growing and shrinking settings
-===============================================================================}
-type
-{
-  gmSlow            - grow by 1
-  gmLinear          - grow by GrowFactor (integer part of the float)
-  gmFast            - grow by capacity * GrowFactor
-  gmFastAttenuated  - if capacity is below GrowLimit, grow by capacity * GrowFactor
-                      if capacity is above or equal to GrowLimit, grow by 1/16 * GrowLimit
-}
-  TGrowMode = (gmSlow, gmLinear, gmFast, gmFastAttenuated);
-{
-  smKeepCap - list is not shrinked, capacity is preserved
-  smNormal  - if count is zero (or lower), then the capacity is set to zero,
-              when count is greater than zero but lower than or equal to
-              capacity * ShrinkFactor, and at the same time capacity is higher
-              than ShrinkLimit, then capacity is set either to capacity *
-              ShrinkFactor or ShrinkLimit, whichever is bigger, in all other
-              cases the capacity is preserved
-  smToCount - capacity is set to count
-}
-  TShrinkMode = (smKeepCap, smNormal, smToCount);
-
-type
-  // structure used to store grow settings in one place
-  TListGrowSettings = record
-    GrowInit:     Integer;
-    GrowMode:     TGrowMode;
-    GrowFactor:   Double;
-    GrowLimit:    Integer;
-    ShrinkMode:   TShrinkMode;
-    ShrinkFactor: Double;
-    ShrinkLimit:  Integer;
-  end;
-  PListGrowSettings = ^TListGrowSettings;
-
-const
-  // default list grow/shrink settings
-  AC_LIST_GROW_SETTINGS_DEF: TListGrowSettings = (
-    GrowInit:     32;
-    GrowMode:     gmFast;
-    GrowFactor:   1.0;
-    GrowLimit:    128 * 1024 * 1024;
-    ShrinkMode:   smNormal;
-    ShrinkFactor: 0.5;
-    ShrinkLimit:  32);
 
 {===============================================================================
     Public functions - declaration
@@ -298,69 +254,6 @@ asm
 {$ENDIF}
 end;
 {$ENDIF}
-
-//------------------------------------------------------------------------------
-
-Function ResolveGrowDelta(Capacity,Count,MinDelta: Integer; GrowSettings: TListGrowSettings; out Delta: Integer): Boolean;
-begin
-// we are assuming sane inputs, namely that count is NOT bigger than capacity
-If (Count + MinDelta) > Capacity then
-  begin
-    If Capacity > 0 then
-      case GrowSettings.GrowMode of
-        gmLinear:
-          Delta := Trunc(GrowSettings.GrowFactor);
-        gmFast:
-          Delta := Trunc(Capacity * GrowSettings.GrowFactor);
-        gmFastAttenuated:
-          If Capacity < GrowSettings.GrowLimit then
-            Delta := Trunc(Capacity * GrowSettings.GrowFactor)
-          else
-            Delta := GrowSettings.GrowLimit shr 4;
-      else
-       {gmSlow}
-        Delta := 1;
-      end
-    else Delta := GrowSettings.GrowInit;
-    If Delta < MinDelta then
-      Delta := MinDelta;
-  end
-else Delta := 0;
-Result := Delta > 0;
-end;
-
-//------------------------------------------------------------------------------
-
-Function ResolveShrinkCapacity(Capacity,Count: Integer; GrowSettings: TListGrowSettings; out NewCapacity: Integer): Boolean;
-
-  Function Max(A,B: Integer): Integer;
-  begin
-    If A > B then
-      Result := A
-    else
-      Result := B;
-  end;
-
-begin
-Result := True;
-If Capacity > 0 then
-  case GrowSettings.ShrinkMode of
-    smNormal:
-      If Count <= 0 then
-        NewCapacity := 0
-      else If (Capacity > GrowSettings.ShrinkLimit) and
-              (Count <= Trunc(Capacity * GrowSettings.ShrinkFactor)) then
-        NewCapacity := Max(Trunc(Capacity * GrowSettings.ShrinkFactor),GrowSettings.ShrinkLimit)
-      else
-        Result := False;
-    smToCount:
-      NewCapacity := Count;
-  else
-    {smKeepCap}
-    Result := False;
-  end
-else Result := False;
-end;
 
 {===============================================================================
 --------------------------------------------------------------------------------

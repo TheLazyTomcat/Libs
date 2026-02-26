@@ -43,9 +43,9 @@
 
   Version 1.0 alpha 3 (requires extensive testing) (2024-05-03)
 
-  Last change 2024-10-04
+  Last change 2026-02-25
 
-  ©2022-2024 František Milt
+  ©2022-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -67,6 +67,7 @@
     AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
     BitVector          - github.com/TheLazyTomcat/Lib.BitVector
   * LinSyncObjs        - github.com/TheLazyTomcat/Lib.LinSyncObjs
+    ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     MemVector          - github.com/TheLazyTomcat/Lib.MemVector
     SharedMemoryStream - github.com/TheLazyTomcat/Lib.SharedMemoryStream
   * WinSyncObjs        - github.com/TheLazyTomcat/Lib.WinSyncObjs
@@ -432,7 +433,8 @@ procedure PeekMessages;
 implementation
 
 uses
-  {$IFDEF Windows}Windows,{$ELSE}Linux, SysCall, {$ENDIF} Math;
+  {$IFDEF Windows}Windows,{$ELSE}Linux, SysCall, {$ENDIF} Math,
+  ListUtils;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

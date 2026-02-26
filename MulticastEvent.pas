@@ -11,9 +11,9 @@
 
   Version 1.1.1 (2024-05-03)
 
-  Last change 2024-10-04
+  Last change 2026-02-25
 
-  ©2015-2024 František Milt
+  ©2015-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -32,6 +32,7 @@
   Dependencies:
     AuxClasses    - github.com/TheLazyTomcat/Lib.AuxClasses
   * AuxExceptions - github.com/TheLazyTomcat/Lib.AuxExceptions
+    ListUtils     - github.com/TheLazyTomcat/Lib.ListUtils
 
   Library AuxExceptions is required only when rebasing local exception classes
   (see symbol MulticastEvent_UseAuxExceptions for details).
@@ -151,6 +152,9 @@ type
   end;
 
 implementation
+
+uses
+  ListUtils;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}

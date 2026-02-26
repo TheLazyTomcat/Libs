@@ -57,9 +57,9 @@
 
   Version 1.1 (2025-02-01)
 
-  Last change 2025-02-01
+  Last change 2026-02-25
 
-  ©2023-2025 František Milt
+  ©2023-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -98,6 +98,7 @@
   Indirect dependencies:
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo

@@ -28,9 +28,9 @@
 
   Version 1.3.1 (2025-03-04)
 
-  Last change 2025-03-04
+  Last change 2026-02-25
 
-  ©2015-2025 František Milt
+  ©2015-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -68,6 +68,7 @@
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     MulticastEvent      - github.com/TheLazyTomcat/Lib.MulticastEvent
     ProcessGlobalVars   - github.com/TheLazyTomcat/Lib.ProcessGlobalVars
     SequentialVectors   - github.com/TheLazyTomcat/Lib.SequentialVectors

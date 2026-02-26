@@ -29,9 +29,9 @@
 
   Version 1.0.1 (2025-01-31)
 
-  Last change 2025-03-04
+  Last change 2026-02-25
 
-  ©2024-2025 František Milt
+  ©2024-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -63,6 +63,7 @@
   Indirect dependencies:
     BasicUIM            - github.com/TheLazyTomcat/Lib.BasicUIM
     BinaryStreamingLite - github.com/TheLazyTomcat/Lib.BinaryStreamingLite
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID         - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect             - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils         - github.com/TheLazyTomcat/Lib.UInt64Utils

@@ -32,9 +32,9 @@
 
   Version 2.0.1 (2024-05-03)
 
-  Last change 2024-09-09
+  Last change 2026-02-25
 
-  ©2015-2024 František Milt
+  ©2015-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -80,6 +80,7 @@
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     MemVector           - github.com/TheLazyTomcat/Lib.MemVector
     MulticastEvent      - github.com/TheLazyTomcat/Lib.MulticastEvent
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems

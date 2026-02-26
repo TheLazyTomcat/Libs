@@ -27,9 +27,9 @@
 
   Version 1.0.1 (2022-10-25)
 
-  Last change 2024-09-09
+  Last change 2026-02-25
 
-  ©2022 František Milt
+  ©2022-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -53,6 +53,7 @@
   Indirect dependencies:
     AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
     InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream

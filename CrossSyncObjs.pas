@@ -33,9 +33,9 @@
 
   Version 1.1.2 (2025-03-06)
 
-  Last change 2025-03-06
+  Last change 2026-02-25
 
-  ©2022-2025 František Milt
+  ©2022-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -69,6 +69,7 @@
     BitVector           - github.com/TheLazyTomcat/Lib.BitVector
     HashBase            - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1
     SharedMemoryStream  - github.com/TheLazyTomcat/Lib.SharedMemoryStream

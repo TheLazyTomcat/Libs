@@ -13,9 +13,9 @@
 
   Version 1.0.10 (2024-05-03)
 
-  Last change 2024-10-15
+  Last change 2026-02-25
 
-  ©2018-2024 František Milt
+  ©2018-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -46,6 +46,7 @@
   Indirect dependencies:
     DynLibUtils    - github.com/TheLazyTomcat/Lib.DynLibUtils
     InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
+    ListUtils      - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID    - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect        - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils    - github.com/TheLazyTomcat/Lib.UInt64Utils

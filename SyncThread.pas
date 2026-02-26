@@ -38,9 +38,9 @@
     
   Version 2.0.1 (2024-05-03)
 
-  Last change 2024-09-09
+  Last change 2026-02-25
 
-  ©2018-2024 František Milt
+  ©2018-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -77,6 +77,7 @@
     InterlockedOps      - github.com/TheLazyTomcat/Lib.InterlockedOps
     LinSyncObjs         - github.com/TheLazyTomcat/Lib.LinSyncObjs
     ListSorters         - github.com/TheLazyTomcat/Lib.ListSorters
+    ListUtils           - github.com/TheLazyTomcat/Lib.ListUtils
     MemVector           - github.com/TheLazyTomcat/Lib.MemVector
     NamedSharedItems    - github.com/TheLazyTomcat/Lib.NamedSharedItems
     SHA1                - github.com/TheLazyTomcat/Lib.SHA1

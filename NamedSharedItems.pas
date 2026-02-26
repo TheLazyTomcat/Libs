@@ -42,9 +42,9 @@
 
   Version 1.1.4 (2024-05-03)
 
-  Last change 2024-09-09
+  Last change 2026-02-25
 
-  ©2021-2024 František Milt
+  ©2021-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -78,6 +78,7 @@
     BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     HashBase           - github.com/TheLazyTomcat/Lib.HashBase
     InterlockedOps     - github.com/TheLazyTomcat/Lib.InterlockedOps
+    ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     SimpleFutex        - github.com/TheLazyTomcat/Lib.SimpleFutex
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream

@@ -22,9 +22,9 @@
 
   Version 1.5.1 (2024-05-03)
 
-  Last change 2024-10-04
+  Last change 2026-02-25
 
-  ©2015-2024 František Milt
+  ©2015-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -53,6 +53,7 @@
 
   Indirect dependencies:
     AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    ListUtils   - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StrRect     - github.com/TheLazyTomcat/Lib.StrRect
     UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
