@@ -12,11 +12,18 @@
     Set of functions providing some of the not-so-common bit-manipulating
     operations and other binary utilities.
 
-  Version 1.25.2 (2025-08-20)
+      WARNING - part of this library will soon be moved into a new, separate
+                library (preliminary named MemOps). This is because some of
+                provided functionality does not match original intended aim
+                of this library (bit-level operations).
+                Namely all memory and pointer operations will be moved (eg.
+                CopyBits, PtrAdvance or MemoryFind*).
 
-  Last change 2025-10-03
+  Version 1.26.1 (2026-03-24)
 
-  ©2014-2025 František Milt
+  Last change 2026-03-24
+
+  ©2014-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -107,8 +114,6 @@ unit BitOps;
   {$IFNDEF PurePascal}
     {$ASMMODE Intel}
   {$ENDIF}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ELSE}
   {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
@@ -185,21 +190,24 @@ uses
   SysUtils,
   AuxTypes{$IFDEF UseAuxExceptions}, AuxExceptions{$ENDIF};
 
+// Following must be after AuxTypes, and do not touch it!
+type
+  U64Type  = {$IF Declared(NativeUInt64E)}UInt64{$ELSE}Int64{$IFEND};
+  PU64Type = ^U64Type;
+
 {===============================================================================
     Library-specific exceptions
 ===============================================================================}
 type
   EBOException = class({$IFDEF UseAuxExceptions}EAEGeneralException{$ELSE}Exception{$ENDIF});
 
-  EBOUnknownFunction     = class(EBOException);
-  EBONoImplementation    = class(EBOException);
   EBOInvalidValue        = class(EBOException);
+  EBOSizeMismatch        = class(EBOException);
   EBOUnsupportedPlatform = class(EBOException);
 
   EBOConversionError  = class(EBOException);
   EBOInvalidCharacter = class(EBOConversionError);
   EBOBufferTooSmall   = class(EBOConversionError);
-  EBOSizeMismatch     = class(EBOConversionError);
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -247,23 +255,52 @@ const
 Function NumberToBitStr(Number: UInt8; BitStringFormat: TBitStringFormat): String; overload;
 Function NumberToBitStr(Number: UInt16; BitStringFormat: TBitStringFormat): String; overload;
 Function NumberToBitStr(Number: UInt32; BitStringFormat: TBitStringFormat): String; overload;
-Function NumberToBitStr(Number: UInt64; BitStringFormat: TBitStringFormat): String; overload;
+Function NumberToBitStr(Number: U64Type; BitStringFormat: TBitStringFormat): String; overload;
+
+Function NumberToBitStr(Number: Int8; BitStringFormat: TBitStringFormat): String; overload;
+Function NumberToBitStr(Number: Int16; BitStringFormat: TBitStringFormat): String; overload;
+Function NumberToBitStr(Number: Int32; BitStringFormat: TBitStringFormat): String; overload;
+{$IF Declared(NativeUInt64E)}
+Function NumberToBitStr(Number: Int64; BitStringFormat: TBitStringFormat): String; overload;
+{$IFEND}
 
 Function NumberToBitStr(Number: UInt8; Split: TBitStringSplit): String; overload;
 Function NumberToBitStr(Number: UInt16; Split: TBitStringSplit): String; overload;
 Function NumberToBitStr(Number: UInt32; Split: TBitStringSplit): String; overload;
-Function NumberToBitStr(Number: UInt64; Split: TBitStringSplit): String; overload;
+Function NumberToBitStr(Number: U64Type; Split: TBitStringSplit): String; overload;
+
+Function NumberToBitStr(Number: Int8; Split: TBitStringSplit): String; overload;
+Function NumberToBitStr(Number: Int16; Split: TBitStringSplit): String; overload;
+Function NumberToBitStr(Number: Int32; Split: TBitStringSplit): String; overload;
+{$IF Declared(NativeUInt64E)}
+Function NumberToBitStr(Number: Int64; Split: TBitStringSplit): String; overload;
+{$IFEND}
 
 Function NumberToBitStr(Number: UInt8): String; overload;
 Function NumberToBitStr(Number: UInt16): String; overload;
 Function NumberToBitStr(Number: UInt32): String; overload;
-Function NumberToBitStr(Number: UInt64): String; overload;
+Function NumberToBitStr(Number: U64Type): String; overload;
+
+Function NumberToBitStr(Number: Int8): String; overload;
+Function NumberToBitStr(Number: Int16): String; overload;
+Function NumberToBitStr(Number: Int32): String; overload;
+{$IF Declared(NativeUInt64E)}
+Function NumberToBitStr(Number: Int64): String; overload;
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
-Function BitStrToNumber(const BitString: String; BitStringFormat: TBitStringFormat): UInt64; overload;
-Function BitStrToNumber(const BitString: String; Split: TBitStringSplit): UInt64; overload;
-Function BitStrToNumber(const BitString: String): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitStrToNumber(const BitString: String; BitStringFormat: TBitStringFormat): U64Type; overload;
+Function BitStrToNumber(const BitString: String; Split: TBitStringSplit): U64Type; overload;
+Function BitStrToNumber(const BitString: String): U64Type; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function BitStrToUInt(const BitString: String; BitStringFormat: TBitStringFormat): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitStrToUInt(const BitString: String; Split: TBitStringSplit): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitStrToUInt(const BitString: String): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function BitStrToInt(const BitString: String; BitStringFormat: TBitStringFormat): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitStrToInt(const BitString: String; Split: TBitStringSplit): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitStrToInt(const BitString: String): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -272,21 +309,42 @@ Function TryBitStrToNumber(const BitString: String; out Value: UInt16; BitString
 Function TryBitStrToNumber(const BitString: String; out Value: UInt32; BitStringFormat: TBitStringFormat): Boolean; overload;
 Function TryBitStrToNumber(const BitString: String; out Value: UInt64; BitStringFormat: TBitStringFormat): Boolean; overload;
 
+Function TryBitStrToNumber(const BitString: String; out Value: Int8; BitStringFormat: TBitStringFormat): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int16; BitStringFormat: TBitStringFormat): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int32; BitStringFormat: TBitStringFormat): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int64; BitStringFormat: TBitStringFormat): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 Function TryBitStrToNumber(const BitString: String; out Value: UInt8; Split: TBitStringSplit): Boolean; overload;
 Function TryBitStrToNumber(const BitString: String; out Value: UInt16; Split: TBitStringSplit): Boolean; overload;
 Function TryBitStrToNumber(const BitString: String; out Value: UInt32; Split: TBitStringSplit): Boolean; overload;
 Function TryBitStrToNumber(const BitString: String; out Value: UInt64; Split: TBitStringSplit): Boolean; overload;
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int8; Split: TBitStringSplit): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int16; Split: TBitStringSplit): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int32; Split: TBitStringSplit): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int64; Split: TBitStringSplit): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 Function TryBitStrToNumber(const BitString: String; out Value: UInt8): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function TryBitStrToNumber(const BitString: String; out Value: UInt16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function TryBitStrToNumber(const BitString: String; out Value: UInt32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function TryBitStrToNumber(const BitString: String; out Value: UInt64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+Function TryBitStrToNumber(const BitString: String; out Value: Int8): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryBitStrToNumber(const BitString: String; out Value: Int64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
-Function BitStrToNumberDef(const BitString: String; Default: UInt64; BitStringFormat: TBitStringFormat): UInt64; overload;
-Function BitStrToNumberDef(const BitString: String; Default: UInt64; Split: TBitStringSplit): UInt64; overload;
-Function BitStrToNumberDef(const BitString: String; Default: UInt64): UInt64; overload;
+Function BitStrToNumberDef(const BitString: String; Default: U64Type; BitStringFormat: TBitStringFormat): U64Type; overload;
+Function BitStrToNumberDef(const BitString: String; Default: U64Type; Split: TBitStringSplit): U64Type; overload;
+Function BitStrToNumberDef(const BitString: String; Default: U64Type): U64Type; overload;
+
+{$IF Declared(NativeUInt64E)}
+Function BitStrToNumberDef(const BitString: String; Default: Int64; BitStringFormat: TBitStringFormat): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitStrToNumberDef(const BitString: String; Default: Int64; Split: TBitStringSplit): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitStrToNumberDef(const BitString: String; Default: Int64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -301,11 +359,22 @@ Function BitStrToNumberDef(const BitString: String; Default: UInt64): UInt64; ov
 Function NumberToOctStr(Number: UInt8): String; overload;
 Function NumberToOctStr(Number: UInt16): String; overload;
 Function NumberToOctStr(Number: UInt32): String; overload;
-Function NumberToOctStr(Number: UInt64): String; overload;
+Function NumberToOctStr(Number: U64Type): String; overload;
+
+Function NumberToOctStr(Number: Int8): String; overload;
+Function NumberToOctStr(Number: Int16): String; overload;
+Function NumberToOctStr(Number: Int32): String; overload;
+{$IF Declared(NativeUInt64E)}
+Function NumberToOctStr(Number: Int64): String; overload;
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
-Function OctStrToNumber(const OctString: String): UInt64;
+Function OctStrToNumber(const OctString: String): U64Type;
+
+Function OctStrToUInt(const OctString: String): UInt64;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function OctStrToInt(const OctString: String): Int64;{$IFDEF CanInline} inline;{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -314,9 +383,18 @@ Function TryOctStrToNumber(const OctString: String; out Value: UInt16): Boolean;
 Function TryOctStrToNumber(const OctString: String; out Value: UInt32): Boolean; overload;
 Function TryOctStrToNumber(const OctString: String; out Value: UInt64): Boolean; overload;
 
+Function TryOctStrToNumber(const OctString: String; out Value: Int8): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryOctStrToNumber(const OctString: String; out Value: Int16): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryOctStrToNumber(const OctString: String; out Value: Int32): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function TryOctStrToNumber(const OctString: String; out Value: Int64): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
-Function OctStrToNumberDef(const OctString: String; Default: UInt64): UInt64;
+Function OctStrToNumberDef(const OctString: String; Default: U64Type): U64Type; overload;
+
+{$IF Declared(NativeUInt64E)}
+Function OctStrToNumberDef(const OctString: String; Default: Int64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -478,6 +556,9 @@ Function TryBitStrToData(const Str: String; out Arr: TArrayOfBytes): Boolean; ov
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  ROL
+  ROLValue
+
   Rotates the number left - that is, the number is shifted left (towards higher
   places) by a selected amount of bits, while the shifted-out bits are inserted
   to the right (lower places).
@@ -491,7 +572,14 @@ Function TryBitStrToData(const Str: String; out Arr: TArrayOfBytes): Boolean; ov
 Function ROL(Value: UInt8; Shift: Integer): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function ROL(Value: UInt16; Shift: Integer): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function ROL(Value: UInt32; Shift: Integer): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function ROL(Value: UInt64; Shift: Integer): UInt64; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function ROL(Value: U64Type; Shift: Integer): U64Type; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function ROL(Value: Int8; Shift: Integer): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ROL(Value: Int16; Shift: Integer): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ROL(Value: Int32; Shift: Integer): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function ROL(Value: Int64; Shift: Integer): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -500,12 +588,20 @@ procedure ROLValue(var Value: UInt16; Shift: Integer); overload;{$IFDEF CanInlin
 procedure ROLValue(var Value: UInt32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure ROLValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure ROLValue(var Value: Int8; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ROLValue(var Value: Int16; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ROLValue(var Value: Int32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ROLValue(var Value: Int64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                Rotate right (ROR)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  ROR
+  RORValue
+
   Rotates the number right - the number is shifted right (towards lower places)
   by a selected amount of bits, while the shifted-out bits are inserted to the
   left (higher places).
@@ -519,7 +615,14 @@ procedure ROLValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
 Function ROR(Value: UInt8; Shift: Integer): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function ROR(Value: UInt16; Shift: Integer): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function ROR(Value: UInt32; Shift: Integer): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function ROR(Value: UInt64; Shift: Integer): UInt64; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function ROR(Value: U64Type; Shift: Integer): U64Type; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function ROR(Value: Int8; Shift: Integer): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ROR(Value: Int16; Shift: Integer): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ROR(Value: Int32; Shift: Integer): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function ROR(Value: Int64; Shift: Integer): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -528,12 +631,22 @@ procedure RORValue(var Value: UInt16; Shift: Integer); overload;{$IFDEF CanInlin
 procedure RORValue(var Value: UInt32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure RORValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure RORValue(var Value: Int8; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RORValue(var Value: Int16; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RORValue(var Value: Int32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RORValue(var Value: Int64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                           Rotate left with carry (RCL)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  RCLCarry
+  RCL
+  RCLValueCarry
+  RCLValue
+
   Rotates the number left with carry - works the same as ROL, but the number
   is being rotated trough carry flag, effectively making it n + 1 bits wide.
   When the number is shifted, the bit shifted in is taken from carry flag and
@@ -560,14 +673,28 @@ procedure RORValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
 Function RCLCarry(Value: UInt8; Shift: Integer; var CF: Boolean): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function RCLCarry(Value: UInt16; Shift: Integer; var CF: Boolean): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function RCLCarry(Value: UInt32; Shift: Integer; var CF: Boolean): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function RCLCarry(Value: UInt64; Shift: Integer; var CF: Boolean): UInt64; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function RCLCarry(Value: U64Type; Shift: Integer; var CF: Boolean): U64Type; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function RCLCarry(Value: Int8; Shift: Integer; var CF: Boolean): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCLCarry(Value: Int16; Shift: Integer; var CF: Boolean): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCLCarry(Value: Int32; Shift: Integer; var CF: Boolean): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function RCLCarry(Value: Int64; Shift: Integer; var CF: Boolean): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
 Function RCL(Value: UInt8; Shift: Integer; CF: Boolean = False): UInt8; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function RCL(Value: UInt16; Shift: Integer; CF: Boolean = False): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function RCL(Value: UInt32; Shift: Integer; CF: Boolean = False): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function RCL(Value: UInt64; Shift: Integer; CF: Boolean = False): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCL(Value: U64Type; Shift: Integer; CF: Boolean = False): U64Type; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function RCL(Value: Int8; Shift: Integer; CF: Boolean = False): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCL(Value: Int16; Shift: Integer; CF: Boolean = False): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCL(Value: Int32; Shift: Integer; CF: Boolean = False): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function RCL(Value: Int64; Shift: Integer; CF: Boolean = False): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -576,6 +703,11 @@ procedure RCLValueCarry(var Value: UInt16; Shift: Integer; var CF: Boolean); ove
 procedure RCLValueCarry(var Value: UInt32; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure RCLValueCarry(var Value: UInt64; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure RCLValueCarry(var Value: Int8; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCLValueCarry(var Value: Int16; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCLValueCarry(var Value: Int32; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCLValueCarry(var Value: Int64; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
 procedure RCLValue(var Value: UInt8; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
@@ -583,12 +715,22 @@ procedure RCLValue(var Value: UInt16; Shift: Integer; CF: Boolean = False); over
 procedure RCLValue(var Value: UInt32; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure RCLValue(var Value: UInt64; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure RCLValue(var Value: Int8; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCLValue(var Value: Int16; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCLValue(var Value: Int32; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCLValue(var Value: Int64; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                          Rotate right with carry (RCR)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  RCRCarry
+  RCR
+  RCRValueCarry
+  RCRValue
+
   Rotates the number right with carry - works the same as ROR, but the number
   is being shifted trough carry flag. See description of RCL for more info.
 
@@ -601,14 +743,28 @@ procedure RCLValue(var Value: UInt64; Shift: Integer; CF: Boolean = False); over
 Function RCRCarry(Value: UInt8; Shift: Integer; var CF: Boolean): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function RCRCarry(Value: UInt16; Shift: Integer; var CF: Boolean): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function RCRCarry(Value: UInt32; Shift: Integer; var CF: Boolean): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function RCRCarry(Value: UInt64; Shift: Integer; var CF: Boolean): UInt64; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function RCRCarry(Value: U64Type; Shift: Integer; var CF: Boolean): U64Type; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function RCRCarry(Value: Int8; Shift: Integer; var CF: Boolean): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCRCarry(Value: Int16; Shift: Integer; var CF: Boolean): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCRCarry(Value: Int32; Shift: Integer; var CF: Boolean): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function RCRCarry(Value: Int64; Shift: Integer; var CF: Boolean): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
 Function RCR(Value: UInt8; Shift: Integer; CF: Boolean = False): UInt8; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function RCR(Value: UInt16; Shift: Integer; CF: Boolean = False): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function RCR(Value: UInt32; Shift: Integer; CF: Boolean = False): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function RCR(Value: UInt64; Shift: Integer; CF: Boolean = False): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCR(Value: U64Type; Shift: Integer; CF: Boolean = False): U64Type; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function RCR(Value: Int8; Shift: Integer; CF: Boolean = False): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCR(Value: Int16; Shift: Integer; CF: Boolean = False): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function RCR(Value: Int32; Shift: Integer; CF: Boolean = False): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function RCR(Value: Int64; Shift: Integer; CF: Boolean = False): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -617,6 +773,11 @@ procedure RCRValueCarry(var Value: UInt16; Shift: Integer; var CF: Boolean); ove
 procedure RCRValueCarry(var Value: UInt32; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure RCRValueCarry(var Value: UInt64; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure RCRValueCarry(var Value: Int8; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCRValueCarry(var Value: Int16; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCRValueCarry(var Value: Int32; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCRValueCarry(var Value: Int64; Shift: Integer; var CF: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
 procedure RCRValue(var Value: UInt8; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
@@ -624,12 +785,20 @@ procedure RCRValue(var Value: UInt16; Shift: Integer; CF: Boolean = False); over
 procedure RCRValue(var Value: UInt32; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure RCRValue(var Value: UInt64; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure RCRValue(var Value: Int8; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCRValue(var Value: Int16; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCRValue(var Value: Int32; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure RCRValue(var Value: Int64; Shift: Integer; CF: Boolean = False); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                           Arithmetic left shift (SAL)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  SAL
+  SALValue
+
   This operation is identical to logical left shift (SHL).
 
   Assembly implementation uses instruction SAL.
@@ -641,7 +810,14 @@ procedure RCRValue(var Value: UInt64; Shift: Integer; CF: Boolean = False); over
 Function SAL(Value: UInt8; Shift: Integer): UInt8; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
 Function SAL(Value: UInt16; Shift: Integer): UInt16; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
 Function SAL(Value: UInt32; Shift: Integer): UInt32; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
-Function SAL(Value: UInt64; Shift: Integer): UInt64; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
+Function SAL(Value: U64Type; Shift: Integer): U64Type; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
+
+Function SAL(Value: Int8; Shift: Integer): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SAL(Value: Int16; Shift: Integer): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SAL(Value: Int32; Shift: Integer): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function SAL(Value: Int64; Shift: Integer): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -650,12 +826,20 @@ procedure SALValue(var Value: UInt16; Shift: Integer); overload;{$IFDEF CanInlin
 procedure SALValue(var Value: UInt32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SALValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure SALValue(var Value: Int8; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SALValue(var Value: Int16; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SALValue(var Value: Int32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SALValue(var Value: Int64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                           Arithmetic right shift (SAR)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  SAR
+  SARValue
+
   Shifts the number to the right (towards lower bits), while preserving the
   highest bit. For example...
 
@@ -674,7 +858,14 @@ procedure SALValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
 Function SAR(Value: UInt8; Shift: Integer): UInt8; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function SAR(Value: UInt16; Shift: Integer): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function SAR(Value: UInt32; Shift: Integer): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function SAR(Value: UInt64; Shift: Integer): UInt64; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function SAR(Value: U64Type; Shift: Integer): U64Type; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function SAR(Value: Int8; Shift: Integer): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SAR(Value: Int16; Shift: Integer): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SAR(Value: Int32; Shift: Integer): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function SAR(Value: Int64; Shift: Integer): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -683,12 +874,22 @@ procedure SARValue(var Value: UInt16; Shift: Integer); overload;{$IFDEF CanInlin
 procedure SARValue(var Value: UInt32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SARValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure SARValue(var Value: Int8; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SARValue(var Value: Int16; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SARValue(var Value: Int32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SARValue(var Value: Int64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                  Endianity swap
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  EndianSwap
+  SwapEndian
+  EndianSwapValue
+  SwapEndianValue
+
   Reverses order of bytes within the number or general data buffer.
 
   Assembly implementation uses instruction BSWAP.
@@ -696,11 +897,23 @@ procedure SARValue(var Value: UInt64; Shift: Integer); overload;{$IFDEF CanInlin
 
 Function EndianSwap(Value: UInt16): UInt16; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function EndianSwap(Value: UInt32): UInt32; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function EndianSwap(Value: UInt64): UInt64; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function EndianSwap(Value: U64Type): U64Type; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function EndianSwap(Value: Int16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function EndianSwap(Value: Int32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function EndianSwap(Value: Int64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 Function SwapEndian(Value: UInt16): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function SwapEndian(Value: UInt32): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function SwapEndian(Value: UInt64): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SwapEndian(Value: U64Type): U64Type; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function SwapEndian(Value: Int16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SwapEndian(Value: Int32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function SwapEndian(Value: Int64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -708,9 +921,17 @@ procedure EndianSwapValue(var Value: UInt16); overload;{$IFDEF CanInline} inline
 procedure EndianSwapValue(var Value: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure EndianSwapValue(var Value: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure EndianSwapValue(var Value: Int16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure EndianSwapValue(var Value: Int32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure EndianSwapValue(var Value: Int64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 procedure SwapEndianValue(var Value: UInt16); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SwapEndianValue(var Value: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SwapEndianValue(var Value: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapEndianValue(var Value: Int16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapEndianValue(var Value: Int32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapEndianValue(var Value: Int64); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -719,19 +940,25 @@ procedure SwapEndian(var Buffer; Size: TMemSize); overload;
 
 //------------------------------------------------------------------------------
 {
+  EndianSwapItems[N]
+  SwapEndianItems[N]
+
   Reverses byte order of individial items in a given array or vector.
 
   Number in the name denotes size of items in bits. Function without number
   accepts an explicitly given item size (in bytes).
 
-  Argument Arr should point to the first element/item in the array.
+    Argument Arr should point to the first element/item in the array to be
+    reversed.
 
-  Count gives number of items in the array (NOT its size in bytes).
+    Count gives number of items in the array that will be byte-swapped. Make
+    sure you do not give too high number as there are no overflow checks in
+    place.
 
-  Stride is a linear distance betveen two items (NOT a space between them,
-  distance from one item to another). Usually it equals to item size - it is
-  here for situations when manipulating an array of records and only one
-  field of each record needs to be swapped.
+    Stride is a linear distance betveen two items (NOT a space between them,
+    distance from one item to another). Usually it equals to item size - it
+    is here for situations when manipulating an array of records and only one
+    field of each record needs to be swapped.
 }
 procedure EndianSwapItems16(var Arr; Count,Stride: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF} overload;
 procedure EndianSwapItems32(var Arr; Count,Stride: TMemSize);{$IFNDEF PurePascal} register; assembler;{$ENDIF} overload;
@@ -765,6 +992,8 @@ procedure SwapEndianItems(var Arr; ItemSize,Count: TMemSize); overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BT
+
   Returns true when selected bit in the Value is set, false when it is clear.
 
   Assembly implementation uses instruction BT.
@@ -776,7 +1005,14 @@ procedure SwapEndianItems(var Arr; ItemSize,Count: TMemSize); overload;
 Function BT(Value: UInt8; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
 Function BT(Value: UInt16; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
 Function BT(Value: UInt32; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
-Function BT(Value: UInt64; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
+Function BT(Value: U64Type; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{$IFDEF CanInline} inline;{$ENDIF}{$ELSE} register; assembler;{$ENDIF}
+
+Function BT(Value: Int8; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BT(Value: Int16; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BT(Value: Int32; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function BT(Value: Int64; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -784,6 +1020,8 @@ Function BT(Value: UInt64; Bit: Integer): Boolean; overload;{$IFDEF PurePascal}{
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BTS
+
   Sets the selected bit in the Value (to 1) and returns true when the bit was
   previously set, false when it was clear.
 
@@ -798,12 +1036,19 @@ Function BTS(var Value: UInt16; Bit: Integer): Boolean; overload;{$IFNDEF PurePa
 Function BTS(var Value: UInt32; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BTS(var Value: UInt64; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
+Function BTS(var Value: Int8; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTS(var Value: Int16; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTS(var Value: Int32; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTS(var Value: Int64; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                             Bit test and reset (BTR)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BTR
+
   Resets the selected bit in the Value (to 0) and returns true when the bit was
   previously set, false when it was clear.
 
@@ -818,12 +1063,19 @@ Function BTR(var Value: UInt16; Bit: Integer): Boolean; overload;{$IFNDEF PurePa
 Function BTR(var Value: UInt32; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BTR(var Value: UInt64; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
+Function BTR(var Value: Int8; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTR(var Value: Int16; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTR(var Value: Int32; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTR(var Value: Int64; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                           Bit test and complement (BTC)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BTC
+
   Complements the selected bit in the Value (swaps its state, 0 <-> 1) and
   returns true when the bit was previously set, false when it was clear.
 
@@ -838,12 +1090,19 @@ Function BTC(var Value: UInt16; Bit: Integer): Boolean; overload;{$IFNDEF PurePa
 Function BTC(var Value: UInt32; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BTC(var Value: UInt64; Bit: Integer): Boolean; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
+Function BTC(var Value: Int8; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTC(var Value: Int16; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTC(var Value: Int32; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BTC(var Value: Int64; Bit: Integer): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                        Bit test and set to a given value
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BitSetTo
+
   Sets value of the selected bit in the number given in Value to a NewValue and
   returns its previous state.
 
@@ -856,12 +1115,19 @@ Function BitSetTo(var Value: UInt16; Bit: Integer; NewValue: Boolean): Boolean; 
 Function BitSetTo(var Value: UInt32; Bit: Integer; NewValue: Boolean): Boolean; overload;
 Function BitSetTo(var Value: UInt64; Bit: Integer; NewValue: Boolean): Boolean; overload;
 
+Function BitSetTo(var Value: Int8; Bit: Integer; NewValue: Boolean): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitSetTo(var Value: Int16; Bit: Integer; NewValue: Boolean): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitSetTo(var Value: Int32; Bit: Integer; NewValue: Boolean): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BitSetTo(var Value: Int64; Bit: Integer; NewValue: Boolean): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                              Bit scan forward (BSF)
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BSF
+
   Returns index of lowest set (1) bit in the passed number. If no bit is set,
   then -1 is returned.
 
@@ -871,7 +1137,14 @@ Function BitSetTo(var Value: UInt64; Bit: Integer; NewValue: Boolean): Boolean; 
 Function BSF(Value: UInt8): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BSF(Value: UInt16): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BSF(Value: UInt32): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function BSF(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function BSF(Value: U64Type): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function BSF(Value: Int8): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BSF(Value: Int16): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BSF(Value: Int32): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function BSF(Value: Int64): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -879,6 +1152,8 @@ Function BSF(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; as
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BSR
+
   Returns index of highest set bit in the passed number. If no bit is set, then
   -1 is returned.
 
@@ -888,7 +1163,14 @@ Function BSF(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; as
 Function BSR(Value: UInt8): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BSR(Value: UInt16): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
 Function BSR(Value: UInt32): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
-Function BSR(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+Function BSR(Value: U64Type): Integer; overload;{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+
+Function BSR(Value: Int8): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BSR(Value: Int16): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function BSR(Value: Int32): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function BSR(Value: Int64): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -896,6 +1178,8 @@ Function BSR(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; as
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  PopCount
+  
   Returns number of set (1) bits in the passed number. When no bit is set, it
   will return 0.
 
@@ -905,7 +1189,14 @@ Function BSR(Value: UInt64): Integer; overload;{$IFNDEF PurePascal} register; as
 Function PopCount(Value: UInt8): Integer; overload;
 Function PopCount(Value: UInt16): Integer; overload;
 Function PopCount(Value: UInt32): Integer; overload;
-Function PopCount(Value: UInt64): Integer; overload;
+Function PopCount(Value: U64Type): Integer; overload;
+
+Function PopCount(Value: Int8): Integer; overload;
+Function PopCount(Value: Int16): Integer; overload;
+Function PopCount(Value: Int32): Integer; overload;
+{$IF Declared(NativeUInt64E)}
+Function PopCount(Value: Int64): Integer; overload;
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -932,6 +1223,8 @@ procedure SetLowNibbleValue(var Value: UInt8; SetTo: TNibble);{$IFDEF CanInline}
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  GetFlagState
+
   When exact match is false, the following function will return true when at
   least one bit set in FlagBitmask is also set in the Value, false otherwise.
 
@@ -942,7 +1235,14 @@ procedure SetLowNibbleValue(var Value: UInt8; SetTo: TNibble);{$IFDEF CanInline}
 Function GetFlagState(Value,FlagBitmask: UInt8; ExactMatch: Boolean = False): Boolean; overload;
 Function GetFlagState(Value,FlagBitmask: UInt16; ExactMatch: Boolean = False): Boolean; overload;
 Function GetFlagState(Value,FlagBitmask: UInt32; ExactMatch: Boolean = False): Boolean; overload;
-Function GetFlagState(Value,FlagBitmask: UInt64; ExactMatch: Boolean = False): Boolean; overload;
+Function GetFlagState(Value,FlagBitmask: U64Type; ExactMatch: Boolean = False): Boolean; overload;
+
+Function GetFlagState(Value,FlagBitmask: Int8; ExactMatch: Boolean = False): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GetFlagState(Value,FlagBitmask: Int16; ExactMatch: Boolean = False): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GetFlagState(Value,FlagBitmask: Int32; ExactMatch: Boolean = False): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function GetFlagState(Value,FlagBitmask: Int64; ExactMatch: Boolean = False): Boolean; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -950,8 +1250,16 @@ Function GetFlagState(Value,FlagBitmask: UInt64; ExactMatch: Boolean = False): B
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  SetFlag
+  SetFlagValue
+  SetFlags_*
+  SetFlags
+  SetFlagsValue_*
+  SetFlagsValue
+
   Bits set in the FlagBitmask are also set (to 1) in the passed number and this
-  resulting number is then returned.
+  resulting number is then returned. Bits not set in the mask are copied to the
+  result without change.
 
   Functions accepting array of flags will set all bits within all the passed
   flag bistmasks.
@@ -965,7 +1273,14 @@ Function GetFlagState(Value,FlagBitmask: UInt64; ExactMatch: Boolean = False): B
 Function SetFlag(Value,FlagBitmask: UInt8): UInt8; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function SetFlag(Value,FlagBitmask: UInt16): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function SetFlag(Value,FlagBitmask: UInt32): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function SetFlag(Value,FlagBitmask: UInt64): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SetFlag(Value,FlagBitmask: U64Type): U64Type; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function SetFlag(Value,FlagBitmask: Int8): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SetFlag(Value,FlagBitmask: Int16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SetFlag(Value,FlagBitmask: Int32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function SetFlag(Value,FlagBitmask: Int64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -974,26 +1289,50 @@ procedure SetFlagValue(var Value: UInt16; FlagBitmask: UInt16); overload;{$IFDEF
 procedure SetFlagValue(var Value: UInt32; FlagBitmask: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SetFlagValue(var Value: UInt64; FlagBitmask: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure SetFlagValue(var Value: Int8; FlagBitmask: Int8); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetFlagValue(var Value: Int16; FlagBitmask: Int16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetFlagValue(var Value: Int32; FlagBitmask: Int32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetFlagValue(var Value: Int64; FlagBitmask: Int64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
-Function SetFlags_8(Value: UInt8; Flags: array of UInt8): UInt8;
-Function SetFlags_16(Value: UInt16; Flags: array of UInt16): UInt16;
-Function SetFlags_32(Value: UInt32; Flags: array of UInt32): UInt32;
-Function SetFlags_64(Value: UInt64; Flags: array of UInt64): UInt64;
+Function SetFlags_8(Value: UInt8; Flags: array of UInt8): UInt8; overload;
+Function SetFlags_16(Value: UInt16; Flags: array of UInt16): UInt16; overload;
+Function SetFlags_32(Value: UInt32; Flags: array of UInt32): UInt32; overload;
+Function SetFlags_64(Value: U64Type; Flags: array of U64Type): U64Type; overload;
+
+Function SetFlags_8(Value: Int8; Flags: array of Int8): Int8; overload;
+Function SetFlags_16(Value: Int16; Flags: array of Int16): Int16; overload;
+Function SetFlags_32(Value: Int32; Flags: array of Int32): Int32; overload;
+{$IF Declared(NativeUInt64E)}
+Function SetFlags_64(Value: Int64; Flags: array of Int64): Int64; overload;
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
 Function SetFlags(Value: UInt8; Flags: array of UInt8): UInt8; overload;
 Function SetFlags(Value: UInt16; Flags: array of UInt16): UInt16; overload;
 Function SetFlags(Value: UInt32; Flags: array of UInt32): UInt32; overload;
-Function SetFlags(Value: UInt64; Flags: array of UInt64): UInt64; overload;
+Function SetFlags(Value: U64Type; Flags: array of U64Type): U64Type; overload;
+
+Function SetFlags(Value: Int8; Flags: array of Int8): Int8; overload;
+Function SetFlags(Value: Int16; Flags: array of Int16): Int16; overload;
+Function SetFlags(Value: Int32; Flags: array of Int32): Int32; overload;
+{$IF Declared(NativeUInt64E)}
+Function SetFlags(Value: Int64; Flags: array of Int64): Int64; overload;
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
-procedure SetFlagsValue_8(var Value: UInt8; Flags: array of UInt8);
-procedure SetFlagsValue_16(var Value: UInt16; Flags: array of UInt16);
-procedure SetFlagsValue_32(var Value: UInt32; Flags: array of UInt32);
-procedure SetFlagsValue_64(var Value: UInt64; Flags: array of UInt64);
+procedure SetFlagsValue_8(var Value: UInt8; Flags: array of UInt8); overload;
+procedure SetFlagsValue_16(var Value: UInt16; Flags: array of UInt16); overload;
+procedure SetFlagsValue_32(var Value: UInt32; Flags: array of UInt32); overload;
+procedure SetFlagsValue_64(var Value: UInt64; Flags: array of UInt64); overload;
+
+procedure SetFlagsValue_8(var Value: Int8; Flags: array of Int8); overload;
+procedure SetFlagsValue_16(var Value: Int16; Flags: array of Int16); overload;
+procedure SetFlagsValue_32(var Value: Int32; Flags: array of Int32); overload;
+procedure SetFlagsValue_64(var Value: Int64; Flags: array of Int64); overload;
 
 //------------------------------------------------------------------------------
 
@@ -1002,14 +1341,27 @@ procedure SetFlagsValue(var Value: UInt16; Flags: array of UInt16); overload;
 procedure SetFlagsValue(var Value: UInt32; Flags: array of UInt32); overload;
 procedure SetFlagsValue(var Value: UInt64; Flags: array of UInt64); overload;
 
+procedure SetFlagsValue(var Value: Int8; Flags: array of Int8); overload;
+procedure SetFlagsValue(var Value: Int16; Flags: array of Int16); overload;
+procedure SetFlagsValue(var Value: Int32; Flags: array of Int32); overload;
+procedure SetFlagsValue(var Value: Int64; Flags: array of Int64); overload;
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                    Reset flag
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  ResetFlag
+  ResetFlagValue
+  ResetFlags_*
+  ResetFlags
+  ResetFlagsValue_*
+  ResetFlagsValue
+
   Bits set in the FlagBitmask are reset (to 0) in the passed number and this
-  resulting number is then returned.
+  resulting number is then returned. Bits not set in the mask are copied to the
+  result without change.
 
   Functions accepting array of flags will reset all bits within all the passed
   flag bistmasks.
@@ -1023,7 +1375,14 @@ procedure SetFlagsValue(var Value: UInt64; Flags: array of UInt64); overload;
 Function ResetFlag(Value,FlagBitmask: UInt8): UInt8; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function ResetFlag(Value,FlagBitmask: UInt16): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function ResetFlag(Value,FlagBitmask: UInt32): UInt32; overload;{$IFDEF CanInline} inline;{$ENDIF}
-Function ResetFlag(Value,FlagBitmask: UInt64): UInt64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ResetFlag(Value,FlagBitmask: U64Type): U64Type; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function ResetFlag(Value,FlagBitmask: Int8): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ResetFlag(Value,FlagBitmask: Int16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ResetFlag(Value,FlagBitmask: Int32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function ResetFlag(Value,FlagBitmask: Int64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -1032,26 +1391,50 @@ procedure ResetFlagValue(var Value: UInt16; FlagBitmask: UInt16); overload;{$IFD
 procedure ResetFlagValue(var Value: UInt32; FlagBitmask: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure ResetFlagValue(var Value: UInt64; FlagBitmask: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure ResetFlagValue(var Value: Int8; FlagBitmask: Int8); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ResetFlagValue(var Value: Int16; FlagBitmask: Int16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ResetFlagValue(var Value: Int32; FlagBitmask: Int32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ResetFlagValue(var Value: Int64; FlagBitmask: Int64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 //------------------------------------------------------------------------------
 
-Function ResetFlags_8(Value: UInt8; Flags: array of UInt8): UInt8;
-Function ResetFlags_16(Value: UInt16; Flags: array of UInt16): UInt16;
-Function ResetFlags_32(Value: UInt32; Flags: array of UInt32): UInt32;
-Function ResetFlags_64(Value: UInt64; Flags: array of UInt64): UInt64;
+Function ResetFlags_8(Value: UInt8; Flags: array of UInt8): UInt8; overload;
+Function ResetFlags_16(Value: UInt16; Flags: array of UInt16): UInt16; overload;
+Function ResetFlags_32(Value: UInt32; Flags: array of UInt32): UInt32; overload;
+Function ResetFlags_64(Value: U64Type; Flags: array of U64Type): U64Type; overload;
+
+Function ResetFlags_8(Value: Int8; Flags: array of Int8): Int8; overload;
+Function ResetFlags_16(Value: Int16; Flags: array of Int16): Int16; overload;
+Function ResetFlags_32(Value: Int32; Flags: array of Int32): Int32; overload;
+{$IF Declared(NativeUInt64E)}
+Function ResetFlags_64(Value: Int64; Flags: array of Int64): Int64; overload;
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
 Function ResetFlags(Value: UInt8; Flags: array of UInt8): UInt8; overload;
 Function ResetFlags(Value: UInt16; Flags: array of UInt16): UInt16; overload;
 Function ResetFlags(Value: UInt32; Flags: array of UInt32): UInt32; overload;
-Function ResetFlags(Value: UInt64; Flags: array of UInt64): UInt64; overload;
+Function ResetFlags(Value: U64Type; Flags: array of U64Type): U64Type; overload;
+
+Function ResetFlags(Value: Int8; Flags: array of Int8): Int8; overload;
+Function ResetFlags(Value: Int16; Flags: array of Int16): Int16; overload;
+Function ResetFlags(Value: Int32; Flags: array of Int32): Int32; overload;
+{$IF Declared(NativeUInt64E)}
+Function ResetFlags(Value: Int64; Flags: array of Int64): Int64; overload;
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
-procedure ResetFlagsValue_8(var Value: UInt8; Flags: array of UInt8);
-procedure ResetFlagsValue_16(var Value: UInt16; Flags: array of UInt16);
-procedure ResetFlagsValue_32(var Value: UInt32; Flags: array of UInt32);
-procedure ResetFlagsValue_64(var Value: UInt64; Flags: array of UInt64);
+procedure ResetFlagsValue_8(var Value: UInt8; Flags: array of UInt8); overload;
+procedure ResetFlagsValue_16(var Value: UInt16; Flags: array of UInt16); overload;
+procedure ResetFlagsValue_32(var Value: UInt32; Flags: array of UInt32); overload;
+procedure ResetFlagsValue_64(var Value: UInt64; Flags: array of UInt64); overload;
+
+procedure ResetFlagsValue_8(var Value: Int8; Flags: array of Int8); overload;
+procedure ResetFlagsValue_16(var Value: Int16; Flags: array of Int16); overload;
+procedure ResetFlagsValue_32(var Value: Int32; Flags: array of Int32); overload;
+procedure ResetFlagsValue_64(var Value: Int64; Flags: array of Int64); overload;
 
 //------------------------------------------------------------------------------
 
@@ -1060,21 +1443,36 @@ procedure ResetFlagsValue(var Value: UInt16; Flags: array of UInt16); overload;
 procedure ResetFlagsValue(var Value: UInt32; Flags: array of UInt32); overload;
 procedure ResetFlagsValue(var Value: UInt64; Flags: array of UInt64); overload;
 
+procedure ResetFlagsValue(var Value: Int8; Flags: array of Int8); overload;
+procedure ResetFlagsValue(var Value: Int16; Flags: array of Int16); overload;
+procedure ResetFlagsValue(var Value: Int32; Flags: array of Int32); overload;
+procedure ResetFlagsValue(var Value: Int64; Flags: array of Int64); overload;
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                  Set flag state
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  SetFlagState
+  SetFlagStateValue
+
   Sets or resets (depending on NewState; false = reset, true = set) all bits
   selected (set to 1) in FlagBitmask in the passed number Value and returns the
-  result.
+  result. Bits not set in the mask are copied without change.
 }
 
 Function SetFlagState(Value,FlagBitmask: UInt8; NewState: Boolean): UInt8; overload;
 Function SetFlagState(Value,FlagBitmask: UInt16; NewState: Boolean): UInt16; overload;
 Function SetFlagState(Value,FlagBitmask: UInt32; NewState: Boolean): UInt32; overload;
-Function SetFlagState(Value,FlagBitmask: UInt64; NewState: Boolean): UInt64; overload;
+Function SetFlagState(Value,FlagBitmask: U64Type; NewState: Boolean): U64Type; overload;
+
+Function SetFlagState(Value,FlagBitmask: Int8; NewState: Boolean): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SetFlagState(Value,FlagBitmask: Int16; NewState: Boolean): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SetFlagState(Value,FlagBitmask: Int32; NewState: Boolean): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function SetFlagState(Value,FlagBitmask: Int64; NewState: Boolean): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -1083,26 +1481,40 @@ procedure SetFlagStateValue(var Value: UInt16; FlagBitmask: UInt16; NewState: Bo
 procedure SetFlagStateValue(var Value: UInt32; FlagBitmask: UInt32; NewState: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SetFlagStateValue(var Value: UInt64; FlagBitmask: UInt64; NewState: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure SetFlagStateValue(var Value: Int8; FlagBitmask: Int8; NewState: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetFlagStateValue(var Value: Int16; FlagBitmask: Int16; NewState: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetFlagStateValue(var Value: Int32; FlagBitmask: Int32; NewState: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetFlagStateValue(var Value: Int64; FlagBitmask: Int64; NewState: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                     Get bits
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  GetBits
+
   Returns contiguous segment of bits from passed Value, selected by a bit range.
 
   When ShiftDown is true, the extracted bits are shifted down so that the first
-  extracted bit is at lowest position in the result, otherwise the bit segment
-  is left at its original position.
+  extracted bit is at lowest position (bit 0) in the result, otherwise the bit
+  segment is left at its original position.
 
-  Bit indices are taken module 8, 16, 32 and 64, depending on the argument
+  Bit indices are taken modulo 8, 16, 32 and 64, depending on the argument
   width.
 }
 
 Function GetBits(Value: UInt8; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt8; overload;
 Function GetBits(Value: UInt16; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt16; overload;
 Function GetBits(Value: UInt32; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt32; overload;
-Function GetBits(Value: UInt64; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt64; overload;
+Function GetBits(Value: U64Type; FromBit,ToBit: Integer; ShiftDown: Boolean = True): U64Type; overload;
+
+Function GetBits(Value: Int8; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GetBits(Value: Int16; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function GetBits(Value: Int32; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function GetBits(Value: Int64; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1110,23 +1522,33 @@ Function GetBits(Value: UInt64; FromBit,ToBit: Integer; ShiftDown: Boolean = Tru
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  SetBits
+  SetBitsValue
+
   Replaces contiguous segment of bits selected by range in Value by
   corresponding bits from the NewBits.
 
-  Parameter ShiftUP is counterpart to ShiftDown in GetBits. When it is true,
+  Parameter ShiftUp is counterpart to ShiftDown in GetBits. When it is true,
   the deposited bits (NewBits parameter) are shifted up so that the first bit
   (bit 0) becomes the first deposited bit. When false, the NewBits are taken
   without change, meaning the deposited bits are taken from corresponding
-  location in the NewBits, not from the low-order bits.
+  locations in the NewBits, not from the low-order bits.
 
-  Bit indices are taken module 8, 16, 32 and 64, depending on the argument
+  Bit indices are taken modulo 8, 16, 32 and 64, depending on the argument
   width.
 }
 
 Function SetBits(Value,NewBits: UInt8; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt8; overload;
 Function SetBits(Value,NewBits: UInt16; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt16; overload;
 Function SetBits(Value,NewBits: UInt32; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt32; overload;
-Function SetBits(Value,NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt64; overload;
+Function SetBits(Value,NewBits: U64Type; FromBit,ToBit: Integer; ShiftUp: Boolean = True): U64Type; overload;
+
+Function SetBits(Value,NewBits: Int8; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SetBits(Value,NewBits: Int16; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function SetBits(Value,NewBits: Int32; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function SetBits(Value,NewBits: Int64; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -1135,19 +1557,34 @@ procedure SetBitsValue(var Value: UInt16; NewBits: UInt16; FromBit,ToBit: Intege
 procedure SetBitsValue(var Value: UInt32; NewBits: UInt32; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SetBitsValue(var Value: UInt64; NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure SetBitsValue(var Value: Int8; NewBits: Int8; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetBitsValue(var Value: Int16; NewBits: Int16; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetBitsValue(var Value: Int32; NewBits: Int32; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SetBitsValue(var Value: Int64; NewBits: Int64; FromBit,ToBit: Integer; ShiftUp: Boolean = True); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                   Reverse bits
 ================================================================================
 -------------------------------------------------------------------------------}
 {
-  Reverses all bits within a given number.
+  ReverseBits
+  ReverseBitsValue
+
+  Reverses (reflects) all bits within a given number.
 }
 
 Function ReverseBits(Value: UInt8): UInt8; overload;
 Function ReverseBits(Value: UInt16): UInt16; overload;
 Function ReverseBits(Value: UInt32): UInt32; overload;
-Function ReverseBits(Value: UInt64): UInt64; overload;
+Function ReverseBits(Value: U64Type): U64Type; overload;
+
+Function ReverseBits(Value: Int8): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ReverseBits(Value: Int16): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ReverseBits(Value: Int32): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function ReverseBits(Value: Int64): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -1156,13 +1593,20 @@ procedure ReverseBitsValue(var Value: UInt16); overload;{$IFDEF CanInline} inlin
 procedure ReverseBitsValue(var Value: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure ReverseBitsValue(var Value: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure ReverseBitsValue(var Value: Int8); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ReverseBitsValue(var Value: Int16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ReverseBitsValue(var Value: Int32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure ReverseBitsValue(var Value: Int64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                Leading zero count
 ================================================================================
 -------------------------------------------------------------------------------}
 {
-  Returns number of leading most significant zero bits (number of zero bits
+  LZCount
+
+  Returns number of leading (most significant) zero bits (number of zero bits
   above the highest set bit). If the number is zero, it will return size of
   the number (in bits).
 
@@ -1172,7 +1616,14 @@ procedure ReverseBitsValue(var Value: UInt64); overload;{$IFDEF CanInline} inlin
 Function LZCount(Value: UInt8): Integer; overload;
 Function LZCount(Value: UInt16): Integer; overload;
 Function LZCount(Value: UInt32): Integer; overload;
-Function LZCount(Value: UInt64): Integer; overload;
+Function LZCount(Value: U64Type): Integer; overload;
+
+Function LZCount(Value: Int8): Integer; overload;
+Function LZCount(Value: Int16): Integer; overload;
+Function LZCount(Value: Int32): Integer; overload;
+{$IF Declared(NativeUInt64E)}
+Function LZCount(Value: Int64): Integer; overload;
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1180,7 +1631,9 @@ Function LZCount(Value: UInt64): Integer; overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
-  Returns number of trailing least significant zero bits (number of zero bits
+  TZCount
+
+  Returns number of trailing (least significant) zero bits (number of zero bits
   below the lowest set bit). If the number is zero, it will return size of the
   number (in bits).
 
@@ -1190,7 +1643,14 @@ Function LZCount(Value: UInt64): Integer; overload;
 Function TZCount(Value: UInt8): Integer; overload;
 Function TZCount(Value: UInt16): Integer; overload;
 Function TZCount(Value: UInt32): Integer; overload;
-Function TZCount(Value: UInt64): Integer; overload;
+Function TZCount(Value: U64Type): Integer; overload;
+
+Function TZCount(Value: Int8): Integer; overload;
+Function TZCount(Value: Int16): Integer; overload;
+Function TZCount(Value: Int32): Integer; overload;
+{$IF Declared(NativeUInt64E)}
+Function TZCount(Value: Int64): Integer; overload;
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1198,6 +1658,8 @@ Function TZCount(Value: UInt64): Integer; overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  ExtractBits
+
   Extracts contiguous segment of bits from given value, selected by a starting
   bit index and length of the segment.
   The bits are written to the result from lowest bit up. Bits above length are
@@ -1215,7 +1677,14 @@ Function TZCount(Value: UInt64): Integer; overload;
 Function ExtractBits(Value: UInt8; Start,Length: Integer): UInt8; overload;
 Function ExtractBits(Value: UInt16; Start,Length: Integer): UInt16; overload;
 Function ExtractBits(Value: UInt32; Start,Length: Integer): UInt32; overload;
-Function ExtractBits(Value: UInt64; Start,Length: Integer): UInt64; overload;
+Function ExtractBits(Value: U64Type; Start,Length: Integer): U64Type; overload;
+
+Function ExtractBits(Value: Int8; Start,Length: Integer): Int8; overload;
+Function ExtractBits(Value: Int16; Start,Length: Integer): Int16; overload;
+Function ExtractBits(Value: Int32; Start,Length: Integer): Int32; overload;
+{$IF Declared(NativeUInt64E)}
+Function ExtractBits(Value: Int64; Start,Length: Integer): Int64; overload;
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1223,6 +1692,9 @@ Function ExtractBits(Value: UInt64; Start,Length: Integer): UInt64; overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  DepositBits
+  DepositBitsValue
+
   Deposits contiguous segment of bits from parameter NewBits to a selected
   position (Start) in Value and returns it. Bits are taken from low-order
   positions (starting from bit 0).
@@ -1237,7 +1709,14 @@ Function ExtractBits(Value: UInt64; Start,Length: Integer): UInt64; overload;
 Function DepositBits(Value,NewBits: UInt8; Start,Length: Integer): UInt8; overload;
 Function DepositBits(Value,NewBits: UInt16; Start,Length: Integer): UInt16; overload;
 Function DepositBits(Value,NewBits: UInt32; Start,Length: Integer): UInt32; overload;
-Function DepositBits(Value,NewBits: UInt64; Start,Length: Integer): UInt64; overload;
+Function DepositBits(Value,NewBits: U64Type; Start,Length: Integer): U64Type; overload;
+
+Function DepositBits(Value,NewBits: Int8; Start,Length: Integer): Int8; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function DepositBits(Value,NewBits: Int16; Start,Length: Integer): Int16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function DepositBits(Value,NewBits: Int32; Start,Length: Integer): Int32; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function DepositBits(Value,NewBits: Int64; Start,Length: Integer): Int64; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -1246,15 +1725,22 @@ procedure DepositBitsValue(var Value: UInt16; NewBits: UInt16; Start,Length: Int
 procedure DepositBitsValue(var Value: UInt32; NewBits: UInt32; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure DepositBitsValue(var Value: UInt64; NewBits: UInt64; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 
+procedure DepositBitsValue(var Value: Int8; NewBits: Int8; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure DepositBitsValue(var Value: Int16; NewBits: Int16; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure DepositBitsValue(var Value: Int32; NewBits: Int32; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure DepositBitsValue(var Value: Int64; NewBits: Int64; Start,Length: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
 {-------------------------------------------------------------------------------
 ================================================================================
                               Parallel bits extract
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  ParallelBitsExtract
+
   Extracts bits from value using a mask - bits that are set (to 1) in the mask
   are extracted, other bits are ignored. The extracted bits are written into
-  result from the lowest bit (bit 0) up. Unused bit in the result are zeroed.
+  result from the lowest bit (bit 0) up. Unused bits in the result are zeroed.
 
   Assembly implementation uses instruction PEXT.
 }
@@ -1262,7 +1748,14 @@ procedure DepositBitsValue(var Value: UInt64; NewBits: UInt64; Start,Length: Int
 Function ParallelBitsExtract(Value,Mask: UInt8): UInt8; overload;
 Function ParallelBitsExtract(Value,Mask: UInt16): UInt16; overload;
 Function ParallelBitsExtract(Value,Mask: UInt32): UInt32; overload;
-Function ParallelBitsExtract(Value,Mask: UInt64): UInt64; overload;
+Function ParallelBitsExtract(Value,Mask: U64Type): U64Type; overload;
+
+Function ParallelBitsExtract(Value,Mask: Int8): Int8; overload;
+Function ParallelBitsExtract(Value,Mask: Int16): Int16; overload;
+Function ParallelBitsExtract(Value,Mask: Int32): Int32; overload;
+{$IF Declared(NativeUInt64E)}
+Function ParallelBitsExtract(Value,Mask: Int64): Int64; overload;
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1270,6 +1763,8 @@ Function ParallelBitsExtract(Value,Mask: UInt64): UInt64; overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  ParallelBitsDeposit
+
   Deposits bits from value to result using a mask - it takes low order bits
   from value and puts them at locations in result corresponding to set bits
   in the mask, in the order they appear (so first bit from value is put into
@@ -1282,7 +1777,14 @@ Function ParallelBitsExtract(Value,Mask: UInt64): UInt64; overload;
 Function ParallelBitsDeposit(Value,Mask: UInt8): UInt8; overload;
 Function ParallelBitsDeposit(Value,Mask: UInt16): UInt16; overload;
 Function ParallelBitsDeposit(Value,Mask: UInt32): UInt32; overload;
-Function ParallelBitsDeposit(Value,Mask: UInt64): UInt64; overload;
+Function ParallelBitsDeposit(Value,Mask: U64Type): U64Type; overload;
+
+Function ParallelBitsDeposit(Value,Mask: Int8): Int8; overload;
+Function ParallelBitsDeposit(Value,Mask: Int16): Int16; overload;
+Function ParallelBitsDeposit(Value,Mask: Int32): Int32; overload;
+{$IF Declared(NativeUInt64E)}
+Function ParallelBitsDeposit(Value,Mask: Int64): Int64; overload;
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1290,13 +1792,23 @@ Function ParallelBitsDeposit(Value,Mask: UInt64): UInt64; overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BitParity
+
   Bit parity returns true when the number contains an even number or zero set
   bits, false otherwise.
 }
+
 Function BitParity(Value: UInt8): Boolean; overload;
 Function BitParity(Value: UInt16): Boolean; overload;
 Function BitParity(Value: UInt32): Boolean; overload;
-Function BitParity(Value: UInt64): Boolean; overload;
+Function BitParity(Value: U64Type): Boolean; overload;
+
+Function BitParity(Value: Int8): Boolean; overload;
+Function BitParity(Value: Int16): Boolean; overload;
+Function BitParity(Value: Int32): Boolean; overload;
+{$IF Declared(NativeUInt64E)}
+Function BitParity(Value: Int64): Boolean; overload;
+{$IFEND}
 
 
 {===============================================================================
@@ -1309,10 +1821,55 @@ Function BitParity(Value: UInt64): Boolean; overload;
 
 {-------------------------------------------------------------------------------
 ================================================================================
+                               Pointer conversions
+================================================================================
+-------------------------------------------------------------------------------}
+{
+  PtrToInt
+  Ptr2Int
+  PtrToUInt
+  Ptr2UInt
+
+  IntToPtr
+  Int2Ptr
+  UIntToPtr
+  UInt2Ptr
+
+  Set of funtions to be used when converting between pointers and pointer-sized
+  integers. They are intended for in-line conversions where they should replace
+  direct type castings, which usually produce warnings in some compilers (FPC).
+
+  They are written in a way as to minimize overhead - they are inlined where
+  possible, where not possible and if use of assembly is allowed, they are
+  implemented in minimal assembly code (no operation in x87 - only a call and
+  immediate return, one MOV instruction in x64).
+}
+
+Function PtrToInt(Ptr: Pointer): PtrInt;{$IFDEF CanInline} inline;{$ELSE}{$IFNDEF PurePascal} register; assembler;{$ENDIF}{$ENDIF}
+Function Ptr2Int(Ptr: Pointer): PtrInt;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function PtrToUInt(Ptr: Pointer): PtrUInt;{$IFDEF CanInline} inline;{$ELSE}{$IFNDEF PurePascal} register; assembler;{$ENDIF}{$ENDIF}
+Function Ptr2UInt(Ptr: Pointer): PtrUInt;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function IntToPtr(I: PtrInt): Pointer;{$IFDEF CanInline} inline;{$ELSE}{$IFNDEF PurePascal} register; assembler;{$ENDIF}{$ENDIF}
+Function Int2Ptr(I: PtrInt): Pointer;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function UIntToPtr(U: PtrUInt): Pointer;{$IFDEF CanInline} inline;{$ELSE}{$IFNDEF PurePascal} register; assembler;{$ENDIF}{$ENDIF}
+Function UInt2Ptr(U: PtrUInt): Pointer;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+================================================================================
                            Pointer arithmetic helpers
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  PtrAdvance
+  PtrAdvanceVar
+  AdvancePtr
+  AdvancePtrVar
+
   Following functions are to be used in situations where a pointer needs to be
   incremented or decremented by an arbitrary offset and doing it in-situ is not
   desirable or possible.
@@ -1336,10 +1893,39 @@ procedure AdvancePtrVar(var Ptr: Pointer; Count: Integer; Stride: TMemSize); ove
 
 {-------------------------------------------------------------------------------
 ================================================================================
+                               Pointer difference
+================================================================================
+-------------------------------------------------------------------------------}
+{
+  PtrDifference
+  PtrDiff
+  PtrDistance
+  PtrDist
+
+  All these functions are returning signed difference between two addresses
+  (pointers), effectively calculating B - A (as if those were signed integers).
+
+  Given how the result is computed, it can overflow (note that overflow errors
+  are explicitly supressed), which means you cannot infer mutual relation of
+  the two pointers (use PtrCompare or PtrCompareRel for that purpose). These
+  function should only be used to calculate difference between two pointers
+  that are known to be close (at most High(TMemOffset) distant). 
+}
+Function PtrDifference(A,B: Pointer): TMemOffset;{$IFDEF CanInline} inline;{$ENDIF}
+Function PtrDiff(A,B: Pointer): TMemOffset;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function PtrDistance(A,B: Pointer): TMemOffset;{$IFDEF CanInline} inline;{$ENDIF}
+Function PtrDist(A,B: Pointer): TMemOffset;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+================================================================================
                                Address comparison
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  PtrCompare
+  ComparePtr
+
   Compares addresses of two given pointers.
 
   If pointer A is smaller (the address is lower) than B, then a negative value
@@ -1347,6 +1933,33 @@ procedure AdvancePtrVar(var Ptr: Pointer; Count: Integer; Stride: TMemSize); ove
   the two pointers point to the same address, then zero is returned.
 }
 Function PtrCompare(A,B: Pointer): Integer;
+Function ComparePtr(A,B: Pointer): Integer;{$IFDEF CanInline} inline;{$ENDIF}
+
+//------------------------------------------------------------------------------
+{
+  TPtrRelation
+
+  Used to select relation between two pointers, see description of function
+  PtrCompareRel for more details.
+}
+type
+  TPtrRelation = (
+    relSame,relNotSame,relLower,relNotLower,relLowerOrSame,relNotLowerNorSame,
+    relHigher,relNotHigher,relHigherOrSame,relNotHigherNorSame);
+
+{
+  PtrCompareRel
+  ComparePtrRel
+
+  Checks whether the two given pointers are in the selected relation. When
+  they are, then true is returned, when they are not, then false is returned.
+
+  For example, if relHigher is selected as relation, the function will return
+  true only when the first given pointer (A) will point to a higher address
+  than the second pointer (B).
+}
+Function PtrCompareRel(A,B: Pointer; Relation: TPtrRelation = relSame): Boolean;
+Function ComparePtrRel(A,B: Pointer; Relation: TPtrRelation = relSame): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1355,38 +1968,86 @@ Function PtrCompare(A,B: Pointer): Integer;
 -------------------------------------------------------------------------------}
 type
 {
-  More alignments can be added later anywhere into the following enumeration,
-  so do not assume anything about the numerical value or position of any enum
-  value.
+  TMemoryAlignment
+
+  This enum is used when selecting a desired alignment or probing for actual
+  existing alignment.
+
+  It contains two complementary groups of values - one group is for selecting
+  bit alignments, the other for byte alignments.
+
+    WARNING - more alignments can be added later anywhere into this
+              enumeration, so do not assume anything about the numerical
+              value or position of any individual value.
 }
   TMemoryAlignment = (maNone,
-    ma8bit,ma16bit,ma32bit,ma64bit,ma128bit,ma256bit,ma512bit,ma1024bit,ma2048bit,
-    ma1byte,ma2byte,ma4byte,ma8byte,ma16byte,ma32byte,ma64byte,ma128byte,ma256byte);
+    ma8bit,ma16bit,ma32bit,ma64bit,ma128bit,ma256bit,ma512bit,ma1024bit,
+    ma1kbit,ma2kbit,ma4kbit,ma8kbit,ma16kbit,ma32kbit,
+    ma1byte,ma2byte,ma4byte,ma8byte,ma16byte,ma32byte,ma64byte,ma128byte,
+    ma256byte,ma512byte,ma1024byte,ma1kbyte,ma2kbyte,ma4kbyte,ma1mbyte);
 
 //------------------------------------------------------------------------------
 
 {
-  AlignmentBytes returns number of bytes corresponding to requested alignment.
+  AlignmentBytes
+
+  Returns number of bytes corresponding to requested alignment.
 }
 Function AlignmentBytes(Alignment: TMemoryAlignment): TMemSize;
 
+{
+  AlignmentBits
+
+  Returns number of bits corresponding to requested alignment.
+  This number will always be an integral multiple of 8.
+}
+Function AlignmentBits(Alignment: TMemoryAlignment): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
+
+{
+  AlignmentSwitch
+
+  Switches type of alignment - that is, it will return corresponding bit
+  alignment if byte alignment is passed and vice-versa.
+
+  For example, if ma128bit is passed, then ma16byte will be returned. Or if
+  ma4byte is passed, then ma32bit is returned.
+
+  If given alignment have more logical counterparts (eg. ma128byte can be
+  converted either to ma1024bit or ma1kbit), then the one with higher
+  ordinality is selected (in mentioned example it would be ma1kbit).
+
+  For alignment of maNone it will always return ma8bit.
+
+    WARNING - if selected alignment does not have corresponding counterpart
+              (eg. ma1mbyte does not have bit counterpart), then it will
+              raise an EBOInvalidValue exception.
+}
+Function AlignmentSwitch(Alignment: TMemoryAlignment): TMemoryAlignment;
+
 //------------------------------------------------------------------------------
 
 {
-  CheckAlignment returns true when the provided memory address is aligned
-  as indicated by Alignment parameter, false otherwise.
+  CheckAlignment
+  AlignmentCheck
+
+  Returns true when the provided memory address is aligned as indicated by
+  Alignment parameter, false otherwise.
 }
 Function CheckAlignment(Address: Pointer; Alignment: TMemoryAlignment): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+Function AlignmentCheck(Address: Pointer; Alignment: TMemoryAlignment): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
 
 {
-  Misalignment returns distance, in bytes, from the closest properly aligned
-  (defined by parameter Alignment) address that is not larger than the passed
-  address.
+  Misalignment
+
+  Returns distance, in bytes, from the closest properly aligned (defined by
+  parameter Alignment) address that is not higher than the passed address.
   If the address is aligned, it will return zero.
 }
 Function Misalignment(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;{$IFDEF CanInline} inline;{$ENDIF}
 
 {
+  AlignmentOffset
+
   Returns number of bytes that needs to be added to Address to obtain a
   properly aligned memory address, effectively calculating:
 
@@ -1395,6 +2056,9 @@ Function Misalignment(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;{
 Function AlignmentOffset(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;
 
 {
+  ResolveAlignment
+  AlignmentResolve
+
   Returns highest alignment the passed address conforms to.
   Note that the actual alignment of the address migh be even higher, this
   function just returns highest value from TMemoryAlignment enum.
@@ -1407,13 +2071,16 @@ Function AlignmentOffset(Address: Pointer; Alignment: TMemoryAlignment): TMemSiz
   happen, ma1byte or ma8bit should be the worst case).
 }
 Function ResolveAlignment(Address: Pointer; ByteAlignments: Boolean = False): TMemoryAlignment;
+Function AlignmentResolve(Address: Pointer; ByteAlignments: Boolean = False): TMemoryAlignment;{$IFDEF CanInline} inline;{$ENDIF}
 
 //------------------------------------------------------------------------------
 {
-  AlignedMemory checks provided memory address for requested alignment. When
-  the address is properly aligned, it is returned and nothing more is done.
-  When is is not properly aligned, then this functions will return closest
-  properly aligned memory address that is not smaller than the provided address.
+  AlignedMemory
+
+  Checks provided memory address for requested alignment. When the address is
+  properly aligned, it is returned and nothing more is done. When is is not
+  properly aligned, then this functions will return closest properly aligned
+  memory address that is not lower than the provided address.
 
     WARNING - this function does NOT do any (re)allocation, it merely returns
               an aligned pointer closest to a given one.
@@ -1421,8 +2088,10 @@ Function ResolveAlignment(Address: Pointer; ByteAlignments: Boolean = False): TM
 Function AlignedMemory(Address: Pointer; Alignment: TMemoryAlignment): Pointer;{$IFDEF CanInline} inline;{$ENDIF}
 
 {
-  AlignMemory works the same as AlignedMemory, it just operates directly on a
-  passed variable.
+  AlignMemory
+
+  Works the same as AlignedMemory, it just operates directly on a passed
+  variable.
 }
 procedure AlignMemory(var Address: Pointer; Alignment: TMemoryAlignment);{$IFDEF CanInline} inline;{$ENDIF}
 
@@ -1446,8 +2115,10 @@ type
 
 //------------------------------------------------------------------------------
 {
-  Following function are comparing data presented in two buffers or two arrays
-  of byte.
+  CompareData
+
+  Following functions are comparing data presented in two buffers or two arrays
+  of bytes.
 
   Behavior of these functions depends on how the parameter CompareMethod is set:
 
@@ -1508,6 +2179,8 @@ Function CompareData(const A; SizeA: TMemSize; const B; SizeB: TMemSize; Compare
 Function CompareData(A,B: array of UInt8; CompareMethod: TCompareMethod): Integer; overload;
 
 {
+  CompareData
+
   Following overloads are here only for the sake of backward compatibility.
   They call main implementation with a parameter CompareMethod set to cmSizeData
   when AllowSizeDiff is true, or cmEqSizeData when AllowSizeDiff is false);
@@ -1521,6 +2194,8 @@ Function CompareData(A,B: array of UInt8; AllowSizeDiff: Boolean = True): Intege
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  SameData
+
   If the two data samples differ in size, SameData will return false,
   irrespective of actual content.
   If both data have zero size, it will return true.
@@ -1536,10 +2211,15 @@ Function SameData(A,B: array of UInt8): Boolean; overload;
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  BufferShiftDown
+  
   Takes bytes at address Buffer + Shift and moves them down so the first moved
   byte is placed at the start of the buffer. Number of bytes shifted is equal
   to BufferSize - Shift (so that the entire rest of the buffer beyond Shift
   offset is moved).
+
+  Content of the buffer beyond the shifted bytes is undefined.
+
   This function is intended for situations where buffered data are only
   partially consumed and what is left must be shifted down to the beginning of
   the buffer for further processing.
@@ -1553,23 +2233,25 @@ procedure BufferShiftDown(var Buffer; BufferSize: TMemSize; Shift: TMemSize);
 ================================================================================
 -------------------------------------------------------------------------------}
 {
+  CopyBits
+
   Takes BitCount number of bits from the Source memory location and copies them
   into Destination memory location. This should not be used as a replacement
   for standard functions copying integral (whole) bytes, only when copying an
   arbitrary bit strings.
-  Also note that the bit count is strictly observed, meaning only the truly
+  Also note that the bit count is strictly honored, meaning only the truly
   copied bits are replacing bits in the destination (ie. when copying one bit,
   then only that bit is put into destination, other bits in destination parent
   byte are unaffected).
 
-  Second overload alows for more precise control of which bits are copied.
+  First overload allows for more precise control over which bits are copied.
   The SrcBitShift parameter prescribes from which bit, counting from the Source
   bit 0, to start copying.
   DstBitShift prescribes at which bit, counting from the Destination bit 0, to
   start putting the copied bits.
 }
-procedure CopyBits(Source,Destination: Pointer; BitCount: TMemSize); overload;
 procedure CopyBits(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCount: TMemSize); overload;
+procedure CopyBits(Source,Destination: Pointer; BitCount: TMemSize); overload;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1584,9 +2266,12 @@ procedure CopyBits(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCou
 
   64bit ASM code requires SSE2 instruction set extension. Presence and support
   of this extension is asserted at the unit initialization - when not supported,
-  then an exception of class EBOUnsupportedPlatform is raised there.
+  then an exception of class EBOUnsupportedPlatform is raised there. But note
+  that this should be of no consequence as all 64bit systems require the CPU
+  to support SSE2, and all existing processors that support 64 mode should also
+  support this extensions.
 }
-procedure FillByte(var Dst; Count: TMemSize; Value: UInt8);{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+procedure FillByte(var Dst; Count: TMemSize; Value: UInt8); {$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
 {
   FillWord
@@ -1598,7 +2283,7 @@ procedure FillByte(var Dst; Count: TMemSize; Value: UInt8);{$IFNDEF PurePascal} 
 
     WARNING - count gives number of words (2-byte entities) to fill, not bytes!
 }
-procedure FillWord(var Dst; Count: TMemSize; Value: UInt16);{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+procedure FillWord(var Dst; Count: TMemSize; Value: UInt16); {$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
 {
   FillLong
@@ -1612,7 +2297,7 @@ procedure FillWord(var Dst; Count: TMemSize; Value: UInt16);{$IFNDEF PurePascal}
     WARNING - count gives number of long words (4-byte entities) to fill,
               not bytes!
 }
-procedure FillLong(var Dst; Count: TMemSize; Value: UInt32);{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+procedure FillLong(var Dst; Count: TMemSize; Value: UInt32); {$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
 {
   FillLong
@@ -1626,7 +2311,7 @@ procedure FillLong(var Dst; Count: TMemSize; Value: UInt32);{$IFNDEF PurePascal}
     WARNING - count gives number of quad words (8-byte entities) to fill,
               not bytes!
 }
-procedure FillQuad(var Dst; Count: TMemSize; Value: UInt64);{$IFNDEF PurePascal} register; assembler;{$ENDIF}
+procedure FillQuad(var Dst; Count: TMemSize; Value: UInt64); {$IFNDEF PurePascal} register; assembler;{$ENDIF}
 
 //------------------------------------------------------------------------------
 {
@@ -1637,13 +2322,13 @@ procedure FillQuad(var Dst; Count: TMemSize; Value: UInt64);{$IFNDEF PurePascal}
   It is equivalent to function FillByte except that it accepts pointer instead
   of untyped variable. In fact it internally calls the FillByte function.
 }
-procedure FillMemory(Mem: Pointer; Size: TMemSize; Value: UInt8);{$IFDEF CanInline} inline;{$ENDIF}
+procedure FillMemory(Mem: Pointer; Size: TMemSize; Value: UInt8); {$IFDEF CanInline} inline;{$ENDIF}
 
 //------------------------------------------------------------------------------
 {
   ZeroMemory
 
-  Fills given memory space of Size bytes with zero (0) bytes.
+  Fills given memory space of Size bytes with null (0x00) bytes.
 
   If is equivalent to FillMemory with Value argument set to zero (internally
   calls the FillByte function).
@@ -1682,193 +2367,449 @@ procedure MoveMemory(Dst,Src: Pointer; Size: TMemSize);
 ================================================================================
 -------------------------------------------------------------------------------}
 {
-  Following functions are searching provided buffer or memory location for a
-  given data (byte sequence or integral value).
+  Following functions are designed to search provided buffer (memory location)
+  for a given data (byte sequence or integral value). The interface is in the
+  form of function triplet operating on context variable, the use pattern
+  should be following:
 
-  When the data are found, their position within the buffer is returned in
-  output parameter Position. It is a zero-based position of start of the
-  sequence/value in relation to the start of provided buffer (that is, a
-  distance of the data from start of the buffer). Whether the data were found
-  or not (and whether in full or partially, see options) is indicated by the
-  result (see description of type TBOSearchResult).
+        If MemoryFindFirst(..., Context, ...) then
+        try
+          repeat
+            // process the last found occurence
+          until not MemoryFindNext(Context);
+        finally
+          MemoryFindClose(Context);
+        end;
 
-    WARNING - both arguments Size and Count (where applicable) must be lower
-              or equal to High(TMemOffset), otherwise an EBOInvalidValue
-              exception is raised.
+  If you are interested only in the first occurence of searched data, then
+  following will suffice:
 
-    NOTE - the integers are assumed to be stored with system endianness, and
-           are therefore searched that way. If you want to search for values
-           stored with different endianness, just use SwapEndian on the Value
-           parameter.
+        If MemoryFindFirst(..., Context, ...) then
+        try
+          // process the first occurence
+        finally
+          MemoryFindClose(Context);
+        end;
 
-  If no option is included, then the sequence/value is searched for full match,
-  that is, it must be present in its entirety, which means only positions from
-  zero up to (Size - Count) or (Size - SizeOf(Value)) are returned.
+  For more information, refer to description of relevant types and functions.
+}
 
- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+type
+{
+  TMemSearchOptions
 
-  TBOSearchResult
+  Each valus in this set corresponds to an option that can alter behavior of
+  searching. Function MemoryFindFirst accepts parameter of this type - values
+  included in this parameter will anable corresponding search option, options
+  corresponding to excluded values will be disabled.
 
-    This type is used for return values and indicate whether and how was the
-    requested data found.
+    soReverseSearch
+
+      Normally, searching for requested data is performed from lowest memory
+      location (address) to highest (forward searching). By enabling this
+      option, the search is done in reverse, ie. from highest address to lowest.
+      Order of operations is also reversed. So, while in forward search the
+      algorithm first searches for lead partial matches, then for full matches
+      and finally for trailing partial matches, enablind this option will
+      reverse these operations (trail -> full -> lead).
+
+        NOTE - matching of byte sequences or values is still done in low to
+               high order (leading bytes are matched first), but this should
+               have no effect on the result.
+
+    soSkipOverlaps
+
+      Enabling this option ensures that only trully distinct occurences will be
+      returned, no overlapping values will be matched.
+      This is achieved by incrementing or decrementing (in reverse search)
+      currently searched position not by one, but by Count or SizeOf(Value)
+      whenever an occurence is found. Be aware of this mechanism, as it might
+      match at positions you might not expect.
+
+      To give an example - let's say we are searching for the following byte
+      sequence:
+
+            [0xAA, 0x00, 0xAA]
+
+      ...within this buffer:
+
+            [0x11, 0xAA, 0x00, 0xAA, 0x00, 0xAA, 0x00, 0xAA, 0x11]
+
+      Without this option active, three occurences would be found at positions
+      1, 3 and 5. Note that the accurence starting at position 3 overlaps with
+      the other two.
+      With this option active, the middle accurence is skipped and only
+      positions 1 and 5 are returned as matching.
+
+    soBytesLocalCopy
+
+      This option is observed only by overload of MemoryFindFirst that accepts
+      byte sequence as an untyped buffer (parameter Bytes) with explicit size
+      (parameter Count). It instructs the function to create copy of the entire
+      Bytes buffer inside of context instead of storing only reference to the
+      buffer. This is intended for situations where one cannot guarantee
+      existence and immutability of the original buffer for the entire duration
+      of searching.
+
+      Be carefull when using this option, as using it on large data will lead
+      to significant memory usage.
+
+      Also note that overload accepting byte sequence as an open array uses
+      this option internally to copy the array (this is because the open array
+      might be destroyed the moment the function returns).
+
+    soUseStartPosition
+
+      When this option is active, it forces the searching algorithm to start at
+      position given in parameter StartPosition (this parameter is otherwise
+      ignored).
+      But be warned, as this position is used irrespection of other options,
+      which may lead unexpected behavior, especially when combined with
+      soMatchPartial* options.
+      soMatchPartialLead requires that the search starts or ends, depending on
+      direction of search, at negative positions. Similarly soMatchPartialTrail
+      requeires access to positions beyond normally used  (Size - Count).
+
+    soMatchPartial
+
+      Enabling this option is equivalent to including both soMatchPartialLead
+      and soMatchPartialTrail.
+
+    soMatchPartialLead
+
+      If this option is activated, then the searching will check leading bytes
+      of the provided buffer for a partial match with the given byte sequence
+      or integral value (as if the data were stored at address below start of
+      the buffer).
+      If a match is found, then a negative position corresponding to how far
+      below the given buffer the data would be stored to produce the found
+      partial match is returned in the context and search result is set to
+      srFoundPartialLead (field LastOccurence is set to nil as address would
+      lay oustside of privided buffer, possibly in an inaccessible memory).
+
+      Positions from -Pred(Count) (where Count is number of bytes searched for,
+      eg. SizeOf(Value)) up to -1 can be returned for leading partial match.
+
+        NOTE - For forward search, this check is done before the memory is
+               scanned for full occurences. If partial leading match is found,
+               the searching ends, meaning full or trailing partial matches
+               are not even attempted in such a case.
+               For reverse searching it is performed only after search for full
+               occurences, ie. as a last operation.
+
+      For example, let's have byte sequence [0x15, 0x89, 0xFF, 0x90] and a
+      memory buffer starting with bytes [0xFF, 0x90, 0xAA, 0x5B, 0x00, ...].
+      Last two bytes of the sequence match with first two bytes of the buffer -
+      this is a partial match, and since the sequence would have to start two
+      bytes before the start of Buffer to produce this, -2 will be returned as
+      a position.
+
+    soMatchPartialTrail
+
+      This is similar to soMatchPartialLead, except it tries to match trailing
+      bytes of the buffer.
+      If match is found, then a positive position which will be above normally
+      returned values (larger than (Size - Count), where Count is number of
+      bytes searched for, eg. SizeOf(Value)) is provided. LastOccurence is set
+      to nil.
+
+      Positions from (Size - Pred(Count)) up to Pred(Size) can be returned for
+      trailing partial match.
+
+        NOTE - In normal, forward searching, the check for trailing partial
+               match is done at the end, meaning if full or leading partial
+               match is found, then check for trailing partial match is not
+               attempted.
+               During reverse searching, this check is performed at the start,
+               before search for full occurences. So if trailing partial match
+               is found in this situation, full matching is not done.
+
+      As an example, let's have buffer that ends with bytes [..., 0xAA, 0x12,
+      0x45, 0x44] and searched byte sequence is [0x45, 0x44, 0x43].
+      Here, last two bytes of the buffer corresponds to first two bytes of the
+      sequence searched for, meaning the sequence would have to start two bytes
+      before end of the buffer to produce this match, therefore indicated
+      position will be (Size - 2).
+
+
+  Leading partial match and trailing partial match can be used in situations
+  where you are scanning some non-memory data (eg. file) - there, one would
+  read and scan smaller buffers. This might create problems if a multi-byte
+  value lies across the buffers boundary - you can use these settings to
+  search for such occurences (or use MemoryFindFirstX, which is specifically
+  designed for these situations - note that it is not yet implemented, it will
+  be added in the near future).
+}
+  TMemSearchOptions = set of (soReverseSearch,soSkipOverlaps,soBytesLocalCopy,
+    soUseStartPosition,soMatchPartial,soMatchPartialLead,soMatchPartialTrail);
+
+{
+  TMemSearchResult
+
+  This type is used within the search context to indicate whether and how was
+  the requested data found by the last call.
 
       srNotFound              - The requested data were not found in the
-                                provided buffer. Value of output parameter
-                                Position is undefined.
+                                provided buffer.
 
       srFound                 - The data were found in their entirety within
-                                the provided buffer. Position contains a
-                                positive distance of start of the data from
-                                start of the provided buffer.
+                                the provided buffer.
 
-      srFoundLeadPartial      - A partial match with the requested data was
+      srFoundPartialLead      - A partial match with the requested data was
                                 found at the start of the buffer (see option
-                                soLeadPartialMatch for more details). Position
-                                contains a negative distance from the start of
-                                buffer to imagined start of the data.
+                                soMatchPartialLead for more details).
 
-      srFoundTrailPartial     - Partial match was found at the end of the
-                                provided buffer (see option soTrailPartialMatch
-                                for more details). Position contains positive
-                                distance from buffer start to start of the
-                                patially matching byte sequence.
-
- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -                                
-
-  TBOSearchOptions
-
-    Each search function accepts parameter Options of this type. It is a set
-    where if any of the enumerated values is present, its corresponding option
-    is activated, when not present, the option is deactivated.
-
-      soLeadPartialMatch
-
-        If this option is activated, then the function will check leading bytes
-        of the provided buffer for a partial match with the given sequence or
-        value (as if the data were stored at address below start of the buffer).
-        If a match is found, then lowest negative position corresponding to how
-        far below the given buffer the data would be stored to produce the
-        found partial match is returned.
-
-        Positions from -Pred(SizeOf(Value)) or -Pred(Count) to -1 can be
-        returned for leading partial match.
-
-          NOTE - this check is done before the memory is scanned for full
-                 occurences. If partial leading match is found, the function
-                 exits, meaning full or trailing partial matches are not even
-                 attempted.
-
-        For example, let's have UInt32 value $11223344 (little endian) and a
-        memory buffer starting with byte sequence $22 $11 $AA $5B $00 ... .
-        This will return position -2.
-
-      soTrailPartialMatch
-
-        This is similar to soLeadPartialMatch, except it tries to match
-        trailing bytes of the buffer. If match is found, then it returns a
-        positive position which will be above normally returned values, that
-        is, larger than (Size - SizeOf(Value)) or (Size - Count), corresponding
-        to where the partially matched value would start in the buffer.
-
-        Positions from (Size - Pred(SizeOf(Value))) or (Size - Pred(Count)) to
-        (Size - 1) can be returned for trailing partial match.
-
-          NOTE - check for trailing partial match is done at the end, meaning
-                 if full or leading partial match is found, then check for
-                 trailing partial match is not attempted.
-
-      soPartialMatch
-
-        Including this option is equivalent to including both soLeadPartialMatch
-        and soTrailPartialMatch.
-
-      soAbsolutePosition
-
-        This has effect only in overloads accepting parameter Offset.
-        Normally the returned position is relative to the start of search,
-        which is affected by the value of Offset, this option forces the
-        function to calculate the position in relation to the start of searched
-        buffer, as if Offset was 0.
-
-    Leading partial match and trailing partial match are here for situations
-    where you are scanning some non-memory data (eg. file) - there, one would
-    read and scan smaller buffers. This might create problems if a multi-byte
-    value lies across the buffers boundary - you can use these settings to
-    search for such occurences.
+      srFoundPartialTrail     - Partial match was found at the end of the
+                                provided buffer (see option soMatchPartialTrail
+                                for more details).
 }
-type
-  TBOSearchResult = (srNotFound,srFound,srFoundLeadPartial,srFoundTrailPartial);
+  TMemSearchResult = (srNotFound,srFound,srFoundPartialLead,srFoundPartialTrail);
 
-  TBOSearchOptions = set of (soLeadPartialMatch,soTrailPartialMatch,soPartialMatch,
-                             soAbsolutePosition);
+{
+  TMemSearchContext
+
+  This type is used to return information about last found occurence of data
+  that are searched for.
+  It is also used internally for storage of data required for continuous
+  searching (ie. searching for multiple occurences). This storage is not
+  public, its structure and nature must not be assumed and as such must not
+  be accessed by user code.
+
+  Variable of this type must be explicitly initialized by MemoryFindFirst
+  and finalized by passing it to MemoryFindClose. See description of these
+  functions for more details.
+
+    Field LastResult indicates whether the requested data were found and how.
+    For more details refer to description of type TMemSearchResult.
+
+      NOTE - even if MemoryFindFirst or MemoryFindNext return false, meaning
+             values stored in the context are undefined, field LastResult will
+             always be properly set (ie. to srNotFound in mentioned cases).
+
+    LastPosition, if valid, stores a signed zero-based offset of found
+    occurence of requested data within the Buffer in relation to its start.
+    For example, if the data are found at the very first byte, then this
+    field will be set to zero. Or, if leading partial match is found (see
+    TMemSearchResult description), then it will be set to a negative value.
+    Generally, value of this field can be in range from -Pred(Count) up to
+    Pred(Size) (Count is number of bytes searched for, eg. SizeOf(Value)).
+    This offset is always relative to start of the Buffer, StartPosition
+    or other processing variables will not affect it.
+
+    LastOccurence stores direct reference to (address of) the found occurence
+    within Buffer. It is only valid when the date were found in full, in case
+    of partial match it will be explicitly set tot nil.
+
+    Field internals stores a reference to internally used structures, do not
+    dereference this field and definitely do not change it.
+}
+  TMemSearchContext = record
+    LastResult:     TMemSearchResult;
+    LastPosition:   TMemOffset;
+    LastOccurence:  Pointer;
+    Internals:      Pointer;  // do not touch this
+  end;
+  PMemSearchContext = ^TMemSearchContext;
 
 //------------------------------------------------------------------------------
 {
-  Count denotes number of bytes in Bytes (byte sequence searched for), whereas
-  argument Size gives size of the provided buffer (argument Buffer) that is to
-  be searched/scanned.
-}
-Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
+  MemoryFindFirst
 
-Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-Function FindQuad(Value: UInt64; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
+  Call these functions to initiate searching of requested byte sequence
+  (Bytes) or integer (Value) in the provided buffer.
+
+  The function will do sanity checks of provided arguments (note that these
+  checks are always performed, even if no other operation is done, eg. because
+  of empty byte sequence), initializes and fills Context variable and then
+  tries to find first occurence of requested data according to selected options
+  (see description of type TMemSearchOptions for details) and other settings.
+
+  Copy of all provided data and settings are stored in the context, so there is
+  no need to provide them again when searching for multiple instances of
+  requested data using MemorySearchNext, only the context variable is passed
+  and search algorithm takes what is needed from there. But this means that
+  all references (eg. Buffer, Bytes) must be valid and unchanged while the
+  searching is performed. Invalidating the references or changing the data will
+  almost certainly lead to exceptions or unexpected and erroneous results.
+
+  If requested data are found, then result will be set to True and output
+  parameter Context will be completely initialized - such context must be freed
+  using function MemoryFindClose after the searching is done, otherwise it
+  creates a (possibly significant) memory leak.
+  This context will then also hold information about how and where the
+  occurence was found (see description of type TMemSearchContext for more
+  info).
+
+  If nothing is found, then false is returned and the Context is not fully
+  initialized - values of its fields are undefined and it also does not need
+  to be freed using MemoryFindClose. Such context also must not be used in a
+  call to MemoryFindNext.
+
+    Parameter Value is an integer that is to be searched for - it is expected
+    to be stored in the buffer with system endianness. If you want to use other
+    byte order, simply use function SwapEndian on the passed value.
+
+    Untyped parameter Bytes is a buffer that contains byte sequence to search
+    for. Count is number of these bytes (ie. size of the Bytes buffer). If
+    Count is zero, then no search is even attempted and the function behaves
+    as if nothing was found (context is left uninitialized and result is set to
+    false).
+    Bytes open array works the same, it is just a different mean of providing
+    the sequence. But note that the array is always copied into the context in
+    its entirety (it can be simultaneously present multiple times in the
+    memory, in some rare circumstance), so try to not use it for large data
+    (or be prepared for a possibility of large memory requirements).
+
+    Buffer is untyped memory location that contains data to be searched. Size
+    gives number of bytes this memory location occupies. Note that you can
+    limit the search area by providing smaller Size than the buffer really
+    occupies - no data beyond the given size will be accessed. If Size is zero,
+    then no searching is performed as there are no data to match against (the
+    function behaves as if nothing was found).
+
+      WARNING - parameters Size and Count, where applicable, must be lower or
+                at most equal to High(TMemOffset), otherwise an EBOInvalidValue
+                exception will be raised. If you need to search larger buffer,
+                you must split it (to properly search on the split boundary,
+                use function MemoryFindFirstX - will be added in the future).
+
+    Output parameter Context must be set to an uninitialized variable,
+    otherwise whatever exists there will be discarded, creating memory leak.
+    When result of the function is set to True, then the returned context
+    must be freed using MemorySearchClose. When False is returned, then content
+    of this variable is undefined and it does NOT need to be freed.
+
+    Options is a set that can alter how and where the requested value ot byte
+    sequence will be searched for. For more details, see description of type
+    TMemSearchOptions, specifically each of its values. When a value is present
+    in the set, then corresponding option is enabled, when not present then
+    it is disabled.
+
+    Start position prescribes where to start search for the first occurence of
+    requested data (signed offset from start of the Buffer). Normally is it
+    ignored, only when soUseStartPosition option is enabled it is used (see
+    description of mentioned option for details).
+    If invalid position is given, then it is silently (without raising any
+    exception) clamped (limited) to be within the allowed range (which is
+    -Pred(Count) or -Pred(SizeOf(Value)) up to Pred(Size)).
+}
+Function MemoryFindFirst(Value: UInt8; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+Function MemoryFindFirst(Value: UInt16; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+Function MemoryFindFirst(Value: UInt32; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+Function MemoryFindFirst(Value: U64Type; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+
+Function MemoryFindFirst(Value: Int8; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+Function MemoryFindFirst(Value: Int16; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+Function MemoryFindFirst(Value: Int32; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+{$IF Declared(NativeUInt64E)}
+Function MemoryFindFirst(Value: Int64; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+{$IFEND}
+
+Function MemoryFindFirst(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
+Function MemoryFindFirst(const Bytes: array of UInt8; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean; overload;
 
 //------------------------------------------------------------------------------
 {
-  Following overloads are wrappers that are here to ease repeated search within
-  the same buffer without a need to use moving pointer. They accept argument
-  Offset, which is used to move start of the searched buffer - the searching
-  starts at address (Addr(Buffer) + Offset).
+  MemoryFindNext
 
-    NOTE - if used for repeated search, do not directly use position of previous
-           occurence for parameter Offset - first, the position can be negative
-           and Offset accepts only positive numbers since it is an unsigned
-           integer, second, the searching would catch the same occurence - use
-           value that is by at least one larger (SizeOf(Value) or Count if
-           overlap is forbidden), and third, unless soAbsolutePosition is used,
-           the returned position is relative to start of search, not to the
-           start of the buffer (so it might not be a valid value for Offset).
+  Use this function if you want to continue searching for requested data after
+  a first occurence was already found by MemoryFindFirst.
 
-  The returned position is normally relative to the start of searching (ie.
-  address shifted by offset). If you want the position to be in relation to the
-  start of the passed buffer, activate option soAbsolutePosition.
+  This function always searches from last found occurence, meaning you can call
+  it as many times as is number of instances of the requested data in the
+  searched buffer.
 
-    WARNING - this can be deceiving in case of partial leading match as the
-              returned postion might not actually point to the searched data
-              if they were only partially matched at the position shifted by
-              offset.
+  When an occurence of requested data is found, then its position is stored
+  in the Context and True is returned (it works the same as in MemoryFindFirst).
 
-  The functions will not touch memory that is bellow (Addr(Buffer) + Offset)
-  even if it is fully within the buffer and accessible.
+  If no further occurence is found, then False is returned and content of the
+  Context is undefined.
+
+    WARNING - the context is not automatically freed when false is returned.
+
+  When passing uninitialized context, it just returns false and does nothing,
+  no exception is raised.
 }
-Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-
-Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-Function FindQuad(Value: UInt64; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
+Function MemoryFindNext(var Context: TMemSearchContext): Boolean;
 
 //------------------------------------------------------------------------------
 {
-  Following overloads are provided only for backward compatibility with
-  previous implementation. They are internally calling current implementation
-  (previous overloads).
+  MemoryFindClose
 
-  Paramenters LeadingPartialMatch and TrailingPartialMatch are turned into
-  corresponding options.
+  Frees any memory allocated in the Context variable and invalidates it. The
+  variable can then be safely used again in another search without a risk of
+  memory leak.
 
-  Returned value is the same as in output parameter Position in previous
-  overloads when the value is found. If not found, then -SizeOf(Value) or
-  -Count is returned.
+  If context that is not initialized is passed here, then nothing happens and
+  the function just returns. 
 }
-Function FindBytes(const Bytes; Count: TMemSize; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset; overload;
+procedure MemoryFindClose(var Context: TMemSearchContext);
 
-Function FindByte(Value: UInt8; Memory: Pointer; Size: TMemSize): TMemOffset; overload;
-Function FindWord(Value: UInt16; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset; overload;
-Function FindLong(Value: UInt32; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset; overload;
-Function FindQuad(Value: UInt64; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset; overload;
+//==============================================================================
+{
+  FindByte
+  FindWord
+  FindLong
+  FindQuad
+  FindBytes
+
+  Following is a set of macro functions that are wrapping default interface
+  of memory searching (MemoryFindFirst - MemoryFindNext - MemoryFindClose).
+  They are intended as a simplified way of searching for only a single
+  occurence of searched data within provided buffer.
+
+    Parameters Value, Bytes, Count, Buffer, Size and StartPosition are used
+    exactly the same as in MemoryFindFirst, so see there for description.
+
+    Output parameter Position is used to return position of the found occurence
+    (it corresponds to Context field LastPosition when using default interfece).
+
+    Options are used as presented, but with following changes:
+
+      In first group (functions without StartPosition parameter), option
+      soUseStartPosition is explicitly removed. In second group (functions
+      accepting StartPosition), option soUseStartPosition is explicitly added.
+
+      Functions accepting byte sequence as a pair of untyped buffer and size
+      (ie. parameters Bytes and Count) will remove option soBytesLocalCopy.
+      This is because that option is intended for continuous searching, which
+      is not done here, so it would be a waste of memory.
+
+    Result corresponds to Context field LastResult in default interface. Note
+    that if srNotFound is returned, then value of Position is undefined - and
+    this time for real (it is not assigned any value)!
+}
+Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindQuad(Value: U64Type; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+
+Function FindByte(Value: Int8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindWord(Value: Int16; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindLong(Value: Int32; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+{$IF Declared(NativeUInt64E)}
+Function FindQuad(Value: Int64; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+{$IFEND}
+
+Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindBytes(const Bytes: array of UInt8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+
+//------------------------------------------------------------------------------
+
+Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindQuad(Value: U64Type; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+
+Function FindByte(Value: Int8; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindWord(Value: Int16; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindLong(Value: Int32; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+{$IF Declared(NativeUInt64E)}
+Function FindQuad(Value: Int64; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+{$IFEND}
+
+Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
+Function FindBytes(const Bytes: array of UInt8; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult; overload;
 
 
 {===============================================================================
@@ -1923,18 +2864,26 @@ Function LLDecodeFlags(Flags: UInt16): TBOStatusFlags;
 
   Use constants BO_FLAG_* (see above) to test for individual flags.
 
-    NOTE - These functions are available only when PurePascal symbol is not
-           defined. Function accepting 64bit values is accessible only in 64bit
-           programs.
+    NOTE - these functions are available only when PurePascal symbol is not
+           defined.
+
+    NOTE - on 32bit systems, function accepting 64bit values is only emulated 
+           and its result does not reflect state of real hardware register
+           (flags are calculated in software).
 
   For more technical details, refer to x86(-64) CPU documentation.
 }
 Function LLCompareRaw(A,B: UInt8): UInt16; overload; register; assembler;
 Function LLCompareRaw(A,B: UInt16): UInt16; overload; register; assembler;
 Function LLCompareRaw(A,B: UInt32): UInt16; overload; register; assembler;
-{$IFDEF x64}
-Function LLCompareRaw(A,B: UInt64): UInt16; overload; register; assembler;
-{$ENDIF}
+Function LLCompareRaw(A,B: U64Type): UInt16; overload;{$IFDEF x64} register; assembler;{$ENDIF}
+
+Function LLCompareRaw(A,B: Int8): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLCompareRaw(A,B: Int16): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLCompareRaw(A,B: Int32): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function LLCompareRaw(A,B: Int64): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 {
@@ -1948,9 +2897,14 @@ Function LLCompareRaw(A,B: UInt64): UInt16; overload; register; assembler;
 Function LLCompare(A,B: UInt8): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function LLCompare(A,B: UInt16): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function LLCompare(A,B: UInt32): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
-{$IFDEF x64}
-Function LLCompare(A,B: UInt64): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
-{$ENDIF}
+Function LLCompare(A,B: U64Type): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function LLCompare(A,B: Int8): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLCompare(A,B: Int16): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLCompare(A,B: Int32): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function LLCompare(A,B: Int64): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {$ENDIF}
 
@@ -1973,18 +2927,26 @@ Function LLCompare(A,B: UInt64): TBOStatusFlags; overload;{$IFDEF CanInline} inl
 
   Use constants BO_FLAG_* (see above) to test for individual flags.
 
-    NOTE - These functions are available only when PurePascal symbol is not
-           defined. Function accepting 64bit values is accessible only in 64bit
-           programs.
+    NOTE - these functions are available only when PurePascal symbol is not
+           defined.
+
+    NOTE - on 32bit systems, function accepting 64bit values is only emulated 
+           and its result does not reflect state of real hardware register
+           (flags are calculated in software).
 
   For more technical details, refer to x86(-64) CPU documentation.
 }
 Function LLTestRaw(A,B: UInt8): UInt16; overload; register; assembler;
 Function LLTestRaw(A,B: UInt16): UInt16; overload; register; assembler;
 Function LLTestRaw(A,B: UInt32): UInt16; overload; register; assembler;
-{$IFDEF x64}
-Function LLTestRaw(A,B: UInt64): UInt16; overload; register; assembler;
-{$ENDIF}
+Function LLTestRaw(A,B: U64Type): UInt16; overload;{$IFDEF x64} register; assembler;{$ENDIF}
+
+Function LLTestRaw(A,B: Int8): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLTestRaw(A,B: Int16): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLTestRaw(A,B: Int32): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function LLTestRaw(A,B: Int64): UInt16; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 //------------------------------------------------------------------------------
 {
@@ -1998,9 +2960,14 @@ Function LLTestRaw(A,B: UInt64): UInt16; overload; register; assembler;
 Function LLTest(A,B: UInt8): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function LLTest(A,B: UInt16): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
 Function LLTest(A,B: UInt32): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
-{$IFDEF x64}
-Function LLTest(A,B: UInt64): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
-{$ENDIF}
+Function LLTest(A,B: U64Type): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+Function LLTest(A,B: Int8): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLTest(A,B: Int16): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function LLTest(A,B: Int32): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function LLTest(A,B: Int64): TBOStatusFlags; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
 {$ENDIF}
 
@@ -2033,8 +3000,8 @@ Function LLTest(A,B: UInt64): TBOStatusFlags; overload;{$IFDEF CanInline} inline
   These functions have both implementations (pascal and assembly) compiled, and
   which will be used is selected at unit initialization, after checking CPU for
   required extensions.
-  Before unit initialization, all the functions are routed to default
-  implementation (pascal).
+  Before unit initialization, all the functions are routed to default (pascal)
+  implementation.
 
   When such function is called, the selected implementation is called via an
   internal global variable which holds pointer to the implementation. Within
@@ -2043,9 +3010,10 @@ Function LLTest(A,B: UInt64): TBOStatusFlags; overload;{$IFDEF CanInline} inline
   Following types and functions are here to obtain information about which
   implementation is currently selected and to provide a mean of changing it.
 
-  WARNING - be wery careful when changing the selected implementation, as there
-            is absolutely no thread-safety protection (the variables are global,
-            initialized only once and not expected to be ever changed)
+    WARNING - be wery careful when changing the selected implementation, as
+              there is absolutely no thread-safety protection (the variables
+              are global, initialized only once and not expected to be ever
+              changed).
 }
 type
   TUIM_BitOps_Function = (
@@ -2062,25 +3030,32 @@ type
   TUIM_BitOps_Implementations = set of TUIM_BitOps_Implementation;
 
 //------------------------------------------------------------------------------
-
 {
+  UIM_BitOps_AvailableFuncImpl
+
   Returns which implementations are available for the selected function.
 }
 Function UIM_BitOps_AvailableFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementations;
 
 {
+  UIM_BitOps_SupportedFuncImpl
+
   Returns which implementations are supported and can be safely selected for
   a given function.
 }
 Function UIM_BitOps_SupportedFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementations;
 
 {
+  UIM_BitOps_GetFuncImpl
+
   Returns value indicating what implementation of the selected function is
-  executed when calling the function.
+  executed (ie. which is selected) when calling the function.
 }
 Function UIM_BitOps_GetFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementation;
 
 {
+  UIM_BitOps_SetFuncImpl
+
   Routes selected function to a selected implementation.
 
   Returned value is the previous routing.
@@ -2090,11 +3065,11 @@ Function UIM_BitOps_GetFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Impleme
 
   WARNING - when selecting imNone as an implementation for some function, the
             routing is set to nil, and because the routing mechanism, for the
-            sake of speed, does not check validity, it will result in an
+            sake of performance, does not check validity, it will result in an
             exception when calling this function
 
-  WANRING - when selecting unsupported implementation, calling the function will
-            almost certainly result in an system exception (invalid
+  WANRING - when selecting unsupported implementation, calling the function
+            will almost certainly result in an system exception (invalid
             instruction).
 }
 Function UIM_BitOps_SetFuncImpl(Func: TUIM_BitOps_Function; NewImpl: TUIM_BitOps_Implementation): TUIM_BitOps_Implementation;
@@ -2103,12 +3078,6 @@ implementation
 
 uses
   BasicUIM{$IFNDEF PurePascal}, SimpleCPUID{$ENDIF};
-
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
-{$ENDIF}
 
 {$IFNDEF FPC}
 const
@@ -2174,6 +3143,72 @@ else
   Result := B;
 end;
 
+//------------------------------------------------------------------------------
+
+Function MemOffsetMin(A,B: TMemOffset): TMemOffset;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If A < B then
+  Result := A
+else
+  Result := B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemOffsetMax(A,B: TMemOffset): TMemOffset;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If A > B then
+  Result := A
+else
+  Result := B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemOffsetIfThen(Condition: Boolean; OnTrue: TMemOffset; OnFalse: TMemOffset = 0): TMemOffset;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If Condition then
+  Result := OnTrue
+else
+  Result := OnFalse;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemOffsetLimit(Offset,Low,High: TMemOffset): TMemOffset;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If Low <= High then
+  begin
+    If Offset < Low then
+      Result := Low
+    else If Offset > High then
+      Result := High
+    else
+      Result := Offset;
+  end
+else raise EBOInvalidValue.Create('MemOffsetLimit: Low limit is higher than high limit.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function IntegerMin(A,B: Integer): Integer;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If A < B then
+  Result := A
+else
+  Result := B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function IntegerMax(A,B: Integer): Integer;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If A > B then
+  Result := A
+else
+  Result := B;
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -2189,7 +3224,7 @@ end;
 ================================================================================
 -------------------------------------------------------------------------------}
 
-Function NumberToBitString(Number: UInt64; Bits: UInt8; BitStringFormat: TBitStringFormat): String;
+Function NumberToBitString(Number: U64Type; Bits: UInt8; BitStringFormat: TBitStringFormat): String;
 var
   i,SplitCnt: Integer;
 begin
@@ -2213,33 +3248,64 @@ For i := 1 to Pred(Bits div SplitCnt) do
   Result[(i * SplitCnt) + i] := BitStringFormat.SplitChar;
 end;
 
-//------------------------------------------------------------------------------
+//==============================================================================
 
 Function NumberToBitStr(Number: UInt8; BitStringFormat: TBitStringFormat): String;
 begin
-Result := NumberToBitString(Number,8,BitStringFormat);
+Result := NumberToBitString(U64Type(Number),8,BitStringFormat);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function NumberToBitStr(Number: UInt16; BitStringFormat: TBitStringFormat): String;
 begin
-Result := NumberToBitString(Number,16,BitStringFormat);
+Result := NumberToBitString(U64Type(Number),16,BitStringFormat);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function NumberToBitStr(Number: UInt32; BitStringFormat: TBitStringFormat): String;
 begin
-Result := NumberToBitString(Number,32,BitStringFormat);
+Result := NumberToBitString(U64Type(Number),32,BitStringFormat);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function NumberToBitStr(Number: UInt64; BitStringFormat: TBitStringFormat): String;
+Function NumberToBitStr(Number: U64Type; BitStringFormat: TBitStringFormat): String;
 begin
 Result := NumberToBitString(Number,64,BitStringFormat);
 end;
+
+//------------------------------------------------------------------------------
+
+Function NumberToBitStr(Number: Int8; BitStringFormat: TBitStringFormat): String;
+begin
+Result := NumberToBitString(U64Type(Number),8,BitStringFormat);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int16; BitStringFormat: TBitStringFormat): String;
+begin
+Result := NumberToBitString(U64Type(Number),16,BitStringFormat);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int32; BitStringFormat: TBitStringFormat): String;
+begin
+Result := NumberToBitString(U64Type(Number),32,BitStringFormat);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int64; BitStringFormat: TBitStringFormat): String;
+begin
+Result := NumberToBitString(U64Type(Number),64,BitStringFormat);
+end;
+
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
@@ -2249,7 +3315,7 @@ var
 begin
 Format := DefBitStringFormat;
 Format.Split := Split;
-Result := NumberToBitStr(Number,Format);
+Result := NumberToBitString(U64Type(Number),8,Format);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2260,7 +3326,7 @@ var
 begin
 Format := DefBitStringFormat;
 Format.Split := Split;
-Result := NumberToBitStr(Number,Format);
+Result := NumberToBitString(U64Type(Number),16,Format);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2271,51 +3337,129 @@ var
 begin
 Format := DefBitStringFormat;
 Format.Split := Split;
-Result := NumberToBitStr(Number,Format);
+Result := NumberToBitString(U64Type(Number),32,Format);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function NumberToBitStr(Number: UInt64; Split: TBitStringSplit): String;
+Function NumberToBitStr(Number: U64Type; Split: TBitStringSplit): String;
 var
   Format: TBitStringFormat;
 begin
 Format := DefBitStringFormat;
 Format.Split := Split;
-Result := NumberToBitStr(Number,Format);
+Result := NumberToBitString(Number,64,Format);
 end;
+
+//------------------------------------------------------------------------------
+
+Function NumberToBitStr(Number: Int8; Split: TBitStringSplit): String;
+var
+  Format: TBitStringFormat;
+begin
+Format := DefBitStringFormat;
+Format.Split := Split;
+Result := NumberToBitString(U64Type(Number),8,Format);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int16; Split: TBitStringSplit): String;
+var
+  Format: TBitStringFormat;
+begin
+Format := DefBitStringFormat;
+Format.Split := Split;
+Result := NumberToBitString(U64Type(Number),16,Format);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int32; Split: TBitStringSplit): String;
+var
+  Format: TBitStringFormat;
+begin
+Format := DefBitStringFormat;
+Format.Split := Split;
+Result := NumberToBitString(U64Type(Number),32,Format);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int64; Split: TBitStringSplit): String;
+var
+  Format: TBitStringFormat;
+begin
+Format := DefBitStringFormat;
+Format.Split := Split;
+Result := NumberToBitString(U64Type(Number),64,Format);
+end;
+
+{$IFEND}
 
 //------------------------------------------------------------------------------
 
 Function NumberToBitStr(Number: UInt8): String;
 begin
-Result := NumberToBitString(Number,8,DefBitStringFormat);
+Result := NumberToBitString(U64Type(Number),8,DefBitStringFormat);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function NumberToBitStr(Number: UInt16): String;
 begin
-Result := NumberToBitString(Number,16,DefBitStringFormat);
+Result := NumberToBitString(U64Type(Number),16,DefBitStringFormat);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function NumberToBitStr(Number: UInt32): String;
 begin
-Result := NumberToBitString(Number,32,DefBitStringFormat);
+Result := NumberToBitString(U64Type(Number),32,DefBitStringFormat);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function NumberToBitStr(Number: UInt64): String;
+Function NumberToBitStr(Number: U64Type): String;
 begin
 Result := NumberToBitString(Number,64,DefBitStringFormat);
 end;
 
+//------------------------------------------------------------------------------
+
+Function NumberToBitStr(Number: Int8): String;
+begin
+Result := NumberToBitString(U64Type(Number),8,DefBitStringFormat);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int16): String;
+begin
+Result := NumberToBitString(U64Type(Number),16,DefBitStringFormat);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int32): String;
+begin
+Result := NumberToBitString(U64Type(Number),32,DefBitStringFormat);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToBitStr(Number: Int64): String;
+begin
+Result := NumberToBitString(U64Type(Number),64,DefBitStringFormat);
+end;
+
+{$IFEND}    
+
 //==============================================================================
 
-Function BitStrToNumber(const BitString: String; BitStringFormat: TBitStringFormat): UInt64;
+Function BitStrToNumber(const BitString: String; BitStringFormat: TBitStringFormat): U64Type;
 var
   i:  Integer;
 begin
@@ -2334,9 +3478,9 @@ For i := 1 to Length(BitString) do
   end;
 end;
 
-//------------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BitStrToNumber(const BitString: String; Split: TBitStringSplit): UInt64;
+Function BitStrToNumber(const BitString: String; Split: TBitStringSplit): U64Type;
 var
   Format: TBitStringFormat;
 begin
@@ -2345,14 +3489,56 @@ Format.Split := Split;
 Result := BitStrToNumber(BitString,Format);
 end;
 
-//------------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BitStrToNumber(const BitString: String): UInt64;
+Function BitStrToNumber(const BitString: String): U64Type;
 begin
 Result := BitStrToNumber(BitString,DefBitStringFormat);
 end;
 
 //------------------------------------------------------------------------------
+
+Function BitStrToUInt(const BitString: String; BitStringFormat: TBitStringFormat): UInt64;
+begin
+Result := UInt64(BitStrToNumber(BitString,BitStringFormat));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitStrToUInt(const BitString: String; Split: TBitStringSplit): UInt64;
+begin
+Result := UInt64(BitStrToNumber(BitString,Split));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitStrToUInt(const BitString: String): UInt64;
+begin
+Result := UInt64(BitStrToNumber(BitString));
+end;
+
+//------------------------------------------------------------------------------
+
+Function BitStrToInt(const BitString: String; BitStringFormat: TBitStringFormat): Int64;
+begin
+Result := Int64(BitStrToNumber(BitString,BitStringFormat));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitStrToInt(const BitString: String; Split: TBitStringSplit): Int64;
+begin
+Result := Int64(BitStrToNumber(BitString,Split));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitStrToInt(const BitString: String): Int64;
+begin
+Result := Int64(BitStrToNumber(BitString));
+end;
+
+//==============================================================================
 
 Function TryBitStrToNumber(const BitString: String; out Value: UInt8; BitStringFormat: TBitStringFormat): Boolean;
 begin
@@ -2393,11 +3579,39 @@ end;
 Function TryBitStrToNumber(const BitString: String; out Value: UInt64; BitStringFormat: TBitStringFormat): Boolean;
 begin
 try
-  Value := BitStrToNumber(BitString,BitStringFormat);
+  Value := UInt64(BitStrToNumber(BitString,BitStringFormat));
   Result := True;
 except
   Result := False;
 end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int8; BitStringFormat: TBitStringFormat): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt8(Value),BitStringFormat);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int16; BitStringFormat: TBitStringFormat): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt16(Value),BitStringFormat);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int32; BitStringFormat: TBitStringFormat): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt32(Value),BitStringFormat);
+end; 
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int64; BitStringFormat: TBitStringFormat): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt64(Value),BitStringFormat);
 end;
 
 //------------------------------------------------------------------------------
@@ -2444,6 +3658,33 @@ Format.Split := Split;
 Result := TryBitStrToNumber(BitString,Value,Format);
 end;
 
+//------------------------------------------------------------------------------
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int8; Split: TBitStringSplit): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt8(Value),Split);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int16; Split: TBitStringSplit): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt16(Value),Split);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int32; Split: TBitStringSplit): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt32(Value),Split);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int64; Split: TBitStringSplit): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt64(Value),Split);
+end;
 
 //------------------------------------------------------------------------------
 
@@ -2475,15 +3716,43 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function BitStrToNumberDef(const BitString: String; Default: UInt64; BitStringFormat: TBitStringFormat): UInt64;
+Function TryBitStrToNumber(const BitString: String; out Value: Int8): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt8(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int16): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt16(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int32): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt32(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryBitStrToNumber(const BitString: String; out Value: Int64): Boolean;
+begin
+Result := TryBitStrToNumber(BitString,UInt64(Value));
+end;
+
+//==============================================================================
+
+Function BitStrToNumberDef(const BitString: String; Default: U64Type; BitStringFormat: TBitStringFormat): U64Type;
 begin
 If not TryBitStrToNumber(BitString,Result,BitStringFormat) then
   Result := Default;
 end;
 
-//------------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BitStrToNumberDef(const BitString: String; Default: UInt64; Split: TBitStringSplit): UInt64;
+Function BitStrToNumberDef(const BitString: String; Default: U64Type; Split: TBitStringSplit): U64Type;
 var
   Format: TBitStringFormat;
 begin
@@ -2493,13 +3762,37 @@ If not TryBitStrToNumber(BitString,Result,Format) then
   Result := Default;
 end;
 
-//------------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BitStrToNumberDef(const BitString: String; Default: UInt64): UInt64;
+Function BitStrToNumberDef(const BitString: String; Default: U64Type): U64Type;
 begin
 If not TryBitStrToNumber(BitString,Result,DefBitStringFormat) then
   Result := Default;
 end;
+
+{$IF Declared(NativeUInt64E)}
+//------------------------------------------------------------------------------
+
+Function BitStrToNumberDef(const BitString: String; Default: Int64; BitStringFormat: TBitStringFormat): Int64;
+begin
+Result := Int64(BitStrToNumberDef(BitString,U64Type(Default),BitStringFormat));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitStrToNumberDef(const BitString: String; Default: Int64; Split: TBitStringSplit): Int64;
+begin
+Result := Int64(BitStrToNumberDef(BitString,U64Type(Default),Split));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitStrToNumberDef(const BitString: String; Default: Int64): Int64;
+begin
+Result := Int64(BitStrToNumberDef(BitString,U64Type(Default)));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -2507,7 +3800,7 @@ end;
 ================================================================================
 -------------------------------------------------------------------------------}
 
-Function NumberToOctString(Number: UInt64): String;
+Function NumberToOctString(Number: U64Type): String;
 var
   Len:  TStrOff;
 begin
@@ -2520,43 +3813,74 @@ while Number <> 0 do
     Inc(Len);
   end;
 // remove leading zeroes
-If len > 0 then
+If Len > 0 then
   Result := Copy(Result,Succ(Length(Result) - Len),Len)
 else
   Result := '0';
 end;
 
-//------------------------------------------------------------------------------
+//==============================================================================
 
 Function NumberToOctStr(Number: UInt8): String;
 begin
-Result := NumberToOctString(UInt64(Number));
+Result := NumberToOctString(U64Type(Number));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function NumberToOctStr(Number: UInt16): String;
 begin
-Result := NumberToOctString(UInt64(Number));
+Result := NumberToOctString(U64Type(Number));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function NumberToOctStr(Number: UInt32): String;
 begin
-Result := NumberToOctString(UInt64(Number));
+Result := NumberToOctString(U64Type(Number));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function NumberToOctStr(Number: UInt64): String;
+Function NumberToOctStr(Number: U64Type): String;
 begin
-Result := NumberToOctString(UInt64(Number));
+Result := NumberToOctString(U64Type(Number));
 end;
 
 //------------------------------------------------------------------------------
 
-Function OctStrToNumber(const OctString: String): UInt64;
+Function NumberToOctStr(Number: Int8): String;
+begin
+Result := NumberToOctString(U64Type(Number));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToOctStr(Number: Int16): String;
+begin
+Result := NumberToOctString(U64Type(Number));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToOctStr(Number: Int32): String;
+begin
+Result := NumberToOctString(U64Type(Number));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function NumberToOctStr(Number: Int64): String;
+begin
+Result := NumberToOctString(U64Type(Number));
+end;
+
+{$IFEND}
+
+//==============================================================================
+
+Function OctStrToNumber(const OctString: String): U64Type;
 var
   i:  TStrOff;
 begin
@@ -2564,21 +3888,43 @@ begin
 Result := 0;
 If (Length(OctString) > 0) and (Length(OctString) <= 22) then
   begin
-    For i := 1 to Length(OctString) do
+    For i := 1 to Pred(Length(OctString)) do
       If Ord(OctString[i]) in [Ord('0')..Ord('7')] then
-        begin
-          If (Result and $E000000000000000) = 0 then
-            Result := Result shl 3
-          else
-            raise EBOConversionError.CreateFmt('OctStrToNumber: "%s" is not a valid octal number.',[OctString]);
-          Result := Result or (Ord(OctString[i]) - Ord('0'));
-        end
-      else raise EBOInvalidCharacter.CreateFmt('OctStrToNumber: Unknown character (#%d) in octstring.',[Ord(OctString[i])]);
+        Result := (Result shl 3) or (Ord(OctString[i]) - Ord('0'))
+      else
+        raise EBOInvalidCharacter.CreateFmt('OctStrToNumber: Unknown character (#%d) in octstring.',[Ord(OctString[i])]);
+  {
+    Last character is processed separately to remove pointles testing of
+    highest three bits from the above cycle.
+  }
+    If Ord(OctString[Length(OctString)]) in [Ord('0')..Ord('7')] then
+      begin
+        If (Result and U64Type($E000000000000000)) = 0 then
+          Result := Result shl 3
+        else
+          raise EBOConversionError.CreateFmt('OctStrToNumber: "%s" is not a valid octal number.',[OctString]);
+        Result := Result or (Ord(OctString[Length(OctString)]) - Ord('0'));
+      end
+    else raise EBOInvalidCharacter.CreateFmt('OctStrToNumber: Unknown character (#%d) in octstring.',[Ord(OctString[Length(OctString)])]);
   end
 else raise EBOConversionError.CreateFmt('OctStrToNumber: "%s" is not a valid octal number.',[OctString]);
 end;
 
 //------------------------------------------------------------------------------
+
+Function OctStrToUInt(const OctString: String): UInt64;
+begin
+Result := UInt64(OctStrToNumber(OctString));
+end;
+
+//------------------------------------------------------------------------------
+
+Function OctStrToInt(const OctString: String): Int64;
+begin
+Result := Int64(OctStrToNumber(OctString));
+end;
+
+//==============================================================================
 
 Function TryOctStrToNumber(const OctString: String; out Value: UInt8): Boolean;
 begin
@@ -2628,11 +3974,48 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function OctStrToNumberDef(const OctString: String; Default: UInt64): UInt64;
+Function TryOctStrToNumber(const OctString: String; out Value: Int8): Boolean;
+begin
+Result := TryOctStrToNumber(OctString,UInt8(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryOctStrToNumber(const OctString: String; out Value: Int16): Boolean;
+begin
+Result := TryOctStrToNumber(OctString,UInt16(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryOctStrToNumber(const OctString: String; out Value: Int32): Boolean;
+begin
+Result := TryOctStrToNumber(OctString,UInt32(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TryOctStrToNumber(const OctString: String; out Value: Int64): Boolean;
+begin
+Result := TryOctStrToNumber(OctString,UInt64(Value));
+end;
+
+//==============================================================================
+
+Function OctStrToNumberDef(const OctString: String; Default: U64Type): U64Type;
 begin
 If not TryOctStrToNumber(OctString,Result) then
   Result := Default;
 end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function OctStrToNumberDef(const OctString: String; Default: Int64): Int64;
+begin
+Result := Int64(OctStrToNumberDef(OctString,U64Type(Default)));
+end;
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -3404,7 +4787,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ROL(Value: UInt64; Shift: Integer): UInt64;
+Function ROL(Value: U64Type; Shift: Integer): U64Type;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -3456,9 +4839,40 @@ end;
 {$ELSE}
 begin
 Shift := Shift and 63;
-Result := UInt64((Value shl Shift) or (Value shr (64 - Shift)));
+Result := U64Type((Value shl Shift) or (Value shr (64 - Shift)));
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function ROL(Value: Int8; Shift: Integer): Int8;
+begin
+Result := Int8(ROL(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ROL(Value: Int16; Shift: Integer): Int16;
+begin
+Result := Int16(ROL(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ROL(Value: Int32; Shift: Integer): Int32;
+begin
+Result := Int32(ROL(UInt32(Value),Shift));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ROL(Value: Int64; Shift: Integer): Int64;
+begin
+Result := Int64(ROL(U64Type(Value),Shift));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -3485,7 +4899,35 @@ end;
 
 procedure ROLValue(var Value: UInt64; Shift: Integer);
 begin
-Value := ROL(Value,Shift);
+Value := ROL(U64Type(Value),Shift);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure ROLValue(var Value: Int8; Shift: Integer);
+begin
+Value := Int8(ROL(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ROLValue(var Value: Int16; Shift: Integer);
+begin
+Value := Int16(ROL(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ROLValue(var Value: Int32; Shift: Integer);
+begin
+Value := Int32(ROL(UInt32(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ROLValue(var Value: Int64; Shift: Integer);
+begin
+Value := Int64(ROL(U64Type(Value),Shift));
 end;
 
 {-------------------------------------------------------------------------------
@@ -3569,7 +5011,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ROR(Value: UInt64; Shift: Integer): UInt64;
+Function ROR(Value: U64Type; Shift: Integer): U64Type;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -3621,9 +5063,41 @@ end;
 {$ELSE}
 begin
 Shift := Shift and 63;
-Result := UInt64((Value shr Shift) or (Value shl (64 - Shift)));
+Result := U64Type((Value shr Shift) or (Value shl (64 - Shift)));
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function ROR(Value: Int8; Shift: Integer): Int8;
+begin
+Result := Int8(ROR(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ROR(Value: Int16; Shift: Integer): Int16;
+begin
+Result := Int16(ROR(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ROR(Value: Int32; Shift: Integer): Int32;
+begin
+Result := Int32(ROR(UInt32(Value),Shift));
+end;
+
+{$IF Declared(NativeUInt64E)}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ROR(Value: Int64; Shift: Integer): Int64;
+begin
+Result := Int64(ROR(U64Type(Value),Shift));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -3650,7 +5124,35 @@ end;
 
 procedure RORValue(var Value: UInt64; Shift: Integer);
 begin
-Value := ROR(Value,Shift);
+Value := ROR(U64Type(Value),Shift);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure RORValue(var Value: Int8; Shift: Integer);
+begin
+Value := Int8(ROR(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RORValue(var Value: Int16; Shift: Integer);
+begin
+Value := Int16(ROR(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RORValue(var Value: Int32; Shift: Integer);
+begin
+Value := Int32(ROR(UInt32(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RORValue(var Value: Int64; Shift: Integer);
+begin
+Value := Int64(ROR(U64Type(Value),Shift));
 end;
 
 {-------------------------------------------------------------------------------
@@ -3797,7 +5299,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function RCLCarry(Value: UInt64; Shift: Integer; var CF: Boolean): UInt64;
+Function RCLCarry(Value: U64Type; Shift: Integer; var CF: Boolean): U64Type;
 {$IFNDEF PurePascal}
 {$IFDEF x64}
 asm
@@ -3922,16 +5424,46 @@ Carry := CF;
 Result := Value;
 For i := 1 to Shift do
   begin
-    CF := (Result and UInt64($8000000000000000)) <> 0;
+    CF := (Result and U64Type($8000000000000000)) <> 0;
     If Carry then
-      Result := UInt64((Result shl 1) or UInt64(1))
+      Result := U64Type((Result shl 1) or U64Type(1))
     else
-      Result := UInt64(Result shl 1);
+      Result := U64Type(Result shl 1);
     Carry := CF;
   end;
 end;
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
+Function RCLCarry(Value: Int8; Shift: Integer; var CF: Boolean): Int8;
+begin
+Result := Int8(RCLCarry(UInt8(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCLCarry(Value: Int16; Shift: Integer; var CF: Boolean): Int16;
+begin
+Result := Int16(RCLCarry(UInt16(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCLCarry(Value: Int32; Shift: Integer; var CF: Boolean): Int32;
+begin
+Result := Int32(RCLCarry(UInt32(Value),Shift,CF));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCLCarry(Value: Int64; Shift: Integer; var CF: Boolean): Int64;
+begin
+Result := Int64(RCLCarry(U64Type(Value),Shift,CF));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -3965,13 +5497,56 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function RCL(Value: UInt64; Shift: Integer; CF: Boolean = False): UInt64;
+Function RCL(Value: U64Type; Shift: Integer; CF: Boolean = False): U64Type;
 var
   TempCF: Boolean;
 begin
 TempCF := CF;
 Result := RCLCarry(Value,Shift,TempCF);
 end;
+
+//------------------------------------------------------------------------------
+
+Function RCL(Value: Int8; Shift: Integer; CF: Boolean = False): Int8;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int8(RCLCarry(UInt8(Value),Shift,TempCF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCL(Value: Int16; Shift: Integer; CF: Boolean = False): Int16;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int16(RCLCarry(UInt16(Value),Shift,TempCF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCL(Value: Int32; Shift: Integer; CF: Boolean = False): Int32;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int32(RCLCarry(UInt32(Value),Shift,TempCF));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCL(Value: Int64; Shift: Integer; CF: Boolean = False): Int64;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int64(RCLCarry(U64Type(Value),Shift,TempCF));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -3998,7 +5573,35 @@ end;
 
 procedure RCLValueCarry(var Value: UInt64; Shift: Integer; var CF: Boolean);
 begin
-Value := RCLCarry(Value,Shift,CF);
+Value := RCLCarry(U64Type(Value),Shift,CF);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure RCLValueCarry(var Value: Int8; Shift: Integer; var CF: Boolean);
+begin
+Value := Int8(RCLCarry(UInt8(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCLValueCarry(var Value: Int16; Shift: Integer; var CF: Boolean);
+begin
+Value := Int16(RCLCarry(UInt16(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCLValueCarry(var Value: Int32; Shift: Integer; var CF: Boolean);
+begin
+Value := Int32(RCLCarry(UInt32(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCLValueCarry(var Value: Int64; Shift: Integer; var CF: Boolean);
+begin
+Value := Int64(RCLCarry(U64Type(Value),Shift,CF));
 end;
 
 //==============================================================================
@@ -4026,7 +5629,35 @@ end;
 
 procedure RCLValue(var Value: UInt64; Shift: Integer; CF: Boolean = False);
 begin
-Value := RCL(Value,Shift,CF);
+Value := RCL(U64Type(Value),Shift,CF);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure RCLValue(var Value: Int8; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int8(RCL(UInt8(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCLValue(var Value: Int16; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int16(RCL(UInt16(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCLValue(var Value: Int32; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int32(RCL(UInt32(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCLValue(var Value: Int64; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int64(RCL(U64Type(Value),Shift,CF));
 end;
 
 {-------------------------------------------------------------------------------
@@ -4173,7 +5804,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function RCRCarry(Value: UInt64; Shift: Integer; var CF: Boolean): UInt64;
+Function RCRCarry(Value: U64Type; Shift: Integer; var CF: Boolean): U64Type;
 {$IFNDEF PurePascal}
 {$IFDEF x64}
 asm
@@ -4299,13 +5930,44 @@ For i := 1 to Shift do
   begin
     CF := (Result and 1) <> 0;
     If Carry then
-      Result := UInt64((Result shr 1) or UInt64($8000000000000000))
+      Result := U64Type((Result shr 1) or U64Type($8000000000000000))
     else
-      Result := UInt64(Result shr 1);
+      Result := U64Type(Result shr 1);
     Carry := CF;
   end;
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function RCRCarry(Value: Int8; Shift: Integer; var CF: Boolean): Int8;
+begin
+Result := Int8(RCRCarry(UInt8(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCRCarry(Value: Int16; Shift: Integer; var CF: Boolean): Int16;
+begin
+Result := Int16(RCRCarry(UInt16(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCRCarry(Value: Int32; Shift: Integer; var CF: Boolean): Int32;
+begin
+Result := Int32(RCRCarry(UInt32(Value),Shift,CF));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCRCarry(Value: Int64; Shift: Integer; var CF: Boolean): Int64;
+begin
+Result := Int64(RCRCarry(U64Type(Value),Shift,CF));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -4339,13 +6001,56 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function RCR(Value: UInt64; Shift: Integer; CF: Boolean = False): UInt64;
+Function RCR(Value: U64Type; Shift: Integer; CF: Boolean = False): U64Type;
 var
   TempCF: Boolean;
 begin
 TempCF := CF;
-Result := RCRCarry(Value,Shift,TempCF);
+Result := RCRCarry(U64Type(Value),Shift,TempCF);
 end;
+
+//------------------------------------------------------------------------------
+
+Function RCR(Value: Int8; Shift: Integer; CF: Boolean = False): Int8;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int8(RCRCarry(UInt8(Value),Shift,TempCF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCR(Value: Int16; Shift: Integer; CF: Boolean = False): Int16;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int16(RCRCarry(UInt16(Value),Shift,TempCF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCR(Value: Int32; Shift: Integer; CF: Boolean = False): Int32;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int32(RCRCarry(UInt32(Value),Shift,TempCF));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function RCR(Value: Int64; Shift: Integer; CF: Boolean = False): Int64;
+var
+  TempCF: Boolean;
+begin
+TempCF := CF;
+Result := Int64(RCRCarry(U64Type(Value),Shift,TempCF));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -4372,7 +6077,35 @@ end;
 
 procedure RCRValueCarry(var Value: UInt64; Shift: Integer; var CF: Boolean);
 begin
-Value := RCRCarry(Value,Shift,CF);
+Value := RCRCarry(U64Type(Value),Shift,CF);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure RCRValueCarry(var Value: Int8; Shift: Integer; var CF: Boolean);
+begin
+Value := Int8(RCRCarry(UInt8(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCRValueCarry(var Value: Int16; Shift: Integer; var CF: Boolean);
+begin
+Value := Int16(RCRCarry(UInt16(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCRValueCarry(var Value: Int32; Shift: Integer; var CF: Boolean);
+begin
+Value := Int32(RCRCarry(UInt32(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCRValueCarry(var Value: Int64; Shift: Integer; var CF: Boolean);
+begin
+Value := Int64(RCRCarry(U64Type(Value),Shift,CF));
 end;
 
 //==============================================================================
@@ -4400,7 +6133,35 @@ end;
 
 procedure RCRValue(var Value: UInt64; Shift: Integer; CF: Boolean = False);
 begin
-Value := RCR(Value,Shift,CF);
+Value := RCR(U64Type(Value),Shift,CF);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure RCRValue(var Value: Int8; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int8(RCR(UInt8(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCRValue(var Value: Int16; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int16(RCR(UInt16(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCRValue(var Value: Int32; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int32(RCR(UInt32(Value),Shift,CF));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure RCRValue(var Value: Int64; Shift: Integer; CF: Boolean = False);
+begin
+Value := Int64(RCR(U64Type(Value),Shift,CF));
 end;
 
 {-------------------------------------------------------------------------------
@@ -4493,7 +6254,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SAL(Value: UInt64; Shift: Integer): UInt64;
+Function SAL(Value: U64Type; Shift: Integer): U64Type;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -4541,9 +6302,40 @@ begin
   software implementation just nulls the result for large shifts (64+), which
   does not conform to Intel's documentation of SHL/SAL instruction.
 }
-Result := UInt64(Value shl UInt8(Shift and 63));
+Result := U64Type(Value shl UInt8(Shift and 63));
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function SAL(Value: Int8; Shift: Integer): Int8;
+begin
+Result := Int8(SAL(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SAL(Value: Int16; Shift: Integer): Int16;
+begin
+Result := Int16(SAL(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SAL(Value: Int32; Shift: Integer): Int32;
+begin
+Result := Int32(SAL(UInt32(Value),Shift));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SAL(Value: Int64; Shift: Integer): Int64;
+begin
+Result := Int64(SAL(U64Type(Value),Shift));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -4570,7 +6362,35 @@ end;
 
 procedure SALValue(var Value: UInt64; Shift: Integer);
 begin
-Value := SAL(Value,Shift);
+Value := SAL(U64Type(Value),Shift);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SALValue(var Value: Int8; Shift: Integer);
+begin
+Value := Int8(SAL(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SALValue(var Value: Int16; Shift: Integer);
+begin
+Value := Int16(SAL(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SALValue(var Value: Int32; Shift: Integer);
+begin
+Value := Int32(SAL(UInt32(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SALValue(var Value: Int64; Shift: Integer);
+begin
+Value := Int64(SAL(U64Type(Value),Shift));
 end;
 
 {-------------------------------------------------------------------------------
@@ -4687,7 +6507,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SAR(Value: UInt64; Shift: Integer): UInt64;
+Function SAR(Value: U64Type; Shift: Integer): U64Type;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -4742,14 +6562,45 @@ begin
 Shift := Shift and 63;
 If Shift <> 0 then
   begin
-    If (Value and UInt64($8000000000000000)) <> 0 then
-      Result := UInt64((Value shr Shift) or (UInt64($FFFFFFFFFFFFFFFF) shl (64 - Shift)))
+    If (Value and U64Type($8000000000000000)) <> 0 then
+      Result := U64Type((Value shr Shift) or (U64Type($FFFFFFFFFFFFFFFF) shl (64 - Shift)))
     else
-      Result := UInt64(Value shr Shift);
+      Result := U64Type(Value shr Shift);
   end
 else Result := Value;
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function SAR(Value: Int8; Shift: Integer): Int8;
+begin
+Result := Int8(SAR(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SAR(Value: Int16; Shift: Integer): Int16;
+begin
+Result := Int16(SAR(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SAR(Value: Int32; Shift: Integer): Int32;
+begin
+Result := Int32(SAR(UInt32(Value),Shift));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SAR(Value: Int64; Shift: Integer): Int64;
+begin
+Result := Int64(SAR(U64Type(Value),Shift));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -4776,7 +6627,35 @@ end;
 
 procedure SARValue(var Value: UInt64; Shift: Integer);
 begin
-Value := SAR(Value,Shift);
+Value := SAR(U64Type(Value),Shift);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SARValue(var Value: Int8; Shift: Integer);
+begin
+Value := Int8(SAR(UInt8(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SARValue(var Value: Int16; Shift: Integer);
+begin
+Value := Int16(SAR(UInt16(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SARValue(var Value: Int32; Shift: Integer);
+begin
+Value := Int32(SAR(UInt32(Value),Shift));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SARValue(var Value: Int64; Shift: Integer);
+begin
+Value := Int64(SAR(U64Type(Value),Shift));
 end;
 
 {-------------------------------------------------------------------------------
@@ -4826,7 +6705,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function EndianSwap(Value: UInt64): UInt64;
+Function EndianSwap(Value: U64Type): U64Type;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -4852,6 +6731,30 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function EndianSwap(Value: Int16): Int16;
+begin
+Result := Int16(EndianSwap(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function EndianSwap(Value: Int32): Int32;
+begin
+Result := Int32(EndianSwap(UInt32(Value)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function EndianSwap(Value: Int64): Int64;
+begin
+Result := Int64(EndianSwap(U64Type(Value)));
+end;
+
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
 Function SwapEndian(Value: UInt16): UInt16;
 begin
 Result := EndianSwap(Value);
@@ -4866,10 +6769,34 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SwapEndian(Value: UInt64): UInt64;
+Function SwapEndian(Value: U64Type): U64Type;
 begin
 Result := EndianSwap(Value);
 end;
+
+//------------------------------------------------------------------------------
+
+Function SwapEndian(Value: Int16): Int16;
+begin
+Result := Int16(EndianSwap(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SwapEndian(Value: Int32): Int32;
+begin
+Result := Int32(EndianSwap(UInt32(Value)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SwapEndian(Value: Int64): Int64;
+begin
+Result := Int64(EndianSwap(U64Type(Value)));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -4889,7 +6816,28 @@ end;
 
 procedure EndianSwapValue(var Value: UInt64);
 begin
-Value := EndianSwap(Value);
+Value := EndianSwap(U64Type(Value));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure EndianSwapValue(var Value: Int16);
+begin
+Value := Int16(EndianSwap(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure EndianSwapValue(var Value: Int32);
+begin
+Value := Int32(EndianSwap(UInt32(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure EndianSwapValue(var Value: Int64);
+begin
+Value := Int64(EndianSwap(U64Type(Value)));
 end;
 
 //------------------------------------------------------------------------------
@@ -4910,7 +6858,28 @@ end;
 
 procedure SwapEndianValue(var Value: UInt64);
 begin
-Value := EndianSwap(Value);
+Value := EndianSwap(U64Type(Value));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SwapEndianValue(var Value: Int16);
+begin
+Value := Int16(EndianSwap(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapEndianValue(var Value: Int32);
+begin
+Value := Int32(EndianSwap(UInt32(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapEndianValue(var Value: Int64);
+begin
+Value := Int64(EndianSwap(U64Type(Value)));
 end;
 
 //==============================================================================
@@ -5563,7 +7532,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BT(Value: UInt64; Bit: Integer): Boolean;
+Function BT(Value: U64Type; Bit: Integer): Boolean;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -5592,6 +7561,38 @@ begin
 Result := ((Value shr (Bit and 63)) and 1) <> 0;
 end;
 {$ENDIF}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BT(Value: Int8; Bit: Integer): Boolean;
+begin
+Result := BT(UInt8(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BT(Value: Int16; Bit: Integer): Boolean;
+begin
+Result := BT(UInt16(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BT(Value: Int32; Bit: Integer): Boolean;
+begin
+Result := BT(UInt32(Value),Bit);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BT(Value: Int64; Bit: Integer): Boolean;
+begin
+Result := BT(U64Type(Value),Bit);
+end;
+
+{$IFEND}
+
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -5720,6 +7721,34 @@ Value := UInt64(Value or (UInt64(1) shl Bit));
 end;
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
+Function BTS(var Value: Int8; Bit: Integer): Boolean;
+begin
+Result := BTS(UInt8(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTS(var Value: Int16; Bit: Integer): Boolean;
+begin
+Result := BTS(UInt16(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTS(var Value: Int32; Bit: Integer): Boolean;
+begin
+Result := BTS(UInt32(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTS(var Value: Int64; Bit: Integer): Boolean;
+begin
+Result := BTS(UInt64(Value),Bit);
+end;
+
 {-------------------------------------------------------------------------------
 ================================================================================
                             Bit test and reset (BTR)
@@ -5846,6 +7875,34 @@ Result := ((Value shr Bit) and 1) <> 0;
 Value := UInt64(Value and not(UInt64(1) shl Bit));
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function BTR(var Value: Int8; Bit: Integer): Boolean;
+begin
+Result := BTR(UInt8(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTR(var Value: Int16; Bit: Integer): Boolean;
+begin
+Result := BTR(UInt16(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTR(var Value: Int32; Bit: Integer): Boolean;
+begin
+Result := BTR(UInt32(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTR(var Value: Int64; Bit: Integer): Boolean;
+begin
+Result := BTR(UInt64(Value),Bit);
+end;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -5974,6 +8031,34 @@ Value := UInt64(Value xor (UInt64(1) shl Bit));
 end;
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
+Function BTC(var Value: Int8; Bit: Integer): Boolean;
+begin
+Result := BTC(UInt8(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTC(var Value: Int16; Bit: Integer): Boolean;
+begin
+Result := BTC(UInt16(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTC(var Value: Int32; Bit: Integer): Boolean;
+begin
+Result := BTC(UInt32(Value),Bit);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BTC(var Value: Int64; Bit: Integer): Boolean;
+begin
+Result := BTC(UInt64(Value),Bit);
+end;
+
 {-------------------------------------------------------------------------------
 ================================================================================
                        Bit test and set to a given value
@@ -6008,6 +8093,34 @@ Function BitSetTo(var Value: UInt64; Bit: Integer; NewValue: Boolean): Boolean;
 begin
 If NewValue then Result := BTS(Value,Bit)
   else Result := BTR(Value,Bit);
+end;
+
+//------------------------------------------------------------------------------
+
+Function BitSetTo(var Value: Int8; Bit: Integer; NewValue: Boolean): Boolean;
+begin
+Result := BitSetTo(UInt8(Value),Bit,NewValue);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitSetTo(var Value: Int16; Bit: Integer; NewValue: Boolean): Boolean;
+begin
+Result := BitSetTo(UInt16(Value),Bit,NewValue);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitSetTo(var Value: Int32; Bit: Integer; NewValue: Boolean): Boolean;
+begin
+Result := BitSetTo(UInt32(Value),Bit,NewValue);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitSetTo(var Value: Int64; Bit: Integer; NewValue: Boolean): Boolean;
+begin
+Result := BitSetTo(UInt64(Value),Bit,NewValue);
 end;
 
 {-------------------------------------------------------------------------------
@@ -6128,7 +8241,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BSF(Value: UInt64): Integer;
+Function BSF(Value: U64Type): Integer;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -6168,6 +8281,37 @@ For i := 0 to 63 do
     end;
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function BSF(Value: Int8): Integer;
+begin
+Result := BSF(UInt8(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BSF(Value: Int16): Integer;
+begin
+Result := BSF(UInt16(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BSF(Value: Int32): Integer;
+begin
+Result := BSF(UInt32(Value));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BSF(Value: Int64): Integer;
+begin
+Result := BSF(U64Type(Value));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -6288,7 +8432,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BSR(Value: UInt64): Integer;
+Function BSR(Value: U64Type): Integer;
 {$IFNDEF PurePascal}
 asm
 {$IFDEF x64}
@@ -6329,6 +8473,37 @@ For i := 63 downto 0 do
     end;
 end;
 {$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function BSR(Value: Int8): Integer;
+begin
+Result := BSR(UInt8(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BSR(Value: Int16): Integer;
+begin
+Result := BSR(UInt16(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BSR(Value: Int32): Integer;
+begin
+Result := BSR(UInt32(Value));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BSR(Value: Int64): Integer;
+begin
+Result := BSR(U64Type(Value));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -6403,7 +8578,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_PopCount_64_Pas(Value: UInt64): Integer; register;
+Function Fce_PopCount_64_Pas(Value: U64Type): Integer; register;
 {$IFDEF UseLookupTable}
 begin
 {$IFDEF CPU64bit}
@@ -6417,12 +8592,12 @@ Result := Fce_PopCount_32_Pas(Int64Rec(Value).Lo) + Fce_PopCount_32_Pas(Int64Rec
 end;
 {$ELSE}
 begin
-Value := (Value and UInt64($5555555555555555)) + ((Value shr 1) and UInt64($5555555555555555));
-Value := (Value and UInt64($3333333333333333)) + ((Value shr 2) and UInt64($3333333333333333));
-Value := (Value and UInt64($0F0F0F0F0F0F0F0F)) + ((Value shr 4) and UInt64($0F0F0F0F0F0F0F0F));
-Value := (Value and UInt64($00FF00FF00FF00FF)) + ((Value shr 8) and UInt64($00FF00FF00FF00FF));
-Value := (Value and UInt64($0000FFFF0000FFFF)) + ((Value shr 16) and UInt64($0000FFFF0000FFFF));
-Value := (Value and UInt64($00000000FFFFFFFF)) + ((Value shr 32) and UInt64($00000000FFFFFFFF));
+Value := (Value and U64Type($5555555555555555)) + ((Value shr 1) and U64Type($5555555555555555));
+Value := (Value and U64Type($3333333333333333)) + ((Value shr 2) and U64Type($3333333333333333));
+Value := (Value and U64Type($0F0F0F0F0F0F0F0F)) + ((Value shr 4) and U64Type($0F0F0F0F0F0F0F0F));
+Value := (Value and U64Type($00FF00FF00FF00FF)) + ((Value shr 8) and U64Type($00FF00FF00FF00FF));
+Value := (Value and U64Type($0000FFFF0000FFFF)) + ((Value shr 16) and U64Type($0000FFFF0000FFFF));
+Value := (Value and U64Type($00000000FFFFFFFF)) + ((Value shr 32) and U64Type($00000000FFFFFFFF));
 Result := Integer(Value);
 end;
 {$ENDIF}
@@ -6489,7 +8664,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_PopCount_64_Asm(Value: UInt64): Integer; register; assembler;
+Function Fce_PopCount_64_Asm(Value: U64Type): Integer; register; assembler;
 asm
 {$IFDEF x64}
   {$IFDEF Windows}
@@ -6518,13 +8693,12 @@ end;
 
 {$ENDIF}
 
-//==============================================================================
-
+//==============================================================================       
 var
   Var_PopCount_8: Function(Value: UInt8): Integer; register = Fce_PopCount_8_Pas;
   Var_PopCount_16: Function(Value: UInt16): Integer; register = Fce_PopCount_16_Pas;
   Var_PopCount_32: Function(Value: UInt32): Integer; register = Fce_PopCount_32_Pas;
-  Var_PopCount_64: Function(Value: UInt64): Integer; register = Fce_PopCount_64_Pas;
+  Var_PopCount_64: Function(Value: U64Type): Integer; register = Fce_PopCount_64_Pas;
 
 //------------------------------------------------------------------------------
 
@@ -6549,10 +8723,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function PopCount(Value: UInt64): Integer;
+Function PopCount(Value: U64Type): Integer;
 begin
 Result := Var_PopCount_64(Value);
 end;
+
+//------------------------------------------------------------------------------
+
+Function PopCount(Value: Int8): Integer;
+begin
+Result := Var_PopCount_8(UInt8(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function PopCount(Value: Int16): Integer;
+begin
+Result := Var_PopCount_16(UInt16(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function PopCount(Value: Int32): Integer;
+begin
+Result := Var_PopCount_32(UInt32(Value));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function PopCount(Value: Int64): Integer;
+begin
+Result := Var_PopCount_64(U64Type(Value));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -6636,13 +8841,44 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function GetFlagState(Value,FlagBitmask: UInt64; ExactMatch: Boolean = False): Boolean;
+Function GetFlagState(Value,FlagBitmask: U64Type; ExactMatch: Boolean = False): Boolean;
 begin
 If ExactMatch then
   Result := (Value and FlagBitmask) = FlagBitmask
 else
   Result := (Value and FlagBitmask) <> 0;
 end;
+
+//------------------------------------------------------------------------------
+
+Function GetFlagState(Value,FlagBitmask: Int8; ExactMatch: Boolean = False): Boolean;
+begin
+Result := GetFlagState(UInt8(Value),UInt8(FlagBitmask),ExactMatch);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetFlagState(Value,FlagBitmask: Int16; ExactMatch: Boolean = False): Boolean;
+begin
+Result := GetFlagState(UInt16(Value),UInt16(FlagBitmask),ExactMatch);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetFlagState(Value,FlagBitmask: Int32; ExactMatch: Boolean = False): Boolean;
+begin
+Result := GetFlagState(UInt32(Value),UInt32(FlagBitmask),ExactMatch);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetFlagState(Value,FlagBitmask: Int64; ExactMatch: Boolean = False): Boolean;
+begin
+Result := GetFlagState(U64Type(Value),U64Type(FlagBitmask),ExactMatch);
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -6671,10 +8907,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetFlag(Value,FlagBitmask: UInt64): UInt64;
+Function SetFlag(Value,FlagBitmask: U64Type): U64Type;
 begin
 Result := Value or FlagBitmask;
 end;
+
+//------------------------------------------------------------------------------
+
+Function SetFlag(Value,FlagBitmask: Int8): Int8;
+begin
+Result := Int8(SetFlag(UInt8(Value),UInt8(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlag(Value,FlagBitmask: Int16): Int16;
+begin
+Result := Int16(SetFlag(UInt16(Value),UInt16(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlag(Value,FlagBitmask: Int32): Int32;
+begin
+Result := Int32(SetFlag(UInt32(Value),UInt32(FlagBitmask)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlag(Value,FlagBitmask: Int64): Int64;
+begin
+Result := Int64(SetFlag(U64Type(Value),U64Type(FlagBitmask)));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -6701,7 +8968,35 @@ end;
 
 procedure SetFlagValue(var Value: UInt64; FlagBitmask: UInt64);
 begin
-Value := SetFlag(Value,FlagBitmask);
+Value := UInt64(SetFlag(U64Type(Value),U64Type(FlagBitmask)));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SetFlagValue(var Value: Int8; FlagBitmask: Int8);
+begin
+Value := Int8(SetFlag(UInt8(Value),UInt8(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagValue(var Value: Int16; FlagBitmask: Int16);
+begin
+Value := Int16(SetFlag(UInt16(Value),UInt16(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagValue(var Value: Int32; FlagBitmask: Int32);
+begin
+Value := Int32(SetFlag(UInt32(Value),UInt32(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagValue(var Value: Int64; FlagBitmask: Int64);
+begin
+Value := Int64(SetFlag(U64Type(Value),U64Type(FlagBitmask)));
 end;
 
 //==============================================================================
@@ -6745,9 +9040,9 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetFlags_64(Value: UInt64; Flags: array of UInt64): UInt64;
+Function SetFlags_64(Value: U64Type; Flags: array of U64Type): U64Type;
 var
-  TempBitmask:  UInt64;
+  TempBitmask:  U64Type;
   i:            Integer;
 begin
 TempBitmask := 0;
@@ -6755,6 +9050,61 @@ For i := Low(Flags) to High(flags) do
   TempBitmask := TempBitmask or Flags[i];
 Result := SetFlag(Value,TempBitmask);
 end;
+
+//------------------------------------------------------------------------------
+
+Function SetFlags_8(Value: Int8; Flags: array of Int8): Int8;
+var
+  TempBitmask:  UInt8;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or UInt8(Flags[i]);
+Result := Int8(SetFlag(UInt8(Value),TempBitmask));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlags_16(Value: Int16; Flags: array of Int16): Int16;
+var
+  TempBitmask:  UInt16;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or UInt16(Flags[i]);
+Result := Int16(SetFlag(UInt16(Value),TempBitmask));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlags_32(Value: Int32; Flags: array of Int32): Int32;
+var
+  TempBitmask:  UInt32;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or UInt32(Flags[i]);
+Result := Int32(SetFlag(UInt32(Value),TempBitmask));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlags_64(Value: Int64; Flags: array of Int64): Int64;
+var
+  TempBitmask:  U64Type;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or U64Type(Flags[i]);
+Result := Int64(SetFlag(U64Type(Value),TempBitmask));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -6779,10 +9129,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetFlags(Value: UInt64; Flags: array of UInt64): UInt64;
+Function SetFlags(Value: U64Type; Flags: array of U64Type): U64Type;
 begin
 Result := SetFlags_64(Value,Flags);
 end;
+
+//------------------------------------------------------------------------------
+
+Function SetFlags(Value: Int8; Flags: array of Int8): Int8;
+begin
+Result := SetFlags_8(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlags(Value: Int16; Flags: array of Int16): Int16;
+begin
+Result := SetFlags_16(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlags(Value: Int32; Flags: array of Int32): Int32;
+begin
+Result := SetFlags_32(Value,Flags);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlags(Value: Int64; Flags: array of Int64): Int64;
+begin
+Result := SetFlags_64(Value,Flags);
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -6808,6 +9189,50 @@ end;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure SetFlagsValue_64(var Value: UInt64; Flags: array of UInt64);
+{$IF Declared(NativeUInt64E)}
+begin
+Value := SetFlags_64(Value,Flags);
+end;
+{$ELSE}
+var
+  TempFlags:  array of U64Type;
+  i:          Integer;
+begin
+TempFlags := nil;
+If Length(Flags) > 0 then
+  begin
+    SetLength(TempFlags,Length(Flags));
+    For i := Low(Flags) to High(Flags) do
+      TempFlags[i] := U64Type(Flags[i]);
+  end;
+Value := UInt64(SetFlags_64(U64Type(Value),TempFlags));
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+procedure SetFlagsValue_8(var Value: Int8; Flags: array of Int8);
+begin
+Value := SetFlags_8(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagsValue_16(var Value: Int16; Flags: array of Int16);
+begin
+Value := SetFlags_16(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagsValue_32(var Value: Int32; Flags: array of Int32);
+begin
+Value := SetFlags_32(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagsValue_64(var Value: Int64; Flags: array of Int64);
 begin
 Value := SetFlags_64(Value,Flags);
 end;
@@ -6840,6 +9265,34 @@ begin
 SetFlagsValue_64(Value,Flags);
 end;
 
+//------------------------------------------------------------------------------
+
+procedure SetFlagsValue(var Value: Int8; Flags: array of Int8);
+begin
+SetFlagsValue_8(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagsValue(var Value: Int16; Flags: array of Int16);
+begin
+SetFlagsValue_16(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagsValue(var Value: Int32; Flags: array of Int32);
+begin
+SetFlagsValue_32(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagsValue(var Value: Int64; Flags: array of Int64);
+begin
+SetFlagsValue_64(Value,Flags);
+end;
+
 {-------------------------------------------------------------------------------
 ================================================================================
                                    Reset flag
@@ -6867,10 +9320,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ResetFlag(Value,FlagBitmask: UInt64): UInt64;
+Function ResetFlag(Value,FlagBitmask: U64Type): U64Type;
 begin
 Result := Value and not FlagBitmask;
 end;
+
+//------------------------------------------------------------------------------
+
+Function ResetFlag(Value,FlagBitmask: Int8): Int8;
+begin
+Result := Int8(ResetFlag(UInt8(Value),UInt8(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlag(Value,FlagBitmask: Int16): Int16;
+begin
+Result := Int16(ResetFlag(UInt16(Value),UInt16(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlag(Value,FlagBitmask: Int32): Int32;
+begin
+Result := Int32(ResetFlag(UInt32(Value),UInt32(FlagBitmask)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlag(Value,FlagBitmask: Int64): Int64;
+begin
+Result := Int64(ResetFlag(U64Type(Value),U64Type(FlagBitmask)));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -6897,7 +9381,35 @@ end;
 
 procedure ResetFlagValue(var Value: UInt64; FlagBitmask: UInt64);
 begin
-Value := ResetFlag(Value,FlagBitmask);
+Value := UInt64(ResetFlag(U64Type(Value),U64Type(FlagBitmask)));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure ResetFlagValue(var Value: Int8; FlagBitmask: Int8);
+begin
+Value := Int8(ResetFlag(UInt8(Value),UInt8(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagValue(var Value: Int16; FlagBitmask: Int16);
+begin
+Value := Int16(ResetFlag(UInt16(Value),UInt16(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagValue(var Value: Int32; FlagBitmask: Int32);
+begin
+Value := Int32(ResetFlag(UInt32(Value),UInt32(FlagBitmask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagValue(var Value: Int64; FlagBitmask: Int64);
+begin
+Value := Int64(ResetFlag(U64Type(Value),U64Type(FlagBitmask)));
 end;
 
 //==============================================================================
@@ -6941,9 +9453,9 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ResetFlags_64(Value: UInt64; Flags: array of UInt64): UInt64;
+Function ResetFlags_64(Value: U64Type; Flags: array of U64Type): U64Type;
 var
-  TempBitmask:  UInt64;
+  TempBitmask:  U64Type;
   i:            Integer;
 begin
 TempBitmask := 0;
@@ -6951,6 +9463,61 @@ For i := Low(Flags) to High(flags) do
   TempBitmask := TempBitmask or Flags[i];
 Result := ResetFlag(Value,TempBitmask);
 end;
+
+//------------------------------------------------------------------------------
+
+Function ResetFlags_8(Value: Int8; Flags: array of Int8): Int8;
+var
+  TempBitmask:  UInt8;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or UInt8(Flags[i]);
+Result := Int8(ResetFlag(UInt8(Value),TempBitmask));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlags_16(Value: Int16; Flags: array of Int16): Int16;
+var
+  TempBitmask:  UInt16;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or UInt16(Flags[i]);
+Result := Int16(ResetFlag(UInt16(Value),TempBitmask));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlags_32(Value: Int32; Flags: array of Int32): Int32;
+var
+  TempBitmask:  UInt32;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or UInt32(Flags[i]);
+Result := Int32(ResetFlag(UInt32(Value),TempBitmask));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlags_64(Value: Int64; Flags: array of Int64): Int64;
+var
+  TempBitmask:  U64Type;
+  i:            Integer;
+begin
+TempBitmask := 0;
+For i := Low(Flags) to High(flags) do
+  TempBitmask := TempBitmask or U64Type(Flags[i]);
+Result := Int64(ResetFlag(U64Type(Value),TempBitmask));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -6974,10 +9541,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ResetFlags(Value: UInt64; Flags: array of UInt64): UInt64;
+Function ResetFlags(Value: U64Type; Flags: array of U64Type): U64Type;
 begin
 Result := ResetFlags_64(Value,Flags);
 end;
+
+//------------------------------------------------------------------------------
+
+Function ResetFlags(Value: Int8; Flags: array of Int8): Int8;
+begin
+Result := ResetFlags_8(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlags(Value: Int16; Flags: array of Int16): Int16;
+begin
+Result := ResetFlags_16(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlags(Value: Int32; Flags: array of Int32): Int32;
+begin
+Result := ResetFlags_32(Value,Flags);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ResetFlags(Value: Int64; Flags: array of Int64): Int64;
+begin
+Result := ResetFlags_64(Value,Flags);
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -7003,6 +9601,50 @@ end;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure ResetFlagsValue_64(var Value: UInt64; Flags: array of UInt64);
+{$IF Declared(NativeUInt64E)}
+begin
+Value := ResetFlags_64(Value,Flags);
+end;
+{$ELSE}
+var
+  TempFlags:  array of U64Type;
+  i:          Integer;
+begin
+TempFlags := nil;
+If Length(Flags) > 0 then
+  begin
+    SetLength(TempFlags,Length(Flags));
+    For i := Low(Flags) to High(Flags) do
+      TempFlags[i] := U64Type(Flags[i]);
+  end;
+Value := UInt64(ResetFlags_64(U64Type(Value),TempFlags));
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+procedure ResetFlagsValue_8(var Value: Int8; Flags: array of Int8);
+begin
+Value := ResetFlags_8(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagsValue_16(var Value: Int16; Flags: array of Int16);
+begin
+Value := ResetFlags_16(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagsValue_32(var Value: Int32; Flags: array of Int32);
+begin
+Value := ResetFlags_32(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagsValue_64(var Value: Int64; Flags: array of Int64);
 begin
 Value := ResetFlags_64(Value,Flags);
 end;
@@ -7031,6 +9673,34 @@ end;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure ResetFlagsValue(var Value: UInt64; Flags: array of UInt64);
+begin
+ResetFlagsValue_64(Value,Flags);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure ResetFlagsValue(var Value: Int8; Flags: array of Int8);
+begin
+ResetFlagsValue_8(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagsValue(var Value: Int16; Flags: array of Int16);
+begin
+ResetFlagsValue_16(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagsValue(var Value: Int32; Flags: array of Int32);
+begin
+ResetFlagsValue_32(Value,Flags);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ResetFlagsValue(var Value: Int64; Flags: array of Int64);
 begin
 ResetFlagsValue_64(Value,Flags);
 end;
@@ -7071,13 +9741,44 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetFlagState(Value,FlagBitmask: UInt64; NewState: Boolean): UInt64;
+Function SetFlagState(Value,FlagBitmask: U64Type; NewState: Boolean): U64Type;
 begin
 If NewState then
   Result := SetFlag(Value,FlagBitmask)
 else
   Result := ResetFlag(Value,FlagBitmask);
 end;
+
+//------------------------------------------------------------------------------
+
+Function SetFlagState(Value,FlagBitmask: Int8; NewState: Boolean): Int8;
+begin
+Result := Int8(SetFlagState(UInt8(Value),UInt8(FlagBitmask),NewState));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlagState(Value,FlagBitmask: Int16; NewState: Boolean): Int16;
+begin
+Result := Int16(SetFlagState(UInt16(Value),UInt16(FlagBitmask),NewState));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlagState(Value,FlagBitmask: Int32; NewState: Boolean): Int32;
+begin
+Result := Int32(SetFlagState(UInt32(Value),UInt32(FlagBitmask),NewState));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetFlagState(Value,FlagBitmask: Int64; NewState: Boolean): Int64;
+begin
+Result := Int64(SetFlagState(U64Type(Value),U64Type(FlagBitmask),NewState));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -7104,7 +9805,35 @@ end;
 
 procedure SetFlagStateValue(var Value: UInt64; FlagBitmask: UInt64; NewState: Boolean);
 begin
-Value := SetFlagState(Value,FlagBitmask,NewState);
+Value := UInt64(SetFlagState(U64Type(Value),U64Type(FlagBitmask),NewState));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SetFlagStateValue(var Value: Int8; FlagBitmask: Int8; NewState: Boolean);
+begin
+Value := Int8(SetFlagState(UInt8(Value),UInt8(FlagBitmask),NewState));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagStateValue(var Value: Int16; FlagBitmask: Int16; NewState: Boolean);
+begin
+Value := Int16(SetFlagState(UInt16(Value),UInt16(FlagBitmask),NewState));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagStateValue(var Value: Int32; FlagBitmask: Int32; NewState: Boolean);
+begin
+Value := Int32(SetFlagState(UInt32(Value),UInt32(FlagBitmask),NewState));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetFlagStateValue(var Value: Int64; FlagBitmask: Int64; NewState: Boolean);
+begin
+Value := Int64(SetFlagState(U64Type(Value),U64Type(FlagBitmask),NewState));
 end;
 
 {-------------------------------------------------------------------------------
@@ -7140,12 +9869,43 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function GetBits(Value: UInt64; FromBit,ToBit: Integer; ShiftDown: Boolean = True): UInt64;
+Function GetBits(Value: U64Type; FromBit,ToBit: Integer; ShiftDown: Boolean = True): U64Type;
 begin
-Result := Value and UInt64((UInt64($FFFFFFFFFFFFFFFF) shl (FromBit and 63)) and (UInt64($FFFFFFFFFFFFFFFF) shr (63 - (ToBit and 63))));
+Result := Value and U64Type((U64Type($FFFFFFFFFFFFFFFF) shl (FromBit and 63)) and (U64Type($FFFFFFFFFFFFFFFF) shr (63 - (ToBit and 63))));
 If ShiftDown then
   Result := Result shr (FromBit and 63);
 end;
+
+//------------------------------------------------------------------------------
+
+Function GetBits(Value: Int8; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int8;
+begin
+Result := Int8(GetBits(UInt8(Value),FromBit,ToBit,ShiftDown));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetBits(Value: Int16; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int16;
+begin
+Result := Int16(GetBits(UInt16(Value),FromBit,ToBit,ShiftDown));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetBits(Value: Int32; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int32;
+begin
+Result := Int32(GetBits(UInt32(Value),FromBit,ToBit,ShiftDown));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetBits(Value: Int64; FromBit,ToBit: Integer; ShiftDown: Boolean = True): Int64;
+begin
+Result := Int64(GetBits(U64Type(Value),FromBit,ToBit,ShiftDown));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -7189,15 +9949,46 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function SetBits(Value,NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True): UInt64;
+Function SetBits(Value,NewBits: U64Type; FromBit,ToBit: Integer; ShiftUp: Boolean = True): U64Type;
 var
-  Mask: UInt64;
+  Mask: U64Type;
 begin
 If ShiftUp then
-  NewBits := UInt64(NewBits shl (FromBit and 63));
-Mask := UInt64((UInt64($FFFFFFFFFFFFFFFF) shl (FromBit and 63)) and (UInt64($FFFFFFFFFFFFFFFF) shr (63 - (ToBit and 63))));
+  NewBits := U64Type(NewBits shl (FromBit and 63));
+Mask := U64Type((U64Type($FFFFFFFFFFFFFFFF) shl (FromBit and 63)) and (U64Type($FFFFFFFFFFFFFFFF) shr (63 - (ToBit and 63))));
 Result := (Value and not Mask) or (NewBits and Mask);
 end;
+
+//------------------------------------------------------------------------------
+
+Function SetBits(Value,NewBits: Int8; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int8;
+begin
+Result := Int8(SetBits(UInt8(Value),UInt8(NewBits),FromBit,ToBit,ShiftUp));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetBits(Value,NewBits: Int16; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int16;
+begin
+Result := Int16(SetBits(UInt16(Value),UInt16(NewBits),FromBit,ToBit,ShiftUp));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetBits(Value,NewBits: Int32; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int32;
+begin
+Result := Int32(SetBits(UInt32(Value),UInt32(NewBits),FromBit,ToBit,ShiftUp));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SetBits(Value,NewBits: Int64; FromBit,ToBit: Integer; ShiftUp: Boolean = True): Int64;
+begin
+Result := Int64(SetBits(U64Type(Value),U64Type(NewBits),FromBit,ToBit,ShiftUp));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -7225,6 +10016,34 @@ end;
 procedure SetBitsValue(var Value: UInt64; NewBits: UInt64; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
 begin
 Value := SetBits(Value,NewBits,FromBit,ToBit,ShiftUp);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SetBitsValue(var Value: Int8; NewBits: Int8; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
+begin
+Value := Int8(SetBits(UInt8(Value),UInt8(NewBits),FromBit,ToBit,ShiftUp));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetBitsValue(var Value: Int16; NewBits: Int16; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
+begin
+Value := Int16(SetBits(UInt16(Value),UInt16(NewBits),FromBit,ToBit,ShiftUp));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetBitsValue(var Value: Int32; NewBits: Int32; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
+begin
+Value := Int32(SetBits(UInt32(Value),UInt32(NewBits),FromBit,ToBit,ShiftUp));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SetBitsValue(var Value: Int64; NewBits: Int64; FromBit,ToBit: Integer; ShiftUp: Boolean = True);
+begin
+Value := Int64(SetBits(U64Type(Value),U64Type(NewBits),FromBit,ToBit,ShiftUp));
 end;
 
 {-------------------------------------------------------------------------------
@@ -7279,11 +10098,42 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ReverseBits(Value: UInt64): UInt64;
+Function ReverseBits(Value: U64Type): U64Type;
 begin
 Int64Rec(Result).Hi := ReverseBits(Int64Rec(Value).Lo);
 Int64Rec(Result).Lo := ReverseBits(Int64Rec(Value).Hi);
 end;
+
+//------------------------------------------------------------------------------
+
+Function ReverseBits(Value: Int8): Int8;
+begin
+Result := Int8(ReverseBits(UInt8(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ReverseBits(Value: Int16): Int16;
+begin
+Result := Int16(ReverseBits(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ReverseBits(Value: Int32): Int32;
+begin
+Result := Int32(ReverseBits(UInt32(Value)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ReverseBits(Value: Int64): Int64;
+begin
+Result := Int64(ReverseBits(U64Type(Value)));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -7311,6 +10161,34 @@ end;
 procedure ReverseBitsValue(var Value: UInt64);
 begin
 Value := ReverseBits(Value);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure ReverseBitsValue(var Value: Int8);
+begin
+Value := Int8(ReverseBits(UInt8(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ReverseBitsValue(var Value: Int16);
+begin
+Value := Int16(ReverseBits(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ReverseBitsValue(var Value: Int32);
+begin
+Value := Int32(ReverseBits(UInt32(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure ReverseBitsValue(var Value: Int64);
+begin
+Value := Int64(ReverseBits(U64Type(Value)));
 end;
 
 {-------------------------------------------------------------------------------
@@ -7364,13 +10242,13 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_LZCount_64_Pas(Value: UInt64): Integer; register;
+Function Fce_LZCount_64_Pas(Value: U64Type): Integer; register;
 var
   i:  Integer;
 begin
 Result := 64;
 For i := 0 to 63 do
-  If (Value and (UInt64($8000000000000000) shr i)) <> 0 then
+  If (Value and (U64Type($8000000000000000) shr i)) <> 0 then
     begin
       Result := i;
       Break{For i};
@@ -7440,7 +10318,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_LZCount_64_Asm(Value: UInt64): Integer; register; assembler;
+Function Fce_LZCount_64_Asm(Value: U64Type): Integer; register; assembler;
 asm
 {$IFDEF x64}
   {$IFDEF Windows}
@@ -7481,12 +10359,11 @@ end;
 {$ENDIF}
 
 //==============================================================================
-
 var
   Var_LZCount_8: Function(Value: UInt8): Integer; register = Fce_LZCount_8_Pas;
   Var_LZCount_16: Function(Value: UInt16): Integer; register = Fce_LZCount_16_Pas;
   Var_LZCount_32: Function(Value: UInt32): Integer; register = Fce_LZCount_32_Pas;
-  Var_LZCount_64: Function(Value: UInt64): Integer; register = Fce_LZCount_64_Pas;
+  Var_LZCount_64: Function(Value: U64Type): Integer; register = Fce_LZCount_64_Pas;
 
 //------------------------------------------------------------------------------
 
@@ -7511,10 +10388,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function LZCount(Value: UInt64): Integer;
+Function LZCount(Value: U64Type): Integer;
 begin
 Result := Var_LZCount_64(Value);
 end;
+
+//------------------------------------------------------------------------------
+
+Function LZCount(Value: Int8): Integer;
+begin
+Result := Int8(Var_LZCount_8(UInt8(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LZCount(Value: Int16): Integer;
+begin
+Result := Int16(Var_LZCount_16(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LZCount(Value: Int32): Integer;
+begin
+Result := Int32(Var_LZCount_32(UInt32(Value)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LZCount(Value: Int64): Integer;
+begin
+Result := Int64(Var_LZCount_64(U64Type(Value)));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -7567,7 +10475,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_TZCount_64_Pas(Value: UInt64): Integer; register;
+Function Fce_TZCount_64_Pas(Value: U64Type): Integer; register;
 var
   i:  Integer;
 begin
@@ -7643,7 +10551,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_TZCount_64_Asm(Value: UInt64): Integer; register; assembler;
+Function Fce_TZCount_64_Asm(Value: U64Type): Integer; register; assembler;
 asm
 {$IFDEF x64}
   {$IFDEF Windows}
@@ -7684,12 +10592,11 @@ end;
 {$ENDIF}
 
 //==============================================================================
-
 var
   Var_TZCount_8: Function(Value: UInt8): Integer; register = Fce_TZCount_8_Pas;
   Var_TZCount_16: Function(Value: UInt16): Integer; register = Fce_TZCount_16_Pas;
   Var_TZCount_32: Function(Value: UInt32): Integer; register = Fce_TZCount_32_Pas;
-  Var_TZCount_64: Function(Value: UInt64): Integer; register = Fce_TZCount_64_Pas;
+  Var_TZCount_64: Function(Value: U64Type): Integer; register = Fce_TZCount_64_Pas;
 
 //------------------------------------------------------------------------------
 
@@ -7714,10 +10621,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function TZCount(Value: UInt64): Integer;
+Function TZCount(Value: U64Type): Integer;
 begin
 Result := Var_TZCount_64(Value);
 end;
+
+//------------------------------------------------------------------------------
+
+Function TZCount(Value: Int8): Integer;
+begin
+Result := Int8(Var_TZCount_8(UInt8(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TZCount(Value: Int16): Integer;
+begin
+Result := Int16(Var_TZCount_16(UInt16(Value)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TZCount(Value: Int32): Integer;
+begin
+Result := Int32(Var_TZCount_32(UInt32(Value)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TZCount(Value: Int64): Integer;
+begin
+Result := Int64(Var_TZCount_64(U64Type(Value)));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -7769,14 +10707,14 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_ExtractBits_64_Pas(Value: UInt64; Start,Length: Integer): UInt64; register;
+Function Fce_ExtractBits_64_Pas(Value: U64Type; Start,Length: Integer): U64Type; register;
 begin
 If UInt8(Start) <= 63 then
   begin
     If UInt8(Length) <= 63 then
-      Result := UInt64(Value shr UInt8(Start)) and UInt64(Int64(UInt64(1) shl UInt8(Length)) - 1)
+      Result := U64Type(Value shr UInt8(Start)) and U64Type(Int64(U64Type(1) shl UInt8(Length)) - 1)
     else
-      Result := UInt64(Value shr UInt8(Start)) and UInt64($FFFFFFFFFFFFFFFF);
+      Result := U64Type(Value shr UInt8(Start)) and U64Type($FFFFFFFFFFFFFFFF);
   end
 else Result := 0;
 end;
@@ -7864,7 +10802,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_ExtractBits_64_Asm(Value: UInt64; Start,Length: Integer): UInt64; register; assembler;
+Function Fce_ExtractBits_64_Asm(Value: U64Type; Start,Length: Integer): U64Type; register; assembler;
 asm
 {$IFDEF x64}
   {$IFDEF Windows}
@@ -7962,12 +10900,11 @@ end;
 {$ENDIF}
 
 //==============================================================================
-
 var
   Var_ExtractBits_8: Function(Value: UInt8; Start,Length: Integer): UInt8; register = Fce_ExtractBits_8_Pas;
   Var_ExtractBits_16: Function(Value: UInt16; Start,Length: Integer): UInt16; register = Fce_ExtractBits_16_Pas;
   Var_ExtractBits_32: Function(Value: UInt32; Start,Length: Integer): UInt32; register = Fce_ExtractBits_32_Pas;
-  Var_ExtractBits_64: Function(Value: UInt64; Start,Length: Integer): UInt64; register = Fce_ExtractBits_64_Pas;
+  Var_ExtractBits_64: Function(Value: U64Type; Start,Length: Integer): U64Type; register = Fce_ExtractBits_64_Pas;
 
 //------------------------------------------------------------------------------
 
@@ -7992,11 +10929,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ExtractBits(Value: UInt64; Start,Length: Integer): UInt64;
+Function ExtractBits(Value: U64Type; Start,Length: Integer): U64Type;
 begin
 Result := Var_ExtractBits_64(Value,Start,Length);
 end;
 
+//------------------------------------------------------------------------------
+
+Function ExtractBits(Value: Int8; Start,Length: Integer): Int8;
+begin
+Result := Int8(Var_ExtractBits_8(UInt8(Value),Start,Length));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ExtractBits(Value: Int16; Start,Length: Integer): Int16;
+begin
+Result := Int16(Var_ExtractBits_16(UInt16(Value),Start,Length));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ExtractBits(Value: Int32; Start,Length: Integer): Int32;
+begin
+Result := Int32(Var_ExtractBits_32(UInt32(Value),Start,Length));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ExtractBits(Value: Int64; Start,Length: Integer): Int64;
+begin
+Result := Int64(Var_ExtractBits_64(U64Type(Value),Start,Length));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -8067,24 +11034,55 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function DepositBits(Value,NewBits: UInt64; Start,Length: Integer): UInt64;
+Function DepositBits(Value,NewBits: U64Type; Start,Length: Integer): U64Type;
 var
-  Mask: UInt64;
+  Mask: U64Type;
 begin
 If UInt8(Start) <= 63 then
   begin
     If UInt8(Length) > 0 then
       begin
         Length := UInt8(Length);
-        Mask := UInt64(UInt64($FFFFFFFFFFFFFFFF) shl Start);
+        Mask := U64Type(U64Type($FFFFFFFFFFFFFFFF) shl Start);
         If Start + Length <= 64 then
-          Mask := Mask and (UInt64($FFFFFFFFFFFFFFFF) shr (64 - (Start + Length)));
-        Result := (Value and not Mask) or (UInt64(NewBits shl Start) and Mask);
+          Mask := Mask and (U64Type($FFFFFFFFFFFFFFFF) shr (64 - (Start + Length)));
+        Result := (Value and not Mask) or (U64Type(NewBits shl Start) and Mask);
       end
     else Result := Value;        
   end
 else Result := Value;
 end;
+
+//------------------------------------------------------------------------------
+
+Function DepositBits(Value,NewBits: Int8; Start,Length: Integer): Int8;
+begin
+Result := Int8(DepositBits(UInt8(Value),UInt8(NewBits),Start,Length));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function DepositBits(Value,NewBits: Int16; Start,Length: Integer): Int16;
+begin
+Result := Int16(DepositBits(UInt16(Value),UInt16(NewBits),Start,Length));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function DepositBits(Value,NewBits: Int32; Start,Length: Integer): Int32;
+begin
+Result := Int32(DepositBits(UInt32(Value),UInt32(NewBits),Start,Length));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function DepositBits(Value,NewBits: Int64; Start,Length: Integer): Int64;
+begin
+Result := Int64(DepositBits(U64Type(Value),U64Type(NewBits),Start,Length));
+end;
+
+{$IFEND}
 
 //==============================================================================
 
@@ -8112,6 +11110,34 @@ end;
 procedure DepositBitsValue(var Value: UInt64; NewBits: UInt64; Start,Length: Integer);
 begin
 Value := DepositBits(Value,NewBits,Start,Length);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure DepositBitsValue(var Value: Int8; NewBits: Int8; Start,Length: Integer);
+begin
+Value := Int8(DepositBits(UInt8(Value),UInt8(NewBits),Start,Length));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure DepositBitsValue(var Value: Int16; NewBits: Int16; Start,Length: Integer);
+begin
+Value := Int16(DepositBits(UInt16(Value),UInt16(NewBits),Start,Length));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure DepositBitsValue(var Value: Int32; NewBits: Int32; Start,Length: Integer);
+begin
+Value := Int32(DepositBits(UInt32(Value),UInt32(NewBits),Start,Length));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure DepositBitsValue(var Value: Int64; NewBits: Int64; Start,Length: Integer);
+begin
+Value := Int64(DepositBits(U64Type(Value),U64Type(NewBits),Start,Length));
 end;
 
 
@@ -8157,14 +11183,14 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_ParallelBitsExtract_64_Pas(Value,Mask: UInt64): UInt64; register;
+Function Fce_ParallelBitsExtract_64_Pas(Value,Mask: U64Type): U64Type; register;
 var
   i:  Integer;
 begin
 Result := 0;
 For i := 63 downto 0 do
   If ((Mask shr i) and 1) <> 0 then
-    Result := UInt64(Result shl 1) or UInt64((Value shr i) and 1);
+    Result := U64Type(Result shl 1) or U64Type((Value shr i) and 1);
 end;
 
 //==============================================================================
@@ -8228,7 +11254,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_ParallelBitsExtract_64_Asm(Value,Mask: UInt64): UInt64; register; assembler;
+Function Fce_ParallelBitsExtract_64_Asm(Value,Mask: U64Type): U64Type; register; assembler;
 asm
 {$IFDEF x64}
   {$IFDEF Windows}
@@ -8277,12 +11303,11 @@ end;
 {$ENDIF}
 
 //==============================================================================
-
 var
   Var_ParallelBitsExtract_8: Function(Value,Mask: UInt8): UInt8; register = Fce_ParallelBitsExtract_8_Pas;
   Var_ParallelBitsExtract_16: Function(Value,Mask: UInt16): UInt16; register = Fce_ParallelBitsExtract_16_Pas;
   Var_ParallelBitsExtract_32: Function(Value,Mask: UInt32): UInt32; register = Fce_ParallelBitsExtract_32_Pas;
-  Var_ParallelBitsExtract_64: Function(Value,Mask: UInt64): UInt64; register = Fce_ParallelBitsExtract_64_Pas;
+  Var_ParallelBitsExtract_64: Function(Value,Mask: U64Type): U64Type; register = Fce_ParallelBitsExtract_64_Pas;
 
 //------------------------------------------------------------------------------
 
@@ -8307,10 +11332,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ParallelBitsExtract(Value,Mask: UInt64): UInt64;
+Function ParallelBitsExtract(Value,Mask: U64Type): U64Type;
 begin
 Result := Var_ParallelBitsExtract_64(Value,Mask);
 end;
+
+//------------------------------------------------------------------------------
+
+Function ParallelBitsExtract(Value,Mask: Int8): Int8;
+begin
+Result := Int8(ParallelBitsExtract(UInt8(Value),UInt8(Mask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ParallelBitsExtract(Value,Mask: Int16): Int16;
+begin
+Result := Int16(ParallelBitsExtract(UInt16(Value),UInt16(Mask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ParallelBitsExtract(Value,Mask: Int32): Int32;
+begin
+Result := Int32(ParallelBitsExtract(UInt32(Value),UInt32(Mask)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ParallelBitsExtract(Value,Mask: Int64): Int64;
+begin
+Result := Int64(ParallelBitsExtract(U64Type(Value),U64Type(Mask)));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -8369,7 +11425,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_ParallelBitsDeposit_64_Pas(Value,Mask: UInt64): UInt64; register;
+Function Fce_ParallelBitsDeposit_64_Pas(Value,Mask: U64Type): U64Type; register;
 var
   i:  Integer;
 begin
@@ -8378,7 +11434,7 @@ For i := 0 to 63 do
   begin
     If ((Mask shr i) and 1) <> 0 then
       begin
-        Result := Result or UInt64(UInt64(Value and 1) shl i);
+        Result := Result or U64Type(U64Type(Value and 1) shl i);
         Value := Value shr 1;
       end;
   end;
@@ -8445,7 +11501,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function Fce_ParallelBitsDeposit_64_Asm(Value,Mask: UInt64): UInt64; register; assembler;
+Function Fce_ParallelBitsDeposit_64_Asm(Value,Mask: U64Type): U64Type; register; assembler;
 asm
 {$IFDEF x64}
   {$IFDEF Windows}
@@ -8489,12 +11545,11 @@ end;
 {$ENDIF}
 
 //==============================================================================
-
 var
   Var_ParallelBitsDeposit_8: Function(Value,Mask: UInt8): UInt8; register = Fce_ParallelBitsDeposit_8_Pas;
   Var_ParallelBitsDeposit_16: Function(Value,Mask: UInt16): UInt16; register = Fce_ParallelBitsDeposit_16_Pas;
   Var_ParallelBitsDeposit_32: Function(Value,Mask: UInt32): UInt32; register = Fce_ParallelBitsDeposit_32_Pas;
-  Var_ParallelBitsDeposit_64: Function(Value,Mask: UInt64): UInt64; register = Fce_ParallelBitsDeposit_64_Pas;
+  Var_ParallelBitsDeposit_64: Function(Value,Mask: U64Type): U64Type; register = Fce_ParallelBitsDeposit_64_Pas;
 
 //------------------------------------------------------------------------------
 
@@ -8519,10 +11574,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function ParallelBitsDeposit(Value,Mask: UInt64): UInt64;
+Function ParallelBitsDeposit(Value,Mask: U64Type): U64Type;
 begin
 Result := Var_ParallelBitsDeposit_64(Value,Mask);
 end;
+
+//------------------------------------------------------------------------------
+
+Function ParallelBitsDeposit(Value,Mask: Int8): Int8;
+begin
+Result := Int8(Var_ParallelBitsDeposit_8(UInt8(Value),UInt8(Mask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ParallelBitsDeposit(Value,Mask: Int16): Int16;
+begin
+Result := Int16(Var_ParallelBitsDeposit_16(UInt16(Value),UInt16(Mask)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ParallelBitsDeposit(Value,Mask: Int32): Int32;
+begin
+Result := Int32(Var_ParallelBitsDeposit_32(UInt32(Value),UInt32(Mask)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function ParallelBitsDeposit(Value,Mask: Int64): Int64;
+begin
+Result := Int64(Var_ParallelBitsDeposit_64(U64Type(Value),U64Type(Mask)));
+end;
+
+{$IFEND}
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -8563,7 +11649,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BitParity(Value: UInt64): Boolean;
+Function BitParity(Value: U64Type): Boolean;
 begin
 Value := Value xor (Value shr 32);
 Value := Value xor (Value shr 16);
@@ -8573,6 +11659,37 @@ Value := Value xor (Value shr 2);
 Value := Value xor (Value shr 1);
 Result := (Value and 1) = 0;
 end;
+
+//------------------------------------------------------------------------------
+
+Function BitParity(Value: Int8): Boolean;
+begin
+Result := BitParity(UInt8(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitParity(Value: Int16): Boolean;
+begin
+Result := BitParity(UInt16(Value));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitParity(Value: Int32): Boolean;
+begin
+Result := BitParity(UInt32(Value));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BitParity(Value: Int64): Boolean;
+begin
+Result := BitParity(U64Type(Value));
+end;
+
+{$IFEND}
 
 
 {===============================================================================
@@ -8585,6 +11702,124 @@ end;
 
 {-------------------------------------------------------------------------------
 ================================================================================
+                               Pointer conversions
+================================================================================
+-------------------------------------------------------------------------------}
+
+Function PtrToInt(Ptr: Pointer): PtrInt;
+{$IF not Defined(CanInline) and not Defined(PurePascal)}
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    MOV   RAX, RCX
+  {$ELSE}
+    MOV   RAX, RDI
+  {$ENDIF}
+{$ELSE}
+    // do nothing, Ptr is in EAX where we also return the result
+{$ENDIF}
+end;
+{$ELSE}
+var
+  Overlay: Pointer absolute Result;
+begin
+Overlay := Ptr;
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function Ptr2Int(Ptr: Pointer): PtrInt;
+begin
+Result := PtrToInt(Ptr);
+end;
+
+//------------------------------------------------------------------------------
+
+Function PtrToUInt(Ptr: Pointer): PtrUInt;
+{$IF not Defined(CanInline) and not Defined(PurePascal)}
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    MOV   RAX, RCX
+  {$ELSE}
+    MOV   RAX, RDI
+  {$ENDIF}
+{$ENDIF}
+end;
+{$ELSE}
+var
+  Overlay: Pointer absolute Result;
+begin
+Overlay := Ptr;
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function Ptr2UInt(Ptr: Pointer): PtrUInt;
+begin
+Result := PtrToUInt(Ptr);
+end;
+
+//==============================================================================
+
+Function IntToPtr(I: PtrInt): Pointer;
+{$IF not Defined(CanInline) and not Defined(PurePascal)}
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    MOV   RAX, RCX
+  {$ELSE}
+    MOV   RAX, RDI
+  {$ENDIF}
+{$ENDIF}
+end;
+{$ELSE}
+var
+  Overlay: PtrInt absolute Result;
+begin
+Overlay := I;
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function Int2Ptr(I: PtrInt): Pointer;
+begin
+Result := IntToPtr(I);
+end;
+
+//------------------------------------------------------------------------------
+
+Function UIntToPtr(U: PtrUInt): Pointer;
+{$IF not Defined(CanInline) and not Defined(PurePascal)}
+asm
+{$IFDEF x64}
+  {$IFDEF Windows}
+    MOV   RAX, RCX
+  {$ELSE}
+    MOV   RAX, RDI
+  {$ENDIF}
+{$ENDIF}
+end;
+{$ELSE}
+var
+  Overlay: PtrUInt absolute Result;
+begin
+Overlay := U;
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function UInt2Ptr(U: PtrUInt): Pointer;
+begin
+Result := IntToPtr(U);
+end;
+
+{-------------------------------------------------------------------------------
+================================================================================
                            Pointer arithmetic helpers
 ================================================================================
 -------------------------------------------------------------------------------}
@@ -8593,18 +11828,14 @@ end;
 
 Function PtrAdvance(Ptr: Pointer; Offset: TMemOffset): Pointer;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := Pointer(PtrUInt(Ptr) + PtrUInt(Offset));
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+Result := UIntToPtr(PtrToUInt(Ptr) + PtrUInt(Offset));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function PtrAdvance(Ptr: Pointer; Count: Integer; Stride: TMemSize): Pointer;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := Pointer(PtrUInt(Ptr) + PtrUInt(PtrInt(Count) * PtrInt(Stride)));
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+Result := UIntToPtr(PtrToUInt(Ptr) + PtrUInt(PtrInt(Count) * PtrInt(Stride)));
 end;
 
 {$IFDEF OverflowChecks}{$Q+}{$ENDIF}
@@ -8653,20 +11884,83 @@ end;
 
 {-------------------------------------------------------------------------------
 ================================================================================
+                               Pointer difference
+================================================================================
+-------------------------------------------------------------------------------}
+{$IFDEF OverflowChecks}{$Q-}{$ENDIF}
+
+Function PtrDifference(A,B: Pointer): TMemOffset;
+begin
+Result := TMemOffset(PtrToInt(B) - PtrToInt(A));
+end;
+
+{$IFDEF OverflowChecks}{$Q+}{$ENDIF}
+//------------------------------------------------------------------------------
+
+Function PtrDiff(A,B: Pointer): TMemOffset;
+begin
+Result := PtrDifference(A,B);
+end;
+
+//------------------------------------------------------------------------------
+
+Function PtrDistance(A,B: Pointer): TMemOffset;
+begin
+Result := PtrDifference(A,B);
+end;
+
+//------------------------------------------------------------------------------
+
+Function PtrDist(A,B: Pointer): TMemOffset;
+begin
+Result := PtrDifference(A,B);
+end;
+
+{-------------------------------------------------------------------------------
+================================================================================
                                Address comparison
 ================================================================================
 -------------------------------------------------------------------------------}
 
 Function PtrCompare(A,B: Pointer): Integer;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-If PtrUInt(A) < PtrUInt(B) then
+If PtrToUInt(A) < PtrToUInt(B) then
   Result := -1
-else If PtrUInt(A) > PtrUInt(B) then
+else If PtrToUInt(A) > PtrToUInt(B) then
   Result := +1
 else
   Result := 0;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function ComparePtr(A,B: Pointer): Integer;
+begin
+Result := ComparePtr(A,B);
+end;
+
+//==============================================================================
+
+Function PtrCompareRel(A,B: Pointer; Relation: TPtrRelation = relSame): Boolean;
+begin
+// to improve performance, do not use PtrCompare and do everything in-place
+case Relation of
+  relSame:                      Result := PtrToUInt(A) = PtrToUInt(B);
+  relNotSame:                   Result := PtrToUInt(A) <> PtrToUInt(B);
+  relLower,relNotHigherNorSame: Result := PtrToUInt(A) < PtrToUInt(B);
+  relNotLower,relHigherOrSame:  Result := PtrToUInt(A) >= PtrToUInt(B);
+  relLowerOrSame,relNotHigher:  Result := PtrToUInt(A) <= PtrToUInt(B);
+  relNotLowerNorSame,relHigher: Result := PtrToUInt(A) > PtrToUInt(B);
+else
+  raise EBOInvalidValue.CreateFmt('PtrCompareRel: Unknown relation (%d).',[Ord(Relation)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function ComparePtrRel(A,B: Pointer; Relation: TPtrRelation = relSame): Boolean;
+begin
+Result := PtrCompareRel(A,B,Relation);
 end;
 
 {-------------------------------------------------------------------------------
@@ -8686,8 +11980,15 @@ case Alignment of
   ma128bit,ma16byte:    Result := 16;
   ma256bit,ma32byte:    Result := 32;
   ma512bit,ma64byte:    Result := 64;
-  ma1024bit,ma128byte:  Result := 128;
-  ma2048bit,ma256byte:  Result := 256;
+  ma1024bit,ma1kbit,
+  ma128byte:            Result := 128;
+  ma2kbit,ma256byte:    Result := 256;
+  ma4kbit,ma512byte:    Result := 512;
+  ma8kbit,
+  ma1024byte,ma1kbyte:  Result := 1024;
+  ma16kbit,ma2kbyte:    Result := 2048;
+  ma32kbit,ma4kbyte:    Result := 4096;
+  ma1mbyte:             Result := 1048576;    // 1024^2
 else
   raise EBOInvalidValue.CreateFmt('AlignmentBytes: Invalid memory alignment (%d).',[Ord(Alignment)]);
 end;
@@ -8695,31 +11996,81 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function AlignmentBits(Alignment: TMemoryAlignment): TMemSize;
+begin
+Result := TMemSize(AlignmentBytes(Alignment) shl 3);
+end;
+
+//------------------------------------------------------------------------------
+
+Function AlignmentSwitch(Alignment: TMemoryAlignment): TMemoryAlignment;
+begin
+case Alignment of
+  maNone:     Result := ma8bit;
+  ma8bit:     Result := ma1byte;
+  ma16bit:    Result := ma2byte;
+  ma32bit:    Result := ma4byte;
+  ma64bit:    Result := ma8byte;
+  ma128bit:   Result := ma16byte;
+  ma256bit:   Result := ma32byte;
+  ma512bit:   Result := ma64byte;
+  ma1024bit:  Result := ma128byte;
+  ma1kbit:    Result := ma128byte;
+  ma2kbit:    Result := ma256byte;
+  ma4kbit:    Result := ma512byte;
+  ma8kbit:    Result := ma1kbyte;
+  ma16kbit:   Result := ma2kByte;
+  ma32kbit:   Result := ma4kByte;
+  ma1byte:    Result := ma8bit;
+  ma2byte:    Result := ma16bit;
+  ma4byte:    Result := ma32bit;
+  ma8byte:    Result := ma64bit;
+  ma16byte:   Result := ma128bit;
+  ma32byte:   Result := ma256bit;
+  ma64byte:   Result := ma512bit;
+  ma128byte:  Result := ma1kbit;
+  ma256byte:  Result := ma2kbit;
+  ma512byte:  Result := ma4kbit;
+  ma1024byte: Result := ma8kbit;
+  ma1kbyte:   Result := ma8kbit;
+  ma2kbyte:   Result := ma16kbit;
+  ma4kbyte:   Result := ma32kbit;
+  ma1mbyte:   raise EBOInvalidValue.CreateFmt('AlignmentSwitch: No counterpart for selected alignment (%d).',[Ord(Alignment)]);
+else
+  raise EBOInvalidValue.CreateFmt('AlignmentSwitch: Invalid memory alignment (%d).',[Ord(Alignment)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
 Function CheckAlignment(Address: Pointer; Alignment: TMemoryAlignment): Boolean;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := (PtrUInt(Address) and PtrUInt(Pred(AlignmentBytes(Alignment)))) = 0;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+Result := (PtrToUInt(Address) and PtrUInt(Pred(AlignmentBytes(Alignment)))) = 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function AlignmentCheck(Address: Pointer; Alignment: TMemoryAlignment): Boolean;
+begin
+Result := CheckAlignment(Address,Alignment);
 end;
 
 //------------------------------------------------------------------------------
 
 Function Misalignment(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := TMemSize(PtrUInt(Address) - (PtrUInt(Address) and not PtrUInt(Pred(AlignmentBytes(Alignment)))));
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+Result := TMemSize(PtrToUInt(Address) - (PtrToUInt(Address) and not PtrUInt(Pred(AlignmentBytes(Alignment)))));
 end;
 
 //------------------------------------------------------------------------------
 
 Function AlignmentOffset(Address: Pointer; Alignment: TMemoryAlignment): TMemSize;
 var
-  Malign: TMemSize;
+  Misalign: TMemSize;
 begin
-Malign := Misalignment(Address,Alignment);
-If Malign <> 0 then
-  Result := AlignmentBytes(Alignment) - Malign
+Misalign := Misalignment(Address,Alignment);
+If Misalign <> 0 then
+  Result := AlignmentBytes(Alignment) - Misalign
 else
   Result := 0;
 end;
@@ -8739,9 +12090,9 @@ Function ResolveAlignment(Address: Pointer; ByteAlignments: Boolean = False): TM
   Function HighAlignment: TMemoryAlignment;
   begin
     If ByteAlignments then
-      Result := ma256byte
+      Result := High(TMemoryAlignment)
     else
-      Result := ma2048bit;
+      Result := Pred(ma1byte);
   end;
 
 var
@@ -8749,13 +12100,18 @@ var
 begin
 Result := maNone;
 For i := HighAlignment downto LowAlignment do
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-  If (PtrUInt(Address) and PtrUInt(Pred(AlignmentBytes(i)))) = 0 then
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+  If (PtrToUInt(Address) and PtrUInt(Pred(AlignmentBytes(i)))) = 0 then
     begin
       Result := i;
       Break{For i};
     end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function AlignmentResolve(Address: Pointer; ByteAlignments: Boolean = False): TMemoryAlignment;
+begin
+Result := ResolveAlignment(Address,ByteAlignments);
 end;
 
 //------------------------------------------------------------------------------
@@ -8766,9 +12122,7 @@ var
 begin
 // to remove a need for two calls to AlignmentBytes...
 AlignBytes := AlignmentBytes(Alignment);
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-Result := Pointer((PtrUInt(Address) + PtrUInt(Pred(AlignBytes))) and not PtrUInt(Pred(AlignBytes)));
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+Result := UintToPtr((PtrToUInt(Address) + PtrUInt(Pred(AlignBytes))) and not PtrUInt(Pred(AlignBytes)));
 end;
 
 //------------------------------------------------------------------------------
@@ -8949,26 +12303,6 @@ end;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function CompareData(A,B: array of UInt8; CompareMethod: TCompareMethod): Integer;
-
-  Function IntegerMin(A,B: Integer): Integer;{$IFDEF CanInline} inline; {$ENDIF}
-  begin
-    If A < B then
-      Result := A
-    else
-      Result := B;
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-  Function IntegerMax(A,B: Integer): Integer;{$IFDEF CanInline} inline; {$ENDIF}
-  begin
-    If A > B then
-      Result := A
-    else
-      Result := B;
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
 
   Function CompareItems: Integer;
   var
@@ -9183,10 +12517,8 @@ If Length(A) = Length(B) then
       begin
        If Length(A) > 128 then
           begin
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            APacked := PtrUInt(@A[1]) - PtrUInt(@A[0]) <= 1;
-            BPacked := PtrUInt(@B[1]) - PtrUInt(@B[0]) <= 1;
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
+            APacked := PtrToUInt(@A[1]) - PtrToUInt(@A[0]) <= 1;
+            BPacked := PtrToUInt(@B[1]) - PtrToUInt(@B[0]) <= 1;
           end
         else
           begin
@@ -9222,7 +12554,7 @@ end;
 procedure BufferShiftDown(var Buffer; BufferSize: TMemSize; Shift: TMemSize);
 begin
 If (Shift > 0) and (Shift < BufferSize) then
-  Move(PtrAdvance(Addr(Buffer),Shift)^,Buffer,BufferSize - Shift);
+  MoveMemory(@Buffer,PtrAdvance(Addr(Buffer),Shift),BufferSize - Shift);
 end;
 
 {-------------------------------------------------------------------------------
@@ -9230,6 +12562,328 @@ end;
                                   Bits copying
 ================================================================================
 -------------------------------------------------------------------------------}
+const
+  BC_NATIVEUINT_BITS = SizeOf(NativeUInt) * 8;
+  BC_NATIVEUINT_MASK = NativeUInt(NativeInt(-1));
+
+//------------------------------------------------------------------------------
+
+Function BC_GenHiMask(Bits: TMemSize): NativeUInt;{$IFDEF CanInline} inline;{$ENDIF}
+begin
+Result := not (BC_NATIVEUINT_MASK shr Bits);
+end;
+
+//------------------------------------------------------------------------------
+
+Function BC_GenLoMask(Bits: TMemSize): NativeUInt;{$IFDEF CanInline} inline;{$ENDIF}
+begin
+Result := not NativeUInt(BC_NATIVEUINT_MASK shl Bits);
+end;
+
+{-------------------------------------------------------------------------------
+    Bits copying - internal functions
+-------------------------------------------------------------------------------}
+
+procedure CopyBits_Fwd(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCount: TMemSize);
+var
+  Buffer: record
+    Temp:   NativeUInt;
+    Data:   NativeUInt;
+    Bits:   TMemSize;
+  end;
+
+  procedure BufferFlush;
+  begin
+    while Buffer.Bits >= 8 do
+      begin
+        PUInt8(Destination)^ := UInt8(Buffer.Data);
+        Inc(PUInt8(Destination));
+        Buffer.Data := Buffer.Data shr 8;
+        Dec(Buffer.Bits,8);
+      end;
+  end;
+
+begin
+FillChar(Addr(Buffer)^,SizeOf(Buffer),0);
+// copy first, possibly partial, byte into buffer
+Buffer.Bits := MemSizeMin(8 - SrcBitOffset,BitCount);
+Buffer.Data := (NativeUInt(PUInt8(Source)^) shr SrcBitOffset) and BC_GenLoMask(Buffer.Bits);
+Inc(PUInt8(Source));
+Dec(BitCount,Buffer.Bits);
+// get bits below first overwritten bit in destination so they are not lost
+If DstBitOffset > 0 then
+  begin
+    Buffer.Data := NativeUInt(Buffer.Data shl DstBitOffset) or
+      (NativeUInt(PUInt8(Destination)^) and BC_GenLoMask(DstBitOffset));
+    Inc(Buffer.Bits,DstBitOffset);
+  end;
+// flush full bytes if any
+BufferFlush;
+{
+  Copy full native words.
+
+  To remove a need for test whether there is something already in the buffer in
+  each cycle, we create two distinct cycles, one for each case, and use only
+  the appropriate one.
+}
+If Buffer.Bits > 0 then
+  while BitCount >= BC_NATIVEUINT_BITS do begin
+    Buffer.Temp := {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(PNativeUInt(Source)^);
+    PNativeUInt(Destination)^ := {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}
+      (Buffer.Data or NativeUInt(Buffer.Temp shl Buffer.Bits));
+    Buffer.Data := Buffer.Temp shr (BC_NATIVEUINT_BITS - Buffer.Bits);
+    Inc(PNativeUInt(Source));
+    Inc(PNativeUInt(Destination));
+    Dec(BitCount,BC_NATIVEUINT_BITS);
+  end
+else
+  while BitCount >= BC_NATIVEUINT_BITS do begin
+    PNativeUInt(Destination)^ := PNativeUInt(Source)^;
+    Inc(PNativeUInt(Source));
+    Inc(PNativeUInt(Destination));
+    Dec(BitCount,BC_NATIVEUINT_BITS);
+  end;
+// copy integral (whole) bytes
+If Buffer.Bits > 0 then
+  while BitCount >= 8 do begin
+    Buffer.Data := Buffer.Data or
+      NativeUInt(NativeUInt(PUInt8(Source)^) shl Buffer.Bits);
+    PUInt8(Destination)^ := UInt8(Buffer.Data);
+    Buffer.Data := Buffer.Data shr 8;
+    Inc(PUInt8(Source));
+    Inc(PUInt8(Destination));
+    Dec(BitCount,8);
+  end
+else
+  while BitCount >= 8 do begin
+    PUInt8(Destination)^ := PUInt8(Source)^;
+    Inc(PUInt8(Source));
+    Inc(PUInt8(Destination));
+    Dec(BitCount,8);
+  end;
+// last partial byte (BitCount here is always less than 8)
+If BitCount > 0 then
+  begin
+    Buffer.Data := Buffer.Data or
+      NativeUInt(NativeUInt(PUInt8(Source)^) shl Buffer.Bits);
+    Inc(Buffer.Bits,BitCount);
+    BufferFlush;
+  end;
+// combine last bits (if any) remaining in the buffer with destination byte
+If Buffer.Bits > 0 then
+  begin
+    Buffer.Temp := BC_GenLoMask(Buffer.Bits);
+    PUInt8(Destination)^ := UInt8(Buffer.Data and Buffer.Temp) or
+      (PUInt8(Destination)^ and not UInt8(Buffer.Temp));
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure CopyBits_Rev(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCount: TMemSize);
+var
+  Buffer: record
+    Temp:   NativeUInt;
+    Data:   NativeUInt;
+    Bits:   TMemSize;
+  end;
+
+  procedure BufferFlush;
+  begin
+    while Buffer.Bits >= 8 do
+      begin
+        PUInt8(Destination)^ := UInt8(Buffer.Data shr (BC_NATIVEUINT_BITS - 8));
+        Dec(PUInt8(Destination));
+        Buffer.Data := NativeUInt(Buffer.Data shl 8);
+        Dec(Buffer.Bits,8);
+      end;
+  end;
+
+var
+  TrailBits:  TMemSize;
+begin
+FillChar(Addr(Buffer)^,SizeOf(Buffer),0);
+{
+  Move source and destination pointers to their last repective bytes.
+
+  The seemingly convoluted code effectively calculates following without a risk
+  of overflows (addition) or precission errors (division, ceiling):
+
+      Ceil((BitCount + xBitOffset) / 8) - 1
+}
+Source := PtrAdvance(Source,Pred(TMemOff((BitCount shr 3) + (((BitCount and 7) + SrcBitOffset + 7) shr 3))));
+Destination := PtrAdvance(Destination,Pred(TMemOff((BitCount shr 3) + (((BitCount and 7) + DstBitOffset + 7) shr 3))));
+// copy bits at the end of destination that needs to be preserved
+Buffer.Bits := (8 - ((DstBitOffset + (BitCount and 7)) and 7)) and 7;
+If Buffer.Bits > 0 then
+  Buffer.Data := NativeUInt(NativeUInt(PUInt8(Destination)^) shl (BC_NATIVEUINT_BITS - 8)) and BC_GenHiMask(Buffer.Bits);
+// add trailing bits from source
+TrailBits := (SrcBitOffset + (BitCount and 7)) and 7;
+If TrailBits > 0 then
+  begin
+    Buffer.Temp := NativeUInt(PUInt8(Source)^) and BC_GenLoMask(TrailBits);
+    Dec(PUInt8(Source));
+    If Buffer.Bits > 0 then
+      Buffer.Data := Buffer.Data or NativeUInt(Buffer.Temp shl (BC_NATIVEUINT_BITS - Integer(TrailBits + Buffer.Bits)))
+    else
+      Buffer.Data := NativeUInt(Buffer.Temp shl (BC_NATIVEUINT_BITS - TrailBits));
+    Inc(Buffer.Bits,MemSizeMin(TrailBits,BitCount));
+    Buffer.Data := Buffer.Data and BC_GenHiMask(Buffer.Bits);
+    Dec(BitCount,MemSizeMin(TrailBits,BitCount));
+  end;
+BufferFlush;
+// copy whole bytes
+If Buffer.Bits > 0 then
+  while BitCount >= 8 do begin
+    Buffer.Data := Buffer.Data or
+      NativeUInt(NativeUInt(PUInt8(Source)^) shl ((BC_NATIVEUINT_BITS - 8) - Buffer.Bits));
+    PUInt8(Destination)^ := UInt8(Buffer.Data shr (BC_NATIVEUINT_BITS - 8));
+    Buffer.Data := NativeUInt(Buffer.Data shl 8);
+    Dec(PUInt8(Source));
+    Dec(PUInt8(Destination));
+    Dec(BitCount,8);
+  end
+else
+  while BitCount >= 8 do begin
+    PUInt8(Destination)^ := PUInt8(Source)^;
+    Dec(PUInt8(Source));
+    Dec(PUInt8(Destination));
+    Dec(BitCount,8);
+  end; 
+{
+  Load leading partial source byte (if any) into buffer.
+
+  If all copied bits were within one byte, then they are already loaded into
+  buffer, so no need to cope with that posibility here.
+}
+If BitCount > 0 then
+  begin
+    If Buffer.Bits > 0 then
+      begin
+        Buffer.Data := Buffer.Data or
+          NativeUInt(NativeUInt(PUInt8(Source)^) shl ((BC_NATIVEUINT_BITS - 8) - Buffer.Bits));
+        Inc(Buffer.Bits,8 - SrcBitOffset);
+      end
+    else
+      begin
+        Buffer.Data := NativeUInt(NativeUInt(PUInt8(Source)^) shl (BC_NATIVEUINT_BITS - 8));
+        Buffer.Bits := 8 - SrcBitOffset;
+      end;
+    Buffer.Data := Buffer.Data and BC_GenHiMask(Buffer.Bits);
+    BufferFlush;
+  end;
+// combine any remaining bits from buffer into destination
+If Buffer.Bits > 0 then
+  begin
+    // Buffer.Bits is always below 8 here
+    Buffer.Temp := BC_GenLoMask(8 - Buffer.Bits);
+    Buffer.Data := Buffer.Data shr (BC_NATIVEUINT_BITS - 8);
+    PUInt8(Destination)^ := (PUInt8(Destination)^ and UInt8(Buffer.Temp)) or
+      UInt8(Buffer.Data and not Buffer.Temp);
+  end;
+end;
+
+{-------------------------------------------------------------------------------
+    Bits copying - public functions implementation
+-------------------------------------------------------------------------------}
+
+procedure CopyBits(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCount: TMemSize);
+
+  Function DestinationInSource: Boolean;
+  var
+    SourceBytes:  TMemSize;
+    LastByteBits: TMemSize;
+  begin
+    Result := False;
+    If PtrCompareRel(Source,Destination,relLowerOrSame) then
+      begin
+      {
+        Destination pointer is somewhere abowe or at the source pointer.
+
+        Following calculation is this convoluted to avoid a possibility of
+        overflow when adding BitCount + SrcBitOffset + 7.
+      }
+        SourceBytes := (BitCount shr 3) + (((BitCount and 7) + SrcBitOffset + 7) shr 3);
+        If PtrCompareRel(PtrAdvance(Source,TMemOff(SourceBytes)),Destination,relHigherOrSame) then
+          begin
+            // destination pointer is inside of source bytes
+            If Destination = Source then
+              begin
+              {
+                Destination and source pointers are equal.
+
+                Note that if destination and source pointers are the same,
+                then offsets MUST differ, otherwise source and destination
+                data match completely.
+              }
+                If BitCount < 8 then
+                {
+                  Following addition cannot overflow because BitCount is below
+                  8 and SrcBitOffset is also masked so it is below 8 before
+                  this function is called.
+                }
+                  Result := (SrcBitOffset < DstBitOffset) and ((SrcBitOffset + BitCount) > DstBitOffset)
+                else
+                  Result := SrcBitOffset < DstBitOffset;
+              end
+            else If Destination = PtrAdvance(Source,TMemOff(SourceBytes - 1)) then
+              begin
+              {
+                Destination pointer points to the last byte of source memory.
+
+                Since destination points to last byte of source, but source and
+                destination pointers do not match here, it means the source must
+                span more than one byte.
+
+                We calculate number of source bits in the last source byte and
+                use this number for comparison (must be lower or equal to dest.
+                bit offset to be ok).
+
+                Note that Pred(SourceBytes) * 8 cannot overflow simply because
+                SourceBytes was previously calculated from BitCount, which is a
+                variable of the same width.
+              }
+                LastByteBits := ((BitCount and 7) + SrcBitOffset) and 7;
+                Result := (LastByteBits = 0) or (LastByteBits > DstBitOffset);
+              end
+            else
+            {
+              Destination pointer is somewhere in the middle, assume collision
+              and return true.
+            }
+              Result := True;            
+          end;
+      end;
+  end;
+
+begin
+If BitCount > 0 then
+  begin
+    // rectify pointers and bit offsets for large (>7) shift offsets
+    PtrAdvanceVar(Source,TMemOff(SrcBitOffset shr 3));
+    PtrAdvanceVar(Destination,TMemOff(DstBitOffset shr 3));
+    SrcBitOffset := SrcBitOffset and 7;
+    DstBitOffset := DstBitOffset and 7;
+    If (SrcBitOffset or DstBitOffset) <> 0 then
+      begin
+        // at least one bit offset is non-zero
+        If (Source <> Destination) or (SrcBitOffset <> DstBitOffset) then
+          begin
+            // source and destination differ, we can continue
+            If DestinationInSource then
+              // destination starts somewhere withing the source, backward copy
+              CopyBits_Rev(Source,Destination,SrcBitOffset,DstBitOffset,BitCount)
+            else
+              // destination is not within the source, forward copy
+              CopyBits_Fwd(Source,Destination,SrcBitOffset,DstBitOffset,BitCount);
+          end;
+      end
+    // both bit offsets are zero, call simplified implementation
+    else CopyBits(Source,Destination,BitCount);
+  end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure CopyBits(Source,Destination: Pointer; BitCount: TMemSize);
 var
@@ -9240,287 +12894,52 @@ If (Source <> Destination) and (BitCount > 0) then
   begin
     If (BitCount and 7) <> 0 then
       begin
-        // mask is used in any case, so let's calculate it here
+        // copying partial byte
+        // mask is always used, so let's calculate it here
         Mask := UInt8($FF) shr (8 - (BitCount and 7));
         // check whether the destination starts inside of source....
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        If (PtrUInt(Source) < PtrUInt(Destination)) and
-          ((PtrUInt(Source) + PtrUInt((BitCount + 7) shr 3)) > PtrUInt(Destination)) then
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        If PtrCompareRel(Source,Destination,relLower) and
+           PtrCompareRel(PtrAdvance(Source,TMemOff(BitCount shr 3)),Destination,relHigherOrSame) then
           begin
-            // source can be overwritten, do backward copy...
-            // first do the last, partial byte
-            DestTemp := PtrAdvance(Destination,Pred((BitCount + 7) shr 3));
-            PUInt8(DestTemp)^ := (PUInt8(DestTemp)^ and not Mask) or
-              (PUInt8(PtrAdvance(Source,Pred((BitCount + 7) shr 3)))^ and Mask);
           {
-            And now complete bytes - System.Move is assumed to be optimized and
-            protected againts overwrites, therefore it is used instead of
-            custom code.
+            Destination starts somewhere inside of source, so if we do normal
+            forward copy we would overwrite source data before copying them ->
+            do backward copy.
+
+            First copy the last, partial, byte and then all the integral
+            (whole) bytes. Note that BitCount here always includes at least
+            one non-integral byte.
           }
-            System.Move(Source^,Destination^,BitCount shr 3);
+            DestTemp := PtrAdvance(Destination,TMemOff(BitCount shr 3));
+            PUInt8(DestTemp)^ := (PUInt8(DestTemp)^ and not Mask) or
+              (PUInt8(PtrAdvance(Source,TMemOff(BitCount shr 3)))^ and Mask);
+          {
+            And now complete bytes - System.Move (called by MoveMemory) is
+            assumed to be optimized and protected againts overwrites, therefore
+            it is used instead of custom code.
+          }
+            MoveMemory(Destination,Source,BitCount shr 3);
           end
         else
           begin
-            // source cannot be overwritten, do normal forward copy...
-            // first full bytes...
-            System.Move(Source^,Destination^,BitCount shr 3);
-            DestTemp := PtrAdvance(Destination,BitCount shr 3);
-            // ...and now the rest
+          {
+            Destination and source do no overlap, or at least destination does
+            not start within source, so we can do normal forward-advancing copy.
+
+            First copy full bytes...
+          }
+            MoveMemory(Destination,Source,BitCount shr 3);
+            DestTemp := PtrAdvance(Destination,TMemOff(BitCount shr 3));
+            // ...and now the rest (non-integral byte)
             PUInt8(DestTemp)^ := (PUInt8(DestTemp)^ and not Mask) or
-              (PUInt8(PtrAdvance(Source,BitCount shr 3))^ and Mask);
+              (PUInt8(PtrAdvance(Source,TMemOff(BitCount shr 3)))^ and Mask);
           end;
       end
-    else System.Move(Source^,Destination^,BitCount shr 3);
+    // copying only integral bytes
+    else MoveMemory(Destination,Source,BitCount shr 3);
   end;
 end;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-procedure CopyBits(Source,Destination: Pointer; SrcBitOffset,DstBitOffset,BitCount: TMemSize);
-
-  Function DestinationIsWithinSource: Boolean;
-  var
-    SrcByteCount: TMemSize;
-  begin
-  {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-    If (PtrUInt(Destination) >= PtrUInt(Source)) then
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
-      begin
-      {
-        Destination pointer is somewhere abowe or at the source pointer.
-
-        Note - ByteCount cannot resolve to zero, because this function is not
-               called if BitCount is zero.
-      }
-        SrcByteCount := TMemSize((SrcBitOffset + BitCount + 7) shr 3){equivalent to "Ceil((SrcBitOffset + BitCount) / 8)"};
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        If PtrUInt(Destination) < (PtrUInt(Source) + PtrUInt(SrcByteCount)) then
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
-          begin
-            // destination pointer is inside of source bytes...
-            If Destination = Source then
-              // destination and source pointer are equal, result depends on bit offsets
-              Result := DstBitOffset >= SrcBitOffset
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            else If (PtrUInt(Destination) + 1) = (PtrUInt(Source) + PtrUInt(SrcByteCount)) then
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
-            {
-              Destination pointer points to the last byte of source memory,
-              result depends on bit count and destination bit offset.
-
-              In reality we calculate number of source bits in the last source
-              byte and use this number for comparison.
-            }
-              Result := DstBitOffset < (({$IFNDEF CPU64bit}Int64{$ENDIF}(SrcBitOffset) + BitCount) - ((SrcByteCount - 1) shl 3))
-            else
-              // destination pointer is somewhere in the middle, just return true
-              Result := True;
-          end
-        // destination pointer is completely behind the source byes
-        else Result := False;
-      end
-    // destination pointer is below source pointer, so it cannot be inside the source memory
-    else Result := False;
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-const
-  ChunkSize = {$IFDEF CPU64Bit}7{$ELSE}3{$ENDIF};
-type
-  TLocalLong = {$IFDEF CPU64Bit}UInt64{$ELSE}UInt32{$ENDIF};
-var
-  ByteWriteMask:  UInt16;
-  LongWriteMask:  TLocalLong;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-  Function CBO16(Value: UInt16): UInt16;  // correct byte order
-  begin
-    Result := {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(Value);
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-  Function CBO(Value: TLocalLong): TLocalLong;
-  begin
-    Result := {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(Value);
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-  procedure DoFullLongCopy;
-  type
-    TChunk = packed array[0..Pred(ChunkSize)] of UInt8;
-
-    Function ReadChunk: TLocalLong;
-    var
-      Chunk:  TChunk;
-    begin
-      Chunk := TChunk(Source^);
-      Result := TLocalLong(Chunk[0])
-        or (TLocalLong(Chunk[1]) shl 8) or (TLocalLong(Chunk[2]) shl 16)
-    {$IFDEF CPU64Bit}
-        or (TLocalLong(Chunk[3]) shl 24) or (TLocalLong(Chunk[4]) shl 32)
-        or (TLocalLong(Chunk[5]) shl 40) or (TLocalLong(Chunk[6]) shl 48)
-    {$ENDIF};
-    end;
-
-    procedure WriteChunk(Value: TLocalLong);
-    var
-      Chunk:  TChunk;
-    begin
-      Chunk[0] := Value and $FF;
-      Chunk[1] := (Value shr 8) and $FF;
-      Chunk[2] := (Value shr 16) and $FF;
-    {$IFDEF CPU64Bit}
-      Chunk[3] := (Value shr 24) and $FF;
-      Chunk[4] := (Value shr 32) and $FF;
-      Chunk[5] := (Value shr 40) and $FF;
-      Chunk[6] := (Value shr 48) and $FF;
-    {$ENDIF};
-      TChunk(Destination^) := Chunk;
-    end;
-
-  var
-    Buffer: TLocalLong;
-  begin
-    // read buffer
-    If SrcBitOffset <> 0 then
-      Buffer := CBO(TLocalLong(Source^)) shr SrcBitOffset
-    else
-      Buffer := ReadChunk;
-    // write buffer
-    If DstBitOffset <> 0 then
-      TLocalLong(Destination^) := CBO(((Buffer shl DstBitOffset) and not LongWriteMask) or (CBO(TLocalLong(Destination^)) and LongWriteMask))
-    else
-      WriteChunk(Buffer);
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-  procedure DoFullByteCopy;
-  var
-    Buffer: UInt8;
-  begin
-    // read buffer
-    If SrcBitOffset <> 0 then
-      Buffer := UInt8(CBO16(PUInt16(Source)^) shr SrcBitOffset)
-    else
-      Buffer := PUInt8(Source)^;
-    // write buffer
-    If DstBitOffset <> 0 then
-      PUInt16(Destination)^ := CBO16((UInt16(Buffer) shl DstBitOffset) or (CBO16(PUInt16(Destination)^) and ByteWriteMask))
-    else
-      PUInt8(Destination)^ := Buffer;
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-  procedure DoPartialByteCopy;
-  var
-    Buffer: UInt8;
-  begin
-    // load bits
-    If (SrcBitOffset + (BitCount and 7)) > 8 then
-      // source bits span byte boundary
-      Buffer := UInt8(GetBits(CBO16(PUInt16(Source)^),Integer(SrcBitOffset),Pred(Integer(SrcBitOffset + (BitCount and 7))),True))
-    else
-      // all source bits are within one byte
-      Buffer := GetBits(PUInt8(Source)^,Integer(SrcBitOffset),Pred(Integer(SrcBitOffset + (BitCount and 7))),True);
-    // store bits
-    If (DstBitOffset + (BitCount and 7)) > 8 then
-      // destination span byte boundary
-      PUInt16(Destination)^ := CBO16(SetBits(CBO16(PUInt16(Destination)^),UInt16(UInt16(Buffer) shl DstBitOffset),
-        Integer(DstBitOffset),Pred(Integer(DstBitOffset + (BitCount and 7))),False))
-    else
-      // destination is within one byte
-      PUInt8(Destination)^ := SetBits(PUInt8(Destination)^,UInt8(Buffer shl DstBitOffset),
-        Integer(DstBitOffset),Pred(Integer(DstBitOffset + (BitCount and 7))),False);
-  end;
-
-//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
-
-var
-  BytesToCopy:  TMemSize;
-  i:            TMemSize;
-begin
-If BitCount > 0 then
-  begin
-    // rectify pointers and bit shifts for large (>7) shift values
-    Inc(PUInt8(Source),SrcBitOffset shr 3);
-    Inc(PUInt8(Destination),DstBitOffset shr 3);
-    SrcBitOffset := SrcBitOffset and 7;
-    DstBitOffset := DstBitOffset and 7;
-    If (SrcBitOffset <> 0) or (DstBitOffset <> 0) then
-      begin
-        // at least one bit offset is non-zero
-        If (Source <> Destination) or (SrcBitOffset <> DstBitOffset) then
-          begin
-            BytesToCopy := BitCount shr 3;
-            ByteWriteMask := not UInt16(UInt16($00FF) shl DstBitOffset);
-          {$IFDEF CPU64Bit}
-            LongWriteMask := not UInt64(UInt64($00FFFFFFFFFFFFFF) shl DstBitOffset);
-          {$ELSE}
-            LongWriteMask := not UInt32(UInt32($00FFFFFF) shl DstBitOffset);
-          {$ENDIF}
-            If DestinationIsWithinSource then
-              begin
-                // destination starts somewhere withing the source memory, do backward copy
-                Source := PtrAdvance(Source,(BitCount + 7) shr 3);
-                Destination := PtrAdvance(Destination,(BitCount + 7) shr 3);
-                // first the trailing partial byte
-                If (BitCount and 7) <> 0 then
-                  begin
-                    // first advance poiters
-                    Dec(PUInt8(Source));
-                    Dec(PUInt8(Destination));
-                    DoPartialByteCopy;
-                  end;
-                // chunks
-                For i := 1 to (BytesToCopy div ChunkSize) do
-                  begin
-                    Dec(PUInt8(Source),ChunkSize);
-                    Dec(PUInt8(Destination),ChunkSize);
-                    DoFullLongCopy;
-                    Dec(BytesToCopy,ChunkSize);
-                  end;
-                // "whole" bytes
-                For i := 1 to BytesToCopy do
-                  begin
-                    Dec(PUInt8(Source));
-                    Dec(PUInt8(Destination));
-                    DoFullByteCopy;
-                  end;
-              end
-            else
-              begin
-                // destination is not within the source, do "normal" forward copy
-                // chunks
-                For i := 1 to (BytesToCopy div ChunkSize) do
-                  begin
-                    DoFullLongCopy;
-                    Inc(PUInt8(Source),ChunkSize);
-                    Inc(PUInt8(Destination),ChunkSize);
-                    Dec(BytesToCopy,ChunkSize);
-                  end;
-                // "whole" bytes
-                For i := 1 to BytesToCopy do
-                  begin
-                    DoFullByteCopy;
-                    Inc(PUInt8(Source));
-                    Inc(PUInt8(Destination));
-                  end;
-                // and the remaining bits, if any
-                If (BitCount and 7) <> 0 then
-                  DoPartialByteCopy;
-              end;
-          end;
-      end
-    // both bit offsets are zero, call simplified implementation
-    else CopyBits(Source,Destination,BitCount);
-  end;
-end;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -9689,7 +13108,7 @@ If Count > 0 then
 end;
 {$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
 procedure FillWord(var Dst; Count: TMemSize; Value: UInt16);
 {$IFNDEF PurePascal}
@@ -9846,7 +13265,7 @@ If Count > 0 then
 end;
 {$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
 procedure FillLong(var Dst; Count: TMemSize; Value: UInt32);
 {$IFNDEF PurePascal}
@@ -9992,7 +13411,7 @@ If Count > 0 then
 end;
 {$ENDIF}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
 procedure FillQuad(var Dst; Count: TMemSize; Value: UInt64);
 {$IFNDEF PurePascal}
@@ -10123,7 +13542,7 @@ If Count > 0 then
 end;
 {$ENDIF}
 
-//------------------------------------------------------------------------------
+//==============================================================================
 
 procedure FillMemory(Mem: Pointer; Size: TMemSize; Value: UInt8);
 begin
@@ -10134,7 +13553,7 @@ end;
 
 procedure ZeroMemory(Mem: Pointer; Size: TMemSize);
 begin
-FillByte(Mem^,Size,0);
+FillByte(Mem^,Size,UInt8(0));
 end;
 
 {-------------------------------------------------------------------------------
@@ -10168,448 +13587,1441 @@ end;
                                   Memory search
 ================================================================================
 -------------------------------------------------------------------------------}
+type
+  TMemSearchContextInternals = record
+    Parameters:     record
+      Buffer:         Pointer;
+      Size:           TMemOffset;
+      Options:        TMemSearchOptions;
+      StartPosition:  TMemOffset;
+      case ValueType: (scvtUInt8,scvtUInt16,scvtUInt32,scvtUInt64,scvtBytes) of
+        scvtUInt8:      (Value8:  UInt8);
+        scvtUInt16:     (Value16: UInt16);
+        scvtUInt32:     (Value32: UInt32);
+        scvtUInt64:     (Value64: U64Type);
+        scvtBytes:      (Bytes:   Pointer;
+                         Count:   TMemOffset);
+    end;
+    CurrentOffset:  TMemOffset;
+    SearchDone:     Boolean;
+  end;
+  PMemSearchContextInternals = ^TMemSearchContextInternals;
+
 {-------------------------------------------------------------------------------
     Memory search - auxiliary functions
 -------------------------------------------------------------------------------}
 
-Function PrepSearchOpts(LeadingPartialMatch,TrailingPartialMatch: Boolean): TBOSearchOptions;
+Function MemSearchOptionsProcess(const Options: TMemSearchOptions): TMemSearchOptions;
 begin
-Result := [];
-If LeadingPartialMatch then
-  Include(Result,soLeadPartialMatch);
-If TrailingPartialMatch then
-  Include(Result,soTrailPartialMatch);
+Result := Options;
+If soMatchPartial in Result then
+  Result := Result + [soMatchPartialLead,soMatchPartialTrail];
 end;
 
-{-------------------------------------------------------------------------------
-    Memory search - main implementation
--------------------------------------------------------------------------------}
+//------------------------------------------------------------------------------
 
-Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult;
+procedure MemSearchContextInit(out Context: TMemSearchContext);
+begin
+ZeroMemory(@Context,SizeOf(TMemSearchContext));
+Context.Internals := New(PMemSearchContextInternals);
+end;
 
-  Function SameBytes(A,B: PByte; Cnt: TMemSize): Boolean;
+//------------------------------------------------------------------------------
+
+procedure MemSearchContextResultsInit(var Context: TMemSearchContext);
+begin
+Context.LastResult := srNotFound;
+Context.LastPosition := 0;
+Context.LastOccurence := nil;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure MemSearchContextFinal(var Context: TMemSearchContext);
+begin
+If Assigned(Context.Internals) then
+  begin
+    with PMemSearchContextInternals(Context.Internals)^.Parameters do
+      If (ValueType = scvtBytes) and (soBytesLocalCopy in Options) then
+        FreeMem(Bytes,Count);
+    Dispose(PMemSearchContextInternals(Context.Internals));
+  end;
+ZeroMemory(@Context,SizeOf(TMemSearchContext));
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemSearchSameBytes(A,B: PUInt8; Count: TMemOffset): Boolean;
+var
+  i:  TMemOffset;
+begin
+If Count > 0 then
   begin
     Result := True;
-    while Cnt > 0 do
+    For i := 1 to Count do
       begin
         If A^ <> B^ then
           begin
             Result := False;
-            Break{while...};
+            Break{For i};
           end;
-        Dec(Cnt);
         Inc(A);
         Inc(B);
       end;
-  end;
-
-var
-  BytesWorkPtr:   Pointer;
-  BufferWorkPtr:  Pointer;
-  BytesRemaining: TMemSize;
-  i:              TMemSize;
-begin
-Position := -1;
-Result := srNotFound;
-// sanity checks
-If Count > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindBytes: Too many bytes to search for.');
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindBytes: Memory buffer too large.');
-If (Count > 0) and (Size > 0) then
-  case Count of
-    // call optimized routines for small data
-    1:  Result := FindByte(UInt8(Bytes),Buffer,Size,Position,Options);
-    2:  Result := FindWord(UInt16(Bytes),Buffer,Size,Position,Options);
-    4:  Result := FindLong(UInt32(Bytes),Buffer,Size,Position,Options);
-    8:  Result := FindQuad(UInt64(Bytes),Buffer,Size,Position,Options);
-  else
-    // general processing, leading partial match search
-    BufferWorkPtr := @Buffer;
-    // note Count cannot be 0 here, it was chacked earlier
-    BytesWorkPtr := PtrAdvance(@Bytes,TMemOffset(Count) - 1);
-    If [soLeadPartialMatch,soPartialMatch] * Options <> [] then
-      For i := 1 to MemSizeMin(Pred(Count),Size) do
-        begin
-          If SameBytes(BufferWorkPtr,BytesWorkPtr,i) then
-            begin
-              Position := TMemOffset(i) - TMemOffset(Count);
-              Result := srFoundLeadPartial;
-              Exit;
-            end
-          else Dec(PUInt8(BytesWorkPtr));
-        end;
-    // whole data search
-    BytesRemaining := Size;
-    while BytesRemaining >= Count do
-      begin
-        // do first byte comparison here to avoid unnecessary rapid calls to SameBytes
-        If PUInt8(BufferWorkPtr)^ = UInt8(Bytes) then
-          If SameBytes(BufferWorkPtr,@Bytes,Count) then
-            begin
-              Position := Size - BytesRemaining;
-              Result := srFound;
-              Exit;
-            end;
-        Inc(PUInt8(BufferWorkPtr));
-        Dec(BytesRemaining);
-      end;
-    // trailing partial match search
-    If [soTrailPartialMatch,soPartialMatch] * Options <> [] then
-      For i := MemSizeMin(Pred(Count),Size) downto 1 do
-        begin
-          If SameBytes(BufferWorkPtr,@Bytes,i) then
-            begin
-              Position := TMemOffset(Size) - TMemOffset(i);
-              Result := srFoundTrailPartial;
-              Exit;
-            end
-          else Inc(PUInt8(BufferWorkPtr));
-        end;
-  end;
+  end
+else Result := True;
 end;
 
-//------------------------------------------------------------------------------
+{-------------------------------------------------------------------------------
+    Memory search - internals implementation
+-------------------------------------------------------------------------------}
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
-Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult;
+Function MemSearchFind8(var Context: TMemSearchContext): Boolean;
 var
-  WorkPtr:        PUInt8;
-  BytesRemaining: TMemSize;
+  Value:    UInt8;
+  WorkPtr:  PUInt8;
 begin
-Position := -1;
-Result := srNotFound;
-// ensure we can actually return the offset
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindByte: Memory buffer too large.');
-WorkPtr := PUInt8(@Buffer);
-BytesRemaining := Size;
-// searching for bytes, no need to do partial checks
-while BytesRemaining > 0 do
+Result := False;
+MemSearchContextResultsInit(Context);
+with PMemSearchContextInternals(Context.Internals)^ do
   begin
-    If WorkPtr^ = Value then
+    // get helper variables
+    Value := Parameters.Value8;
+    CurrentOffset := MemOffsetLimit(CurrentOffset,0,Pred(Parameters.Size));
+    WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+    // main processing
+    If soReverseSearch in Parameters.Options then
       begin
-        // we have found the value
-        Position := Size - BytesRemaining;
-        Result := srFound;
-        Break{while...};
-      end;
-    Inc(WorkPtr);
-    Dec(BytesRemaining);
-  end;
-end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult;
-var
-  WorkPtr:        PUInt16;
-  BytesRemaining: TMemSize;
-begin
-Position := -1;
-Result := srNotFound;
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindWord: Memory buffer too large.');
-If Size > 0 then
-  begin
-    WorkPtr := PUInt16(@Buffer);
-    // leading partial match check
-    If [soLeadPartialMatch,soPartialMatch] * Options <> [] then
-    {$IFDEF ENDIAN_BIG}
-      If UInt8(Value) = PUInt8(WorkPtr)^ then
-    {$ELSE}
-      If UInt8(Value shr 8) = PUInt8(WorkPtr)^ then
-    {$ENDIF}
-        begin
-          Position := -1;
-          Result := srFoundLeadPartial;
-          Exit;
-        end;
-    // check the data
-    BytesRemaining := Size;
-    while BytesRemaining >= SizeOf(Value) do
-      begin
-        If WorkPtr^ = Value then
+        // searching form highest address to lowest
+        while CurrentOffset >= 0 do
           begin
-            Position := Size - BytesRemaining;
-            Result := srFound;
-            Exit;
+            If WorkPtr^ = Value then
+              begin
+                Context.LastResult := srFound;
+                Context.LastPosition := CurrentOffset;
+                Context.LastOccurence := WorkPtr;
+                CurrentOffset := Pred(CurrentOffset);
+                SearchDone := CurrentOffset < 0;
+                Result := True;
+                Exit;
+              end;
+            Dec(WorkPtr);
+            Dec(CurrentOffset);
           end;
-        Inc(PUInt8(WorkPtr)); // increment the working pointer only by one
-        Dec(BytesRemaining);
-      end;
-  {
-    Trailing partial match check.
-
-    Note that by this point, WorkPtr always points to a byte that is exactly
-    SizeOf(Value) - 1 remote from the end of data, so we can directly use it
-    to do partial check.
-  }
-    If [soTrailPartialMatch,soPartialMatch] * Options <> [] then
-    {$IFDEF ENDIAN_BIG}
-      If UInt8(Value shr 8) = PUInt8(WorkPtr)^ then
-    {$ELSE}
-      If UInt8(Value) = PUInt8(WorkPtr)^ then
-    {$ENDIF}
-        begin
-          Position := TMemOffset(Size) - 1;
-          Result := srFoundTrailPartial;
-        end;
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult;
-var
-  WorkPtr:        PUInt32;
-  BytesRemaining: TMemSize;
-  Temp:           UInt32;
-  i:              TMemSize;
-begin
-Position := -1;
-Result := srNotFound;
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindLong: Memory buffer too large.');
-If Size > 0 then
-  begin
-    WorkPtr := PUInt32(@Buffer);
-    If [soLeadPartialMatch,soPartialMatch] * Options <> [] then
-      For i := 1 to MemSizeMin(Pred(SizeOf(UInt32)),Size) do
-        begin
-          Temp := 0;
-          Move(WorkPtr^,Temp,i);
-        {$IFDEF ENDIAN_BIG}
-          If Temp = UInt32(Value shl (8 * (SizeOf(UInt32) - i))) then
-        {$ELSE}
-          If Temp = Value shr (8 * (SizeOf(UInt32) - i)) then
-        {$ENDIF}
-            begin
-              Position := TMemOffset(i) - SizeOf(UInt32);
-              Result := srFoundLeadPartial;
-              Exit;
-            end;
-        end;
-    BytesRemaining := Size;
-    while BytesRemaining >= SizeOf(UInt32) do
+        SearchDone := True;
+      end
+    else  // forward - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       begin
-        If WorkPtr^ = Value then
+        // searching from lowest address towards higher addresses
+        while CurrentOffset < Parameters.Size do
           begin
-            Position := Size - BytesRemaining;
-            Result := srFound;
-            Exit;
+            If WorkPtr^ = Value then
+              begin
+                // searched byte found, fill results and end
+                Context.LastResult := srFound;
+                Context.LastPosition := CurrentOffset;
+                Context.LastOccurence := WorkPtr;
+                CurrentOffset := Succ(CurrentOffset);
+                SearchDone := CurrentOffset >= Parameters.Size;
+                Result := True;
+                Exit;
+              end;
+            Inc(WorkPtr);
+            Inc(CurrentOffset);
           end;
-        Inc(PUInt8(WorkPtr));
-        Dec(BytesRemaining);
+        SearchDone := True;
       end;
-    If [soTrailPartialMatch,soPartialMatch] * Options <> [] then
-      For i := MemSizeMin(Pred(SizeOf(UInt32)),Size) downto 1 do
-        begin
-          Temp := 0;
-          Move(WorkPtr^,Temp,i);
-        {$IFDEF ENDIAN_BIG}
-          If Temp = Value and UInt32(UInt32(-1) shl (8 * (SizeOf(UInt32) - i))) then
-        {$ELSE}
-          If Temp = Value and {mask}(UInt32(-1) shr (8 * (SizeOf(UInt32) - i))) then
-        {$ENDIF}
-            begin
-              Position := TMemOffset(Size) - TMemOffset(i);
-              Result := srFoundTrailPartial;
-              Exit;
-            end;
-          Inc(PUInt8(WorkPtr));
-        end;
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function FindQuad(Value: UInt64; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult;
-var
-  WorkPtr:        PUInt64;
-  BytesRemaining: TMemSize;
-  Temp:           UInt64;
-  i:              TMemSize;
-begin
-Position := -1;
-Result := srNotFound;
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindQuad: Memory buffer too large.');
-If Size > 0 then
-  begin
-    WorkPtr := PUInt64(@Buffer);  
-    If [soLeadPartialMatch,soPartialMatch] * Options <> [] then
-      For i := 1 to MemSizeMin(Pred(SizeOf(UInt64)),Size) do
-        begin
-          Temp := 0;
-          Move(WorkPtr^,Temp,i);
-        {$IFDEF ENDIAN_BIG}
-          If Temp = UInt64(Value shl (8 * (SizeOf(UInt64) - i))) then
-        {$ELSE}
-          If Temp = Value shr (8 * (SizeOf(UInt64) - i)) then
-        {$ENDIF}
-            begin
-              Position := TMemOffset(i) - SizeOf(UInt64);
-              Result := srFoundLeadPartial;
-              Exit;
-            end;
-        end;
-    BytesRemaining := Size;
-    while BytesRemaining >= SizeOf(UInt64) do
-      begin
-        If WorkPtr^ = Value then
-          begin
-            Position := Size - BytesRemaining;
-            Result := srFound;
-            Exit;
-          end;
-        Inc(PUInt8(WorkPtr));
-        Dec(BytesRemaining);
-      end;
-    If [soTrailPartialMatch,soPartialMatch] * Options <> [] then
-      For i := MemSizeMin(Pred(SizeOf(UInt64)),Size) downto 1 do
-        begin
-          Temp := 0;
-          Move(WorkPtr^,Temp,i);
-        {$IFDEF ENDIAN_BIG}
-          If Temp = Value and UInt64(UInt64(-1) shl (8 * (SizeOf(UInt64) - i))) then
-        {$ELSE}
-          If Temp = Value and (UInt64(-1) shr (8 * (SizeOf(UInt64) - i))) then
-        {$ENDIF}
-            begin
-              Position := TMemOffset(Size) - TMemOffset(i);
-              Result := srFoundTrailPartial;
-              Exit;
-            end;
-          Inc(PUInt8(WorkPtr));
-        end;
   end;
 end;
 
 //==============================================================================
 
-Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
+Function MemSearchFindPartialLead16(var Context: TMemSearchContext): Boolean;
 begin
-Position := -1;
-Result := srNotFound;
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
 {
-  This check has to be done here, even if it is later repeated in called Find*.
-  This is because later, the Size is already decremented by From, so the check
-  might falsely succeed there.
+  Current offset can only be -1, so this is simple - in little endian systems,
+  we compare the first byte of buffer with higher-order byte of given 16bit
+  value, in big endian systems we compare it with low-order byte and we are
+  done.
 }
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindBytes: Memory buffer too large.');
-If Offset < Size then
-  begin
-    Result := FindBytes(Bytes,Count,PtrAdvance(@Buffer,TMemOffset(Offset))^,Size - Offset,Position,Options);
-    If (Result <> srNotFound) and (soAbsolutePosition in Options) then
-      Position := Position + TMemOffset(Offset);
-  end;
+{$IFDEF ENDIAN_BIG}
+  If PUInt8(Parameters.Buffer)^ = UInt8(Parameters.Value16) then
+{$ELSE}
+  If PUInt8(Parameters.Buffer)^ = UInt8(Parameters.Value16 shr 8) then
+{$ENDIF}
+    begin
+      Context.LastResult := srFoundPartialLead;
+      Context.LastPosition := -1;
+      Context.LastOccurence := nil;
+      If soReverseSearch in Parameters.Options then
+        begin
+          CurrentOffset := -2;
+          SearchDone := True;
+        end
+      else
+        begin
+          CurrentOffset := MemOffsetIfThen(soSkipOverlaps in Parameters.Options,1,0);
+          SearchDone := CurrentOffset >= Parameters.Size;
+        end;
+      Result := True;
+    end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
+Function MemSearchFindPartialTrail16(var Context: TMemSearchContext): Boolean;
 begin
-Position := -1;
-Result := srNotFound;
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindByte: Memory buffer too large.');
-If Offset < Size then
-  begin
-    Result := FindByte(Value,PtrAdvance(@Buffer,TMemOffset(Offset))^,Size - Offset,Position,Options);
-    If (Result <> srNotFound) and (soAbsolutePosition in Options) then
-      Position := Position + TMemOffset(Offset);
-  end;
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
+{
+  Similarly to lead-partial match, we need to compare only a single byte
+  (this time the last one) with either low or high order byte (depending
+  on endianness) of the searched value.
+}
+{$IFDEF ENDIAN_BIG}
+  If PUInt8(PtrAdvance(Parameters.Buffer,Pred(Parameters.Size)))^ = UInt8(Parameters.Value16 shr 8) then
+{$ELSE}
+  If PUInt8(PtrAdvance(Parameters.Buffer,Pred(Parameters.Size)))^ = UInt8(Parameters.Value16) then
+{$ENDIF}
+    begin
+      Context.LastResult := srFoundPartialTrail;
+      Context.LastPosition := Pred(Parameters.Size);
+      Context.LastOccurence := nil;
+      If soReverseSearch in Parameters.Options then
+        begin
+          CurrentOffset := Parameters.Size - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,3,2);
+          SearchDone := CurrentOffset <= -2;
+        end
+      else
+        begin
+          CurrentOffset := Parameters.Size;
+          SearchDone := True;
+        end;
+      Result := True;
+    end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
+Function MemSearchFind16(var Context: TMemSearchContext): Boolean;
+var
+  Value:    UInt16;
+  WorkPtr:  PUInt8;
 begin
-Position := -1;
-Result := srNotFound;
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindWord: Memory buffer too large.');
-If Offset < Size then
+Result := False;
+MemSearchContextResultsInit(Context);
+with PMemSearchContextInternals(Context.Internals)^ do
   begin
-    Result := FindWord(Value,PtrAdvance(@Buffer,TMemOffset(Offset))^,Size - Offset,Position,Options);
-    If (Result <> srNotFound) and (soAbsolutePosition in Options) then
-      Position := Position + TMemOffset(Offset);
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-begin
-Position := -1;
-Result := srNotFound;
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindLong: Memory buffer too large.');
-If Offset < Size then
-  begin
-    Result := FindLong(Value,PtrAdvance(@Buffer,TMemOffset(Offset))^,Size - Offset,Position,Options);
-    If (Result <> srNotFound) and (soAbsolutePosition in Options) then
-      Position := Position + TMemOffset(Offset);
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function FindQuad(Value: UInt64; const Buffer; Size: TMemSize; Offset: TMemSize; out Position: TMemOffset; Options: TBOSearchOptions = []): TBOSearchResult; overload;
-begin
-Position := -1;
-Result := srNotFound;
-If Size > TMemSize(High(TMemOffset)) then
-  raise EBOInvalidValue.Create('FindQuad: Memory buffer too large.');
-If Offset < Size then
-  begin
-    Result := FindQuad(Value,PtrAdvance(@Buffer,TMemOffset(Offset))^,Size - Offset,Position,Options);
-    If (Result <> srNotFound) and (soAbsolutePosition in Options) then
-      Position := Position + TMemOffset(Offset);
+    Value := Parameters.Value16;
+    CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),Pred(Parameters.Size));
+    If soReverseSearch in Parameters.Options then
+      begin
+        If (soMatchPartialTrail in Parameters.Options) and (CurrentOffset >= Pred(Parameters.Size)) then
+          If MemSearchFindPartialTrail16(Context) then
+            begin
+              // trailing partial match found, positions are already filled
+              Result := True;
+              Exit;
+            end;
+        // no trailing partial match, continue with search for full occurence
+        CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),Parameters.Size - SizeOf(Value));
+        If CurrentOffset >= 0 then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset >= 0 do
+              begin
+                If PUInt16(WorkPtr)^ = Value then
+                  begin
+                    Context.LastResult := srFound;
+                    Context.LastPosition := CurrentOffset;
+                    Context.LastOccurence := WorkPtr;
+                    CurrentOffset := CurrentOffset - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+                    SearchDone := CurrentOffset <= -SizeOf(Value);
+                    Result := True;
+                    Exit; // we need to exit to avoid search for trailing partial
+                  end;
+                Dec(WorkPtr); // decremented only by 1
+                Dec(CurrentOffset);
+              end;
+          end;
+        // full value not found, try leading partial match
+        If soMatchPartialLead in Parameters.Options then
+          begin
+            CurrentOffset := -1;
+            Result := MemSearchFindPartialLead16(Context);
+          end;
+        // when here, then there is nothing more to be found
+        SearchDone := True;
+      end
+    else  // forward - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      begin
+        If (soMatchPartialLead in Parameters.Options) and (CurrentOffset < 0) then
+          If MemSearchFindPartialLead16(Context) then
+            begin
+              // leading partial match found, positions are already filled
+              Result := True;
+              Exit;
+            end;
+        // no leading partial match found, we can continue to normal search
+        CurrentOffset := MemOffsetLimit(CurrentOffset,0,Pred(Parameters.Size));
+        If CurrentOffset < Pred(Parameters.Size) then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset < Pred(Parameters.Size) do
+              begin
+                If PUInt16(WorkPtr)^ = Value then
+                  begin
+                    Context.LastResult := srFound;
+                    Context.LastPosition := CurrentOffset;
+                    Context.LastOccurence := WorkPtr;
+                    CurrentOffset := CurrentOffset + MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+                    SearchDone := CurrentOffset >= Parameters.Size;
+                    Result := True;
+                    Exit; // we need to exit to avoid search for trailing partial
+                  end;
+                Inc(WorkPtr); // incremented only by 1
+                Inc(CurrentOffset);
+              end;
+          end;
+        // value not found in full, try trailing partial match
+        If soMatchPartialTrail in Parameters.Options then
+          begin
+            CurrentOffset := Pred(Parameters.Size);
+            Result := MemSearchFindPartialTrail16(Context);
+          end;
+        // if here, then there is nothing more to be found
+        SearchDone := True;
+      end;
   end;
 end;
 
 //==============================================================================
 
-Function FindBytes(const Bytes; Count: TMemSize; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+Function MemSearchFindPartialLead32(var Context: TMemSearchContext): Boolean;
+var
+  Value:  UInt32;
 begin
-If FindBytes(Bytes,Count,Memory^,Size,Result,PrepSearchOpts(LeadingPartialMatch,TrailingPartialMatch)) = srNotFound then
-  Result := -TMemOffset(Count); // this is ok, Count is checked for TMemOffset bounds in FindBytes
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    Value := Parameters.Value32;
+    // value of current offset was limited before calling this function
+    If soReverseSearch in Parameters.Options then
+      begin
+        while CurrentOffset >= -Pred(SizeOf(Value)) do
+          If MemSearchSameBytes(PtrAdvance(@Value,-CurrentOffset),Parameters.Buffer,CurrentOffset + SizeOf(Value)) then
+            begin
+              Context.LastResult := srFoundPartialLead;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := MemOffsetIfThen(soSkipOverlaps in Parameters.Options,-SizeOf(Value),Pred(CurrentOffset));
+              SearchDone := CurrentOffset <= -SizeOf(Value);
+              Result := True;
+              Break{while};
+            end
+          else Dec(CurrentOffset);
+      end
+    else
+      begin
+        while CurrentOffset <= MemOffsetMin(-1,Parameters.Size - SizeOf(Value)) do
+          If MemSearchSameBytes(PtrAdvance(@Value,-CurrentOffset),Parameters.Buffer,CurrentOffset + SizeOf(Value)) then
+            begin
+              Context.LastResult := srFoundPartialLead;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := CurrentOffset + MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+              SearchDone := CurrentOffset >= Parameters.Size;
+              Result := True;
+              Break{while};
+            end
+          else Inc(CurrentOffset);
+      end;
+  end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function FindByte(Value: UInt8; Memory: Pointer; Size: TMemSize): TMemOffset;
+Function MemSearchFindPartialTrail32(var Context: TMemSearchContext): Boolean;
+var
+  Value:  UInt32;
 begin
-If FindByte(Value,Memory^,Size,Result,[]) = srNotFound then
-  Result := -SizeOf(UInt8);
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    Value := Parameters.Value32;
+    If soReverseSearch in Parameters.Options then
+      begin
+        while CurrentOffset >= MemOffsetMax(0,Parameters.Size - Pred(SizeOf(Value))) do
+          If MemSearchSameBytes(@Value,PtrAdvance(Parameters.Buffer,CurrentOffset),Parameters.Size - CurrentOffset) then
+            begin
+              Context.LastResult := srFoundPartialTrail;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := CurrentOffset - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+              SearchDone := CurrentOffset <= -SizeOf(Value);
+              Result := True;
+            end
+          else Dec(CurrentOffset);
+      end
+    else
+      begin
+        while CurrentOffset <= Pred(Parameters.Size) do
+          If MemSearchSameBytes(@Value,PtrAdvance(Parameters.Buffer,CurrentOffset),Parameters.Size - CurrentOffset) then
+            begin
+              Context.LastResult := srFoundPartialTrail;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := MemOffsetIfThen(soSkipOverlaps in Parameters.Options,Parameters.Size,Succ(CurrentOffset));
+              SearchDone := CurrentOffset >= Parameters.Size;
+              Result := True;
+              Break{For i};
+            end
+          else Inc(CurrentOffset);
+      end;
+  end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function FindWord(Value: UInt16; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+Function MemSearchFind32(var Context: TMemSearchContext): Boolean;
+var
+  Value:    UInt32;
+  WorkPtr:  PUInt8;
 begin
-If FindWord(Value,Memory^,Size,Result,PrepSearchOpts(LeadingPartialMatch,TrailingPartialMatch)) = srNotFound then
-  Result := -SizeOf(UInt16);
+Result := False;
+MemSearchContextResultsInit(Context);
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    Value := Parameters.Value32;
+    CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),Pred(Parameters.Size));
+    If soReverseSearch in Parameters.Options then
+      begin
+        If (soMatchPartialTrail in Parameters.Options) and (CurrentOffset > (Parameters.Size - SizeOf(Value))) then
+          If MemSearchFindPartialTrail32(Context) then
+            begin
+              Result := True;
+              Exit;
+            end;
+        CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),Parameters.Size - SizeOf(Value));
+        If CurrentOffset >= 0 then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset >= 0 do
+              begin
+                If PUInt32(WorkPtr)^ = Value then
+                  begin
+                    Context.LastResult := srFound;
+                    Context.LastPosition := CurrentOffset;
+                    Context.LastOccurence := WorkPtr;
+                    CurrentOffset := CurrentOffset - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+                    SearchDone := CurrentOffset <= -SizeOf(Value);
+                    Result := True;
+                    Exit;
+                  end;
+                Dec(WorkPtr);
+                Dec(CurrentOffset);
+              end;
+          end;
+        If soMatchPartialLead in Parameters.Options then
+          begin
+            CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),-1);
+            Result := MemSearchFindPartialLead32(Context);
+          end;
+        SearchDone := True;
+      end
+    else  // forward - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      begin
+        If (soMatchPartialLead in Parameters.Options) and (CurrentOffset < 0) then
+          If MemSearchFindPartialLead32(Context) then
+            begin
+              Result := True;
+              Exit;
+            end;
+        CurrentOffset := MemOffsetLimit(CurrentOffset,0,Pred(Parameters.Size));
+        If CurrentOffset <= (Parameters.Size - SizeOf(Value)) then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset <= (Parameters.Size - SizeOf(Value)) do
+              begin
+                If PUInt32(WorkPtr)^ = Value then
+                  begin
+                    Context.LastResult := srFound;
+                    Context.LastPosition := CurrentOffset;
+                    Context.LastOccurence := WorkPtr;
+                    CurrentOffset := CurrentOffset + MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+                    SearchDone := CurrentOffset >= Parameters.Size;
+                    Result := True;
+                    Exit;
+                  end;
+                Inc(WorkPtr);
+                Inc(CurrentOffset);
+              end;
+          end;
+        If soMatchPartialTrail in Parameters.Options then
+          begin
+            CurrentOffset := MemOffsetLimit(CurrentOffset,Parameters.Size - Pred(SizeOf(Value)),Pred(Parameters.Size));
+            Result := MemSearchFindPartialTrail32(Context);
+          end;
+        SearchDone := True;
+      end;
+  end;
+end;
+
+//==============================================================================
+
+Function MemSearchFindPartialLead64(var Context: TMemSearchContext): Boolean;
+var
+  Value:  U64Type;
+begin
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    Value := Parameters.Value64;
+    If soReverseSearch in Parameters.Options then
+      begin
+        while CurrentOffset >= -Pred(SizeOf(Value)) do
+          If MemSearchSameBytes(PtrAdvance(@Value,-CurrentOffset),Parameters.Buffer,CurrentOffset + SizeOf(Value)) then
+            begin
+              Context.LastResult := srFoundPartialLead;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := MemOffsetIfThen(soSkipOverlaps in Parameters.Options,-SizeOf(Value),Pred(CurrentOffset));
+              SearchDone := CurrentOffset <= -SizeOf(Value);
+              Result := True;
+              Break{while};
+            end
+          else Dec(CurrentOffset);
+      end
+    else
+      begin
+        while CurrentOffset <= MemOffsetMin(-1,Parameters.Size - SizeOf(Value)) do
+          If MemSearchSameBytes(PtrAdvance(@Value,-CurrentOffset),Parameters.Buffer,CurrentOffset + SizeOf(Value)) then
+            begin
+              Context.LastResult := srFoundPartialLead;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := CurrentOffset + MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+              SearchDone := CurrentOffset >= Parameters.Size;
+              Result := True;
+              Break{while};
+            end
+          else Inc(CurrentOffset);
+      end;
+  end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function FindLong(Value: UInt32; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+Function MemSearchFindPartialTrail64(var Context: TMemSearchContext): Boolean;
+var
+  Value:  U64Type;
 begin
-If FindLong(Value,Memory^,Size,Result,PrepSearchOpts(LeadingPartialMatch,TrailingPartialMatch)) = srNotFound then
-  Result := -SizeOf(UInt32);
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    Value := Parameters.Value64;
+    If soReverseSearch in Parameters.Options then
+      begin
+        while CurrentOffset >= MemOffsetMax(0,Parameters.Size - Pred(SizeOf(Value))) do
+          If MemSearchSameBytes(@Value,PtrAdvance(Parameters.Buffer,CurrentOffset),Parameters.Size - CurrentOffset) then
+            begin
+              Context.LastResult := srFoundPartialTrail;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := CurrentOffset - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+              SearchDone := CurrentOffset <= -SizeOf(Value);
+              Result := True;
+            end
+          else Dec(CurrentOffset);
+      end
+    else
+      begin
+        while CurrentOffset <= Pred(Parameters.Size) do
+          If MemSearchSameBytes(@Value,PtrAdvance(Parameters.Buffer,CurrentOffset),Parameters.Size - CurrentOffset) then
+            begin
+              Context.LastResult := srFoundPartialTrail;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := MemOffsetIfThen(soSkipOverlaps in Parameters.Options,Parameters.Size,Succ(CurrentOffset));
+              SearchDone := CurrentOffset >= Parameters.Size;
+              Result := True;
+              Break{For i};
+            end
+          else Inc(CurrentOffset);
+      end;
+  end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function FindQuad(Value: UInt64; Memory: Pointer; Size: TMemSize; LeadingPartialMatch: Boolean = False; TrailingPartialMatch: Boolean = False): TMemOffset;
+Function MemSearchFind64(var Context: TMemSearchContext): Boolean;
+var
+  Value:    U64Type;
+  WorkPtr:  PUInt8;
 begin
-If FindQuad(Value,Memory^,Size,Result,PrepSearchOpts(LeadingPartialMatch,TrailingPartialMatch)) = srNotFound then
-  Result := -SizeOf(UInt64);
+Result := False;
+MemSearchContextResultsInit(Context);
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    Value := Parameters.Value64;
+    CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),Pred(Parameters.Size));
+    If soReverseSearch in Parameters.Options then
+      begin
+        If (soMatchPartialTrail in Parameters.Options) and (CurrentOffset > (Parameters.Size - SizeOf(Value))) then
+          If MemSearchFindPartialTrail64(Context) then
+            begin
+              Result := True;
+              Exit;
+            end;
+        CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),Parameters.Size - SizeOf(Value));
+        If CurrentOffset >= 0 then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset >= 0 do
+              begin
+                If PUInt64(WorkPtr)^ = Value then
+                  begin
+                    Context.LastResult := srFound;
+                    Context.LastPosition := CurrentOffset;
+                    Context.LastOccurence := WorkPtr;
+                    CurrentOffset := CurrentOffset - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+                    SearchDone := CurrentOffset <= -SizeOf(Value);
+                    Result := True;
+                    Exit;
+                  end;
+                Dec(WorkPtr);
+                Dec(CurrentOffset);
+              end;
+          end;
+        If soMatchPartialLead in Parameters.Options then
+          begin
+            CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(SizeOf(Value)),-1);
+            Result := MemSearchFindPartialLead64(Context);
+          end;
+        SearchDone := True;
+      end
+    else  // forward - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      begin
+        If (soMatchPartialLead in Parameters.Options) and (CurrentOffset < 0) then
+          If MemSearchFindPartialLead64(Context) then
+            begin
+              Result := True;
+              Exit;
+            end;
+        CurrentOffset := MemOffsetLimit(CurrentOffset,0,Pred(Parameters.Size));
+        If CurrentOffset <= (Parameters.Size - SizeOf(Value)) then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset <= (Parameters.Size - SizeOf(Value)) do
+              begin
+                If PUInt64(WorkPtr)^ = Value then
+                  begin
+                    Context.LastResult := srFound;
+                    Context.LastPosition := CurrentOffset;
+                    Context.LastOccurence := WorkPtr;
+                    CurrentOffset := CurrentOffset + MemOffsetIfThen(soSkipOverlaps in Parameters.Options,SizeOf(Value),1);
+                    SearchDone := CurrentOffset >= Parameters.Size;
+                    Result := True;
+                    Exit;
+                  end;
+                Inc(WorkPtr);
+                Inc(CurrentOffset);
+              end;
+          end;
+        If soMatchPartialTrail in Parameters.Options then
+          begin
+            CurrentOffset := MemOffsetLimit(CurrentOffset,Parameters.Size - Pred(SizeOf(Value)),Pred(Parameters.Size));
+            Result := MemSearchFindPartialTrail64(Context);
+          end;
+        SearchDone := True;
+      end;
+  end;
+end;
+
+//==============================================================================
+
+Function MemSearchFindPartialLeadBytes(var Context: TMemSearchContext): Boolean;
+begin
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    If soReverseSearch in Parameters.Options then
+      begin
+        while CurrentOffset >= -Pred(Parameters.Count) do
+          If MemSearchSameBytes(PtrAdvance(Parameters.Bytes,-CurrentOffset),Parameters.Buffer,CurrentOffset + Parameters.Count) then
+            begin
+              Context.LastResult := srFoundPartialLead;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := MemOffsetIfThen(soSkipOverlaps in Parameters.Options,-Parameters.Count,Pred(CurrentOffset));
+              SearchDone := CurrentOffset <= -Parameters.Count;
+              Result := True;
+              Break{while};
+            end
+          else Dec(CurrentOffset);
+      end
+    else
+      begin
+        while CurrentOffset <= MemOffsetMin(-1,Parameters.Size - Parameters.Count) do
+          If MemSearchSameBytes(PtrAdvance(PArameters.Bytes,-CurrentOffset),Parameters.Buffer,CurrentOffset + Parameters.Count) then
+            begin
+              Context.LastResult := srFoundPartialLead;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := CurrentOffset + MemOffsetIfThen(soSkipOverlaps in Parameters.Options,Parameters.Count,1);
+              SearchDone := CurrentOffset >= Parameters.Size;
+              Result := True;
+              Break{while};
+            end
+          else Inc(CurrentOffset);
+      end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemSearchFindPartialTrailBytes(var Context: TMemSearchContext): Boolean;
+begin
+Result := False;
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    If soReverseSearch in Parameters.Options then
+      begin
+        while CurrentOffset >= MemOffsetMax(0,Parameters.Size - Pred(Parameters.Count)) do
+          If MemSearchSameBytes(Parameters.Bytes,PtrAdvance(Parameters.Buffer,CurrentOffset),Parameters.Size - CurrentOffset) then
+            begin
+              Context.LastResult := srFoundPartialTrail;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := CurrentOffset - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,Parameters.Count,1);
+              SearchDone := CurrentOffset <= -Parameters.Count;
+              Result := True;
+            end
+          else Dec(CurrentOffset);
+      end
+    else
+      begin
+        while CurrentOffset <= Pred(Parameters.Size) do
+          If MemSearchSameBytes(Parameters.Bytes,PtrAdvance(Parameters.Buffer,CurrentOffset),Parameters.Size - CurrentOffset) then
+            begin
+              Context.LastResult := srFoundPartialTrail;
+              Context.LastPosition := CurrentOffset;
+              Context.LastOccurence := nil;
+              CurrentOffset := MemOffsetIfThen(soSkipOverlaps in Parameters.Options,Parameters.Size,Succ(CurrentOffset));
+              SearchDone := CurrentOffset >= Parameters.Size;
+              Result := True;
+              Break{For i};
+            end
+          else Inc(CurrentOffset);
+      end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemSearchFindBytes(var Context: TMemSearchContext): Boolean;
+var
+  Value:    UInt8;
+  ValuePtr: PUInt8;
+  WorkPtr:  PUInt8;
+begin
+Result := False;
+MemSearchContextResultsInit(Context);
+with PMemSearchContextInternals(Context.Internals)^ do
+  begin
+    Value := PUInt8(Parameters.Bytes)^;
+    ValuePtr := PtrAdvance(Parameters.Bytes,1); // if Count is 2 or less, then this function is not even called
+    CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(Parameters.Count),Pred(Parameters.Size));
+    If soReverseSearch in Parameters.Options then
+      begin
+        If (soMatchPartialTrail in Parameters.Options) and (CurrentOffset > (Parameters.Size - Parameters.Count)) then
+          If MemSearchFindPartialTrailBytes(Context) then
+            begin
+              Result := True;
+              Exit;
+            end;
+        CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(Parameters.Count),Parameters.Size - Parameters.Count);
+        If CurrentOffset >= 0 then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset >= 0 do
+              begin
+                If PUInt8(WorkPtr)^ = Value then
+                  If MemSearchSameBytes(PtrAdvance(WorkPtr,1),ValuePtr,Pred(Parameters.Count)) then
+                    begin
+                      Context.LastResult := srFound;
+                      Context.LastPosition := CurrentOffset;
+                      Context.LastOccurence := WorkPtr;
+                      CurrentOffset := CurrentOffset - MemOffsetIfThen(soSkipOverlaps in Parameters.Options,Parameters.Count,1);
+                      SearchDone := CurrentOffset <= -Parameters.Count;
+                      Result := True;
+                      Exit;
+                    end;
+                Dec(WorkPtr);
+                Dec(CurrentOffset);
+              end;
+          end;
+        If soMatchPartialLead in Parameters.Options then
+          begin
+            CurrentOffset := MemOffsetLimit(CurrentOffset,-Pred(Parameters.Count),-1);
+            Result := MemSearchFindPartialLeadBytes(Context);
+          end;
+        SearchDone := True;
+      end
+    else  // forward - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      begin
+        If (soMatchPartialLead in Parameters.Options) and (CurrentOffset < 0) then
+          If MemSearchFindPartialLeadBytes(Context) then
+            begin
+              Result := True;
+              Exit;
+            end;
+        CurrentOffset := MemOffsetLimit(CurrentOffset,0,Pred(Parameters.Size));
+        If CurrentOffset <= (Parameters.Size - Parameters.Count) then
+          begin
+            WorkPtr := PtrAdvance(Parameters.Buffer,CurrentOffset);
+            while CurrentOffset <= (Parameters.Size - Parameters.Count) do
+              begin
+                If PUInt8(WorkPtr)^ = Value then
+                  If MemSearchSameBytes(PtrAdvance(WorkPtr,1),ValuePtr,Pred(Parameters.Count)) then
+                    begin
+                      Context.LastResult := srFound;
+                      Context.LastPosition := CurrentOffset;
+                      Context.LastOccurence := WorkPtr;
+                      CurrentOffset := CurrentOffset + MemOffsetIfThen(soSkipOverlaps in Parameters.Options,Parameters.Count,1);
+                      SearchDone := CurrentOffset >= Parameters.Size;
+                      Result := True;
+                      Exit;
+                    end;
+                Inc(WorkPtr);
+                Inc(CurrentOffset);
+              end;
+          end;
+        If soMatchPartialTrail in Parameters.Options then
+          begin
+            CurrentOffset := MemOffsetLimit(CurrentOffset,Parameters.Size - Pred(Parameters.Count),Pred(Parameters.Size));
+            Result := MemSearchFindPartialTrailBytes(Context);
+          end;
+        SearchDone := True;
+      end;
+  end;
+end;
+
+{-------------------------------------------------------------------------------
+    Memory search - public functions implementation
+-------------------------------------------------------------------------------}
+
+Function MemoryFindFirst(Value: UInt8; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := False;
+// sanity checks
+If Size > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('MemoryFindFirst: Memory buffer too large.');
+If Size > 0 then
+  begin
+    MemSearchContextInit(Context);
+    try
+      with PMemSearchContextInternals(Context.Internals)^ do
+        begin
+          // prepare context - store parameters
+          Parameters.Buffer := @Buffer;
+          Parameters.Size := TMemOffset(Size);
+          Parameters.Options := MemSearchOptionsProcess(Options);
+          Parameters.StartPosition := StartPosition;
+          Parameters.ValueType := scvtUInt8;
+          Parameters.Value8 := Value;
+          // init processing variables
+          If soUseStartPosition in Parameters.Options then
+            CurrentOffset := MemOffsetLimit(Parameters.StartPosition,0,Pred(Parameters.Size))
+          else
+            CurrentOffset := MemOffsetIfThen(soReverseSearch in Parameters.Options,Pred(Parameters.Size),0);
+          SearchDone := False;
+        end;
+      // try to find first occurence
+      Result := MemSearchFind8(Context);
+    finally
+      If not Result then
+        MemSearchContextFinal(Context);
+    end;
+  end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function MemoryFindFirst(Value: UInt16; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := False;
+If Size > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('MemoryFindFirst: Memory buffer too large.');
+If Size > 0 then
+  begin
+    MemSearchContextInit(Context);
+    try
+      with PMemSearchContextInternals(Context.Internals)^ do
+        begin
+          Parameters.Buffer := @Buffer;
+          Parameters.Size := TMemOffset(Size);;
+          Parameters.Options := MemSearchOptionsProcess(Options);
+          Parameters.StartPosition := StartPosition;
+          Parameters.ValueType := scvtUInt16;
+          Parameters.Value16 := Value;
+          If soUseStartPosition in Parameters.Options then
+            CurrentOffset := MemOffsetLimit(Parameters.StartPosition,-1,Pred(Parameters.Size))
+          else If soReverseSearch in Parameters.Options then
+            CurrentOffset := Parameters.Size - MemOffsetIfThen(soMatchPartialTrail in Parameters.Options,1,2)
+          else
+            CurrentOffset := MemOffsetIfThen(soMatchPartialLead in Parameters.Options,-1,0);
+          SearchDone := False;
+        end;
+      Result := MemSearchFind16(Context);
+    finally
+      If not Result then
+        MemSearchContextFinal(Context);
+    end;
+  end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function MemoryFindFirst(Value: UInt32; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := False;
+If Size > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('MemoryFindFirst: Memory buffer too large.');
+If Size > 0 then
+  begin
+    MemSearchContextInit(Context);
+    try
+      with PMemSearchContextInternals(Context.Internals)^ do
+        begin
+          Parameters.Buffer := @Buffer;
+          Parameters.Size := TMemOffset(Size);;
+          Parameters.Options := MemSearchOptionsProcess(Options);
+          Parameters.StartPosition := StartPosition;
+          Parameters.ValueType := scvtUInt32;
+          Parameters.Value32 := Value;
+          If soUseStartPosition in Parameters.Options then
+            CurrentOffset := MemOffsetLimit(Parameters.StartPosition,-3,Pred(Parameters.Size))
+          else If soReverseSearch in Parameters.Options then
+            CurrentOffset := Parameters.Size - MemOffsetIfThen(soMatchPartialTrail in Parameters.Options,1,4)
+          else
+            CurrentOffset := MemOffsetIfThen(soMatchPartialLead in Parameters.Options,-3,0);
+          SearchDone := False;
+        end;
+      Result := MemSearchFind32(Context);
+    finally
+      If not Result then
+        MemSearchContextFinal(Context);
+    end;
+  end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function MemoryFindFirst(Value: U64Type; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := False;
+If Size > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('MemoryFindFirst: Memory buffer too large.');
+If Size > 0 then
+  begin
+    MemSearchContextInit(Context);
+    try
+      with PMemSearchContextInternals(Context.Internals)^ do
+        begin
+          Parameters.Buffer := @Buffer;
+          Parameters.Size := TMemOffset(Size);
+          Parameters.Options := MemSearchOptionsProcess(Options);
+          Parameters.StartPosition := StartPosition;
+          Parameters.ValueType := scvtUInt64;
+          Parameters.Value64 := Value;
+          If soUseStartPosition in Parameters.Options then
+            CurrentOffset := MemOffsetLimit(Parameters.StartPosition,-7,Pred(Parameters.Size))
+          else If soReverseSearch in Parameters.Options then
+            CurrentOffset := Parameters.Size - MemOffsetIfThen(soMatchPartialTrail in Parameters.Options,1,8)
+          else
+            CurrentOffset := MemOffsetIfThen(soMatchPartialLead in Parameters.Options,-7,0);
+          SearchDone := False;
+        end;
+      Result := MemSearchFind64(Context);
+    finally
+      If not Result then
+        MemSearchContextFinal(Context);
+    end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MemoryFindFirst(Value: Int8; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := MemoryFindFirst(UInt8(Value),Buffer,Size,Context,Options,StartPosition);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function MemoryFindFirst(Value: Int16; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := MemoryFindFirst(UInt16(Value),Buffer,Size,Context,Options,StartPosition);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function MemoryFindFirst(Value: Int32; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := MemoryFindFirst(UInt32(Value),Buffer,Size,Context,Options,StartPosition);
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function MemoryFindFirst(Value: Int64; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := MemoryFindFirst(U64Type(Value),Buffer,Size,Context,Options,StartPosition);
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function MemoryFindFirst(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+begin
+Result := False;
+If Size > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('MemoryFindFirst: Memory buffer too large.');
+If Count > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('MemoryFindFirst: Too many bytes to search for.');
+If (Size > 0) and (Count > 0) then
+  case Count of
+    // use optimized variants where possible
+    1:  Result := MemoryFindFirst(UInt8(Bytes),Buffer,Size,Context,Options,StartPosition);
+    2:  Result := MemoryFindFirst(UInt16(Bytes),Buffer,Size,Context,Options,StartPosition);
+    4:  Result := MemoryFindFirst(UInt32(Bytes),Buffer,Size,Context,Options,StartPosition);
+    8:  Result := MemoryFindFirst(U64Type(Bytes),Buffer,Size,Context,Options,StartPosition);
+  else
+    MemSearchContextInit(Context);
+    try
+      with PMemSearchContextInternals(Context.Internals)^ do
+        begin
+          Parameters.Buffer := @Buffer;
+          Parameters.Size := TMemOffset(Size);
+          Parameters.Options := MemSearchOptionsProcess(Options);
+          Parameters.StartPosition := StartPosition;
+          Parameters.ValueType := scvtBytes;
+          // make local copy if requested, if not then just store reference
+          If soBytesLocalCopy in Parameters.Options then
+            begin
+              GetMem(Parameters.Bytes,Count);
+              CopyMemory(Parameters.Bytes,@Bytes,Count);
+            end
+          else Parameters.Bytes := @Bytes;
+          Parameters.Count := TMemOffset(Count);
+          If soUseStartPosition in Parameters.Options then
+            CurrentOffset := MemOffsetLimit(Parameters.StartPosition,-Pred(Parameters.Count),Pred(Parameters.Size))
+          else If soReverseSearch in Parameters.Options then
+            CurrentOffset := Parameters.Size - MemOffsetIfThen(soMatchPartialTrail in Parameters.Options,1,Parameters.Count)
+          else
+            CurrentOffset := MemOffsetIfThen(soMatchPartialLead in Parameters.Options,-Pred(Parameters.Count),0);
+          SearchDone := False;
+        end;
+      Result := MemSearchFindBytes(Context);
+    finally
+      If not Result then
+        MemSearchContextFinal(Context);
+    end;
+  end;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function MemoryFindFirst(const Bytes: array of UInt8; const Buffer; Size: TMemSize; out Context: TMemSearchContext; Options: TMemSearchOptions = []; StartPosition: TMemOffset = 0): Boolean;
+var
+  BytesBuffer:  packed array of UInt8;
+  BytesPtr:     PUInt8;
+  i:            Integer;
+begin
+Result := False;
+If Size > TMemSize(High(TMemOffset)) then
+  raise EBOInvalidValue.Create('MemoryFindFirst: Memory buffer too large.');
+If (Size > 0) and (Length(Bytes) > 0) then
+  begin
+  {
+    Check whether the array is packed (implementation-dependent, but usually
+    it is), ie. the items are contiguous in memory.
+
+    If it is packed, then we can use direct reference - but local copy still
+    needs to be made, because the array can be destroyed the moment this
+    function returns. We let the called overload to make the copy by adding
+    soBytesLocalCopy to options.
+  }
+    BytesPtr := Addr(Bytes[Low(Bytes)]);
+    If Length(Bytes) > 1 then
+      If PtrAdvance(Addr(Bytes[Low(Bytes)]),1) <> Addr(Bytes[Succ(Low(Bytes))]) then
+        begin
+        {
+          Array is not packed - allocate buffer and copy items to it one-by-one.
+          Pass this buffer to a buffer-accepting overload and let it create its
+          own copy so we can free our temporary here (since it is a dynamic
+          array, it will be freed automatically when this function returns).
+        }
+          BytesBuffer := nil;
+          SetLength(BytesBuffer,Length(Bytes));
+          For i := Low(Bytes) to High(Bytes) do
+            BytesBuffer[i] := Bytes[i];
+          BytesPtr := Addr(BytesBuffer[Low(BytesBuffer)]);
+        end;
+    Result := MemoryFindFirst(BytesPtr^,TMemSize(Length(Bytes)),Buffer,Size,Context,Options + [soBytesLocalCopy],StartPosition);
+  end;
+end;
+
+//==============================================================================
+
+Function MemoryFindNext(var Context: TMemSearchContext): Boolean;
+begin
+Result := False;
+MemSearchContextResultsInit(Context);
+If Assigned(Context.Internals) then
+  If not PMemSearchContextInternals(Context.Internals)^.SearchDone then
+    case PMemSearchContextInternals(Context.Internals)^.Parameters.ValueType of
+      scvtUInt8:  Result := MemSearchFind8(Context);
+      scvtUInt16: Result := MemSearchFind16(Context);
+      scvtUInt32: Result := MemSearchFind32(Context);
+      scvtUInt64: Result := MemSearchFind64(Context);
+    else
+     {scvtBytes}  Result := MemSearchFindBytes(Context);
+    end;
+end;
+
+//==============================================================================
+
+procedure MemoryFindClose(var Context: TMemSearchContext);
+begin
+MemSearchContextFinal(Context);
+end;
+
+//==============================================================================
+
+Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function FindQuad(Value: U64Type; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindByte(Value: Int8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindWord(Value: Int16; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindLong(Value: Int32; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+{$IF Declared(NativeUInt64E)}
+//------------------------------------------------------------------------------
+
+Function FindQuad(Value: Int64; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+{$IFEND}
+
+//------------------------------------------------------------------------------
+
+Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Bytes,Count,Buffer,Size,Context,Options - [soUseStartPosition,soBytesLocalCopy]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindBytes(const Bytes: array of UInt8; const Buffer; Size: TMemSize; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Bytes,Buffer,Size,Context,Options - [soUseStartPosition]) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//==============================================================================
+
+Function FindByte(Value: UInt8; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindWord(Value: UInt16; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindLong(Value: UInt32; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindQuad(Value: U64Type; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindByte(Value: Int8; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindWord(Value: Int16; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindLong(Value: Int32; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+{$IF Declared(NativeUInt64E)}
+//------------------------------------------------------------------------------
+
+Function FindQuad(Value: Int64; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Value,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+{$IFEND}
+
+Function FindBytes(const Bytes; Count: TMemSize; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Bytes,Count,Buffer,Size,Context,(Options - [soBytesLocalCopy]) + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FindBytes(const Bytes: array of UInt8; const Buffer; Size: TMemSize; StartPosition: TMemOffset; out Position: TMemOffset; Options: TMemSearchOptions = []): TMemSearchResult;
+var
+  Context:  TMemSearchcontext;
+begin
+If MemoryFindFirst(Bytes,Buffer,Size,Context,Options + [soUseStartPosition],StartPosition) then
+  try
+    Position := Context.LastPosition;
+    Result := Context.LastResult;
+  finally
+    MemoryFindClose(Context);
+  end
+else Result := srNotFound;
 end;
 
 
@@ -10644,10 +15056,15 @@ If Flags and BO_FLAG_OVERFLOW <> 0 then
   Include(Result,flOverflow);
 end;
 
-//------------------------------------------------------------------------------
 {$IFNDEF PurePascal}
+//==============================================================================
 const
   BO_FLAG_MASK_CMP  = $08D5;
+
+Function U64Sign(I: U64Type): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
+begin
+Result := BT(I,63);
+end;
 
 //------------------------------------------------------------------------------
 
@@ -10722,8 +15139,10 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+{$IFDEF OverflowChecks}{$Q-}{$ENDIF}  // for A - B
+
+Function LLCompareRaw(A,B: U64Type): UInt16;
 {$IFDEF x64}
-Function LLCompareRaw(A,B: UInt64): UInt16;
 asm
 {$IFDEF Windows}
     CMP     RCX, RDX
@@ -10734,9 +15153,70 @@ asm
     POP     RAX
     AND     RAX, BO_FLAG_MASK_CMP
 end;
+{$ELSE}
+var
+  SgnA: Boolean;  // true means negative
+  SgnB: Boolean;
+  Temp: U64Type;
+  SgnT: Boolean;
+begin
+SgnA := U64Sign(A);
+SgnB := U64Sign(B);
+Temp := A - B;
+SgnT := U64Sign(Temp);
+Result := 0;
+{$IF Declared(NativeUInt64E)}
+// U64Type = UInt64
+SetFlagStateValue(Result,BO_FLAG_CARRY,A < B);
+{$ELSE}
+// U64Type = Int64
+If SgnA = SgnB then
+  SetFlagStateValue(Result,BO_FLAG_CARRY,A < B)
+else
+  SetFlagStateValue(Result,BO_FLAG_CARRY,A > B);
+{$IFEND}
+SetFlagStateValue(Result,BO_FLAG_PARITY,BitParity(UInt8(Temp)));
+SetFlagStateValue(Result,BO_FLAG_AUXCARRY,(A and $F) < (B and $F));
+SetFlagStateValue(Result,BO_FLAG_ZERO,Temp = 0);
+SetFlagStateValue(Result,BO_FLAG_SIGN,SgnT);
+SetFlagStateValue(Result,BO_FLAG_OVERFLOW,(SgnA xor SgnB) and not(SgnB xor SgnT));
+end;
 {$ENDIF}
 
+{$IFDEF OverflowChecks}{$Q+}{$ENDIF}
+
 //------------------------------------------------------------------------------
+
+Function LLCompareRaw(A,B: Int8): UInt16;
+begin
+Result := LLCompareRaw(UInt8(A),UInt8(B));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLCompareRaw(A,B: Int16): UInt16;
+begin
+Result := LLCompareRaw(UInt16(A),UInt16(B));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLCompareRaw(A,B: Int32): UInt16;
+begin
+Result := LLCompareRaw(UInt32(A),UInt32(B));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLCompareRaw(A,B: Int64): UInt16;
+begin
+Result := LLCompareRaw(U64Type(A),U64Type(B));
+end;
+
+{$IFEND}
+
+//==============================================================================
 
 Function LLCompare(A,B: UInt8): TBOStatusFlags;
 begin
@@ -10759,12 +15239,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-{$IFDEF x64}
-Function LLCompare(A,B: UInt64): TBOStatusFlags;
+Function LLCompare(A,B: U64Type): TBOStatusFlags;
 begin
 Result := LLDecodeFlags(LLCompareRaw(A,B));
 end;
-{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function LLCompare(A,B: Int8): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLCompareRaw(UInt8(A),UInt8(B)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLCompare(A,B: Int16): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLCompareRaw(UInt16(A),UInt16(B)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLCompare(A,B: Int32): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLCompareRaw(UInt32(A),UInt32(B)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLCompare(A,B: Int64): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLCompareRaw(U64Type(A),U64Type(B)));
+end;
+
+{$IFEND}
 
 {$ENDIF}
 
@@ -10842,8 +15351,8 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+Function LLTestRaw(A,B: U64Type): UInt16;
 {$IFDEF x64}
-Function LLTestRaw(A,B: UInt64): UInt16;
 asm
 {$IFDEF Windows}
     TEST    RCX, RDX
@@ -10854,9 +15363,50 @@ asm
     POP     RAX
     AND     RAX, BO_FLAG_MASK_TEST
 end;
+{$ELSE}
+var
+  Temp: U64Type;
+begin
+Temp := A and B;
+Result := 0;
+SetFlagStateValue(Result,BO_FLAG_PARITY,BitParity(UInt8(Temp)));
+SetFlagStateValue(Result,BO_FLAG_ZERO,Temp = 0);
+SetFlagStateValue(Result,BO_FLAG_SIGN,U64Sign(Temp));
+end;
 {$ENDIF}
 
 //------------------------------------------------------------------------------
+
+Function LLTestRaw(A,B: Int8): UInt16;
+begin
+Result := LLTestRaw(UInt8(A),UInt8(B));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLTestRaw(A,B: Int16): UInt16;
+begin
+Result := LLTestRaw(UInt16(A),UInt16(B));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLTestRaw(A,B: Int32): UInt16;
+begin
+Result := LLTestRaw(UInt32(A),UInt32(B));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLTestRaw(A,B: Int64): UInt16;
+begin
+Result := LLTestRaw(U64Type(A),U64Type(B));
+end;
+
+{$IFEND}
+
+//==============================================================================
 
 Function LLTest(A,B: UInt8): TBOStatusFlags;
 begin
@@ -10879,12 +15429,41 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-{$IFDEF x64}
-Function LLTest(A,B: UInt64): TBOStatusFlags;
+Function LLTest(A,B: U64Type): TBOStatusFlags;
 begin
 Result := LLDecodeFlags(LLTestRaw(A,B));
 end;
-{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function LLTest(A,B: Int8): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLTestRaw(UInt8(A),UInt8(B)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLTest(A,B: Int16): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLTestRaw(UInt16(A),UInt16(B)));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLTest(A,B: Int32): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLTestRaw(UInt32(A),UInt32(B)));
+end;
+
+{$IF Declared(NativeUInt64E)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function LLTest(A,B: Int64): TBOStatusFlags;
+begin
+Result := LLDecodeFlags(LLTestRaw(U64Type(A),U64Type(B)));
+end;
+
+{$IFEND}
 
 {$ENDIF}
 
@@ -10895,8 +15474,7 @@ end;
                                       UIM
 
 --------------------------------------------------------------------------------
-===============================================================================}
-
+===============================================================================}  
 {-------------------------------------------------------------------------------
 ================================================================================
                          Unit implementation management
@@ -10907,84 +15485,36 @@ var
 
 //------------------------------------------------------------------------------
 
-{$IFNDEF ASM_Extensions}{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}{$ENDIF}
-Function UIM_CheckASMSupport(Func: TUIM_BitOps_Function): Boolean;
-begin
-Result := False;
-{$IFDEF ASM_Extensions}
-with TSimpleCPUID.Create do
-try
-  case Func of
-    fnPopCount8,fnPopCount16,fnPopCount32,fnPopCount64:
-      Result := Info.SupportedExtensions.POPCNT;
-    fnLZCount8,fnLZCount16,fnLZCount32,fnLZCount64:
-      Result := Info.ExtendedProcessorFeatures.LZCNT;
-    fnTZCount8,fnTZCount16,fnTZCount32,fnTZCount64,
-    fnExtractBits8,fnExtractBits16,fnExtractBits32,fnExtractBits64:
-      Result := Info.ProcessorFeatures.BMI1;
-    fnParallelBitsExtract8,fnParallelBitsExtract16,fnParallelBitsExtract32,
-    fnParallelBitsDeposit8,fnParallelBitsDeposit16,fnParallelBitsDeposit32:
-      Result := Info.ProcessorFeatures.BMI2;
-    fnParallelBitsExtract64:
-      Result := Info.ProcessorFeatures.BMI2{$IFNDEF x64} and Info.SupportedExtensions.POPCNT{$ENDIF};
-    fnParallelBitsDeposit64:
-      Result := Info.ProcessorFeatures.BMI2{$IFNDEF x64} and Info.SupportedExtensions.POPCNT and Info.ProcessorFeatures.CMOV{$ENDIF};
-  else
-    raise EBOUnknownFunction.CreateFmt('UIM_CheckASMSupport: Unknown function (%d).',[Ord(Func)]);
-  end;
-finally
-  Free;
-end;
-{$ENDIF}
-end;
-{$IFNDEF ASM_Extensions}{$IFDEF FPCDWM}{$POP}{$ENDIF}{$ENDIF}
-
-//==============================================================================
-
 Function UIM_BitOps_AvailableFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementations;
+var
+  i:  Integer;
 begin
-case Func of
-  fnPopCount8,fnPopCount16,fnPopCount32,fnPopCount64,
-  fnLZCount8,fnLZCount16,fnLZCount32,fnLZCount64,
-  fnTZCount8,fnTZCount16,fnTZCount32,fnTZCount64,
-  fnExtractBits8,fnExtractBits16,fnExtractBits32,fnExtractBits64,
-  fnParallelBitsExtract8,fnParallelBitsExtract16,fnParallelBitsExtract32,fnParallelBitsExtract64,
-  fnParallelBitsDeposit8,fnParallelBitsDeposit16,fnParallelBitsDeposit32,fnParallelBitsDeposit64:
-    Result := [imNone,imPascal{$IFDEF ASM_Extensions},imAssembly{$ENDIF}];
-else
-  raise EBOUnknownFunction.CreateFmt('UIM_BitOps_AvailableFuncImpl: Unknown function (%d).',[Ord(Func)]);
-end;
+Result := [];
+with varImplManager.RoutingFindObj(TUIMIdentifier(Func)) do
+  For i := LowIndex to HighIndex do
+    If ifAvailable in Implementations[i].ImplementationFlags then
+      Include(Result,TUIM_BitOps_Implementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
 
 Function UIM_BitOps_SupportedFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementations;
+var
+  i:  Integer;
 begin
-Result := [imNone,imPascal];
-case Func of
-  fnPopCount8,fnPopCount16,fnPopCount32,fnPopCount64,
-  fnLZCount8,fnLZCount16,fnLZCount32,fnLZCount64,
-  fnTZCount8,fnTZCount16,fnTZCount32,fnTZCount64,
-  fnExtractBits8,fnExtractBits16,fnExtractBits32,fnExtractBits64,
-  fnParallelBitsExtract8,fnParallelBitsExtract16,fnParallelBitsExtract32,fnParallelBitsExtract64,
-  fnParallelBitsDeposit8,fnParallelBitsDeposit16,fnParallelBitsDeposit32,fnParallelBitsDeposit64:
-    If UIM_CheckASMSupport(Func) then
-      Include(Result,imAssembly);
-else
-  raise EBOUnknownFunction.CreateFmt('UIM_BitOps_SupportedFuncImpl: Unknown function (%d).',[Ord(Func)]);
-end;
+Result := [];
+with varImplManager.RoutingFindObj(TUIMIdentifier(Func)) do
+  For i := LowIndex to HighIndex do
+    // testing whether the two are subset of flags, meaning both must be there
+    If [ifAvailable,ifSupported] <= Implementations[i].ImplementationFlags then
+      Include(Result,TUIM_BitOps_Implementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
 
 Function UIM_BitOps_GetFuncImpl(Func: TUIM_BitOps_Function): TUIM_BitOps_Implementation;
-var
-  SelectedImplID: TUIMIdentifier;
 begin
-If varImplManager.RoutingFindObj(TUIMIdentifier(Func)).Selected(SelectedImplID) then
-  Result := TUIM_BitOps_Implementation(SelectedImplID)
-else
-  raise EBONoImplementation.Create('UIM_BitOps_GetFuncImpl: No implementation selected.');
+Result := TUIM_BitOps_Implementation(varImplManager.RoutingFindObj(TUIMIdentifier(Func)).Selected)
 end;
 
 //------------------------------------------------------------------------------
@@ -11002,61 +15532,196 @@ end;
 -------------------------------------------------------------------------------}
 
 procedure UnitInitialize;
-const
-  NilPtr:   Pointer = nil;
-  ImplsVar: array[TUIM_BitOps_Function] of PPointer = (
-    @@Var_PopCount_8,@@Var_PopCount_16,@@Var_PopCount_32,@@Var_PopCount_64,
-    @@Var_LZCount_8,@@Var_LZCount_16,@@Var_LZCount_32,@@Var_LZCount_64,
-    @@Var_TZCount_8,@@Var_TZCount_16,@@Var_TZCount_32,@@Var_TZCount_64,
-    @@Var_ExtractBits_8,@@Var_ExtractBits_16,@@Var_ExtractBits_32,@@Var_ExtractBits_64,
-    @@Var_ParallelBitsExtract_8,@@Var_ParallelBitsExtract_16,@@Var_ParallelBitsExtract_32,@@Var_ParallelBitsExtract_64,
-    @@Var_ParallelBitsDeposit_8,@@Var_ParallelBitsDeposit_16,@@Var_ParallelBitsDeposit_32,@@Var_ParallelBitsDeposit_64);
-  ImplsPas: array[TUIM_BitOps_Function] of Pointer = (
-    @Fce_PopCount_8_Pas,@Fce_PopCount_16_Pas,@Fce_PopCount_32_Pas,@Fce_PopCount_64_Pas,
-    @Fce_LZCount_8_Pas,@Fce_LZCount_16_Pas,@Fce_LZCount_32_Pas,@Fce_LZCount_64_Pas,
-    @Fce_TZCount_8_Pas,@Fce_TZCount_16_Pas,@Fce_TZCount_32_Pas,@Fce_TZCount_64_Pas,
-    @Fce_ExtractBits_8_Pas,@Fce_ExtractBits_16_Pas,@Fce_ExtractBits_32_Pas,@Fce_ExtractBits_64_Pas,
-    @Fce_ParallelBitsExtract_8_Pas,@Fce_ParallelBitsExtract_16_Pas,@Fce_ParallelBitsExtract_32_Pas,@Fce_ParallelBitsExtract_64_Pas,
-    @Fce_ParallelBitsDeposit_8_Pas,@Fce_ParallelBitsDeposit_16_Pas,@Fce_ParallelBitsDeposit_32_Pas,@Fce_ParallelBitsDeposit_64_Pas);
 {$IFDEF ASM_Extensions}
-  ImplsAsm: array[TUIM_BitOps_Function] of Pointer = (
-    @Fce_PopCount_8_Asm,@Fce_PopCount_16_Asm,@Fce_PopCount_32_Asm,@Fce_PopCount_64_Asm,
-    @Fce_LZCount_8_Asm,@Fce_LZCount_16_Asm,@Fce_LZCount_32_Asm,@Fce_LZCount_64_Asm,
-    @Fce_TZCount_8_Asm,@Fce_TZCount_16_Asm,@Fce_TZCount_32_Asm,@Fce_TZCount_64_Asm,
-    @Fce_ExtractBits_8_Asm,@Fce_ExtractBits_16_Asm,@Fce_ExtractBits_32_Asm,@Fce_ExtractBits_64_Asm,
-    @Fce_ParallelBitsExtract_8_Asm,@Fce_ParallelBitsExtract_16_Asm,@Fce_ParallelBitsExtract_32_Asm,@Fce_ParallelBitsExtract_64_Asm,
-    @Fce_ParallelBitsDeposit_8_Asm,@Fce_ParallelBitsDeposit_16_Asm,@Fce_ParallelBitsDeposit_32_Asm,@Fce_ParallelBitsDeposit_64_Asm);
+type
+  TUIMSuppGrp = (sgPOPCNT,sgLZCNT,sgBMI1,sgBMI2,sgBEXT64,sgBDEP64);
+var
+  Support: array[TUIMSuppGrp] of Boolean;
 {$ENDIF}
 var
   i:  TUIM_BitOps_Function;
 begin
 varImplManager := TImplementationManager.Create;
-For i := Low(TUIM_BitOps_Function) to High(TUIM_BitOps_Function) do
-  begin
-    with varImplManager.RoutingAddObj(TUIMIdentifier(i),ImplsVar[i]^) do
-      begin
-        Add(TUIMIdentifier(imNone),NilPtr);
-        Add(TUIMIdentifier(imPascal),ImplsPas[i],[ifSelect]);
-      {$IFDEF ASM_Extensions}
-        Add(TUIMIdentifier(imAssembly),ImplsAsm[i]);
-      {$ELSE}
-        AddAlias(TUIMIdentifier(imPascal),TUIMIdentifier(imAssembly));
-      {$ENDIF}
-      end;
-    If UIM_CheckASMSupport(i) then
-      UIM_BitOps_SetFuncImpl(i,imAssembly)
-  end;
 {$IFNDEF PurePascal}
+// discern what is supported on current system
 with TSimpleCPUID.Create do
 try
 {$IFDEF x64}
   If not Info.SupportedExtensions.SSE2 then
     raise EBOUnsupportedPlatform.Create('UnitInitialize: SSE2 extension is required for x86-64 system.');
 {$ENDIF}
+{$IFDEF ASM_Extensions}
+  Support[sgPOPCNT] := Info.SupportedExtensions.POPCNT;
+  Support[sgLZCNT]  := Info.ExtendedProcessorFeatures.LZCNT;
+  Support[sgBMI1]   := Info.ProcessorFeatures.BMI1;
+  Support[sgBMI2]   := Info.ProcessorFeatures.BMI2;
+  Support[sgBEXT64] := Info.ProcessorFeatures.BMI2{$IFNDEF x64} and
+    Info.SupportedExtensions.POPCNT{$ENDIF};
+  Support[sgBDEP64] := Info.ProcessorFeatures.BMI2{$IFNDEF x64} and
+    Info.SupportedExtensions.POPCNT and Info.ProcessorFeatures.CMOV{$ENDIF};;
+{$ENDIF}
 finally
   Free;
 end;
 {$ENDIF}
+// fill routing list and select default implementations (pascal)
+// popcount
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnPopCount8),@Var_PopCount_8,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_PopCount_8_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_8_Asm,Support[sgPOPCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_8_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnPopCount16),@Var_PopCount_16,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_PopCount_16_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_16_Asm,Support[sgPOPCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_16_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnPopCount32),@Var_PopCount_32,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_PopCount_32_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_32_Asm,Support[sgPOPCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_32_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnPopCount64),@Var_PopCount_64,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_PopCount_64_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_64_Asm,Support[sgPOPCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_PopCount_64_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+// lzcount
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnLZCount8),@Var_LZCount_8,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_LZCount_8_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_8_Asm,Support[sgLZCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_8_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnLZCount16),@Var_LZCount_16,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_LZCount_16_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_16_Asm,Support[sgLZCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_16_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnLZCount32),@Var_LZCount_32,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_LZCount_32_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_32_Asm,Support[sgLZCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_32_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnLZCount64),@Var_LZCount_64,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_LZCount_64_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_64_Asm,Support[sgLZCNT]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_LZCount_64_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+// tzcount
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnTZCount8),@Var_TZCount_8,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_TZCount_8_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_8_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_8_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnTZCount16),@Var_TZCount_16,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_TZCount_16_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_16_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_16_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnTZCount32),@Var_TZCount_32,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_TZCount_32_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_32_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_32_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnTZCount64),@Var_TZCount_64,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_TZCount_64_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_64_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_TZCount_64_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+// extractbits
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnExtractBits8),@Var_ExtractBits_8,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ExtractBits_8_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_8_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_8_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnExtractBits16),@Var_ExtractBits_16,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ExtractBits_16_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_16_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_16_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnExtractBits32),@Var_ExtractBits_32,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ExtractBits_32_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_32_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_32_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnExtractBits64),@Var_ExtractBits_64,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ExtractBits_64_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_64_Asm,Support[sgBMI1]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ExtractBits_64_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+// parallelbitsextract
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsExtract8),@Var_ParallelBitsExtract_8,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsExtract_8_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_8_Asm,Support[sgBMI2]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_8_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsExtract16),@Var_ParallelBitsExtract_16,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsExtract_16_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_16_Asm,Support[sgBMI2]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_16_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsExtract32),@Var_ParallelBitsExtract_32,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsExtract_32_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_32_Asm,Support[sgBMI2]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_32_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsExtract64),@Var_ParallelBitsExtract_64,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsExtract_64_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_64_Asm,Support[sgBEXT64]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsExtract_64_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+// parallelbitsdeposit
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsDeposit8),@Var_ParallelBitsDeposit_8,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsDeposit_8_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_8_Asm,Support[sgBMI2]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_8_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsDeposit16),@Var_ParallelBitsDeposit_16,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsDeposit_16_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_16_Asm,Support[sgBMI2]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_16_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsDeposit32),@Var_ParallelBitsDeposit_32,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsDeposit_32_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_32_Asm,Support[sgBMI2]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_32_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsDeposit64),@Var_ParallelBitsDeposit_64,[
+  ImplInfo(TUIMIdentifier(imNone),NilPtr),
+  ImplInfo(TUIMIdentifier(imPascal),@Fce_ParallelBitsDeposit_64_Pas),{$IFDEF ASM_Extensions}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_64_Asm,Support[sgBDEP64]){$ELSE}
+  ImplInfo(TUIMIdentifier(imAssembly),@Fce_ParallelBitsDeposit_64_Pas,False){$ENDIF}],
+  TUIMIdentifier(imPascal));
+{
+  Now traverse all functions and select assembly implementation where available
+  and supported.
+}
+For i := Low(TUIM_BitOps_Function) to High(TUIM_BitOps_Function) do
+  If imAssembly in UIM_BitOps_SupportedFuncImpl(i) then
+    UIM_BitOps_SetFuncImpl(i,imAssembly);
 end;
 
 //------------------------------------------------------------------------------
