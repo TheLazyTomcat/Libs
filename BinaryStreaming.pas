@@ -116,9 +116,9 @@
     read (does not apply to Get* functions, as they are returning the value
     being read).
 
-  Version 2.2 (2025-03-08)
+  Version 2.2.1 (2026-04-15)
 
-  Last change 2026-02-25
+  Last change 2026-04-15
 
   ©2015-2026 František Milt
 
@@ -3477,14 +3477,10 @@ type
 type
   TCustomStreamer = class(TCustomListObject)
   protected
-    fEndian:            TEndian;
-    fStart:             Int64;
-    fBookmarks:         array of TBSBookmarkData;
-    fBookmarkCount:     Integer;
-    fChanged:           Boolean;
-    fChangingCounter:   Integer;
-    fOnChangeEvent:     TNotifyEvent;
-    fOnChangeCallback:  TNotifyCallback;
+    fEndian:        TEndian;
+    fStart:         Int64;
+    fBookmarks:     array of TBSBookmarkData;
+    fBookmarkCount: Integer;
     Function GetPosition: Int64; virtual; abstract;
     procedure SetPosition(NewPosition: Int64); virtual; abstract;
     Function GetOffset: Int64; virtual;
@@ -3507,14 +3503,11 @@ type
     Function ReadValueAtOffset(Offset: Int64; ValueType: Integer; ValuePtr: Pointer; Advance: Boolean; Size: TMemSize = 0): TMemSize; virtual;
     Function ReadValueFrom(ID: TBSBookmarkID; ValueType: Integer; ValuePtr: Pointer; Advance: Boolean; Size: TMemSize = 0): TMemSize; virtual;
     Function ReadValueFromIndex(Index: Integer; ValueType: Integer; ValuePtr: Pointer; Advance: Boolean; Size: TMemSize = 0): TMemSize; virtual;
-    procedure DoChange; virtual;
     procedure Initialize; virtual;
     procedure Finalize; virtual;
   public
     destructor Destroy; override;
     // bookmark list methods
-    Function BeginUpdate: Integer; virtual;
-    Function EndUpdate: Integer; virtual;
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
     Function BookmarkLowIndex: Integer; virtual;
@@ -4215,9 +4208,6 @@ type
     property Bookmarks[Index: Integer]: TBSBookmarkData read GetBookmark write SetBookmark; default;
     property BookmarkPtrs[Index: Integer]: PBSBookmarkData read GetBookmarkPtr;
     property BookmarkCount: Integer read GetCount;
-    property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
   end;
 
 
@@ -21121,40 +21111,18 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TCustomStreamer.DoChange;
-begin
-If fChangingCounter <= 0 then
-  begin
-    If Assigned(fOnChangeEvent) then
-      fOnChangeEvent(Self)
-    else If Assigned(fOnChangeCallback) then
-      fOnChangeCallback(Self);
-    fChanged := False;
-  end
-else fChanged := True;
-end;
-
-//------------------------------------------------------------------------------
-
 procedure TCustomStreamer.Initialize;
 begin
 fEndian := endDefault;
 fStart := 0;
 SetLength(fBookmarks,0);
 fBookmarkCount := 0;
-fChanged := False;
-fChangingCounter := 0;
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TCustomStreamer.Finalize;
 begin
-// prevent events firing
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
 BookmarkClear;
 end;
 
@@ -21166,28 +21134,6 @@ destructor TCustomStreamer.Destroy;
 begin
 Finalize;
 inherited;
-end;
-
-//------------------------------------------------------------------------------
-
-Function TCustomStreamer.BeginUpdate: Integer;
-begin
-Inc(fChangingCounter);
-Result := fChangingCounter;
-end;
-
-//------------------------------------------------------------------------------
-
-Function TCustomStreamer.EndUpdate: Integer;
-begin
-Dec(fChangingCounter);
-If fChangingCounter <= 0 then
-  begin
-    fChangingCounter := 0;
-    If fChanged then
-      DoChange; // sets fChanged to false
-  end;
-Result := fChangingCounter;
 end;
 
 //------------------------------------------------------------------------------

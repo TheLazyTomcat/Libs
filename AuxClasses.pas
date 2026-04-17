@@ -9,9 +9,9 @@
 
   Auxiliary classes and other class-related things
 
-  Version 1.4 (2026-02-25)
+  Version 1.6 (2026-04-15)
 
-  Last change 2026-02-25
+  Last change 2026-04-17
 
   ©2018-2026 František Milt
 
@@ -87,6 +87,7 @@ unit AuxClasses;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
+  {$MODESWITCH DuplicateLocals+}
   {$ASMMODE Intel}
 {$ENDIF}
 {$H+}
@@ -133,8 +134,14 @@ type
   TIntegerEvent    = procedure(Sender: TObject; Value: Integer) of object;
   TIntegerCallback = procedure(Sender: TObject; Value: Integer);
 
+  TInt64Event    = procedure(Sender: TObject; Value: Int64) of object;
+  TInt64Callback = procedure(Sender: TObject; Value: Int64);
+
   TIndexEvent    = procedure(Sender: TObject; Index: Integer) of object;
   TIndexCallback = procedure(Sender: TObject; Index: Integer);
+
+  TIndex64Event    = procedure(Sender: TObject; Index: Int64) of object;
+  TIndex64Callback = procedure(Sender: TObject; Index: Int64);
 
   TFloatEvent    = procedure(Sender: TObject; Value: Double) of object;
   TFloatCallback = procedure(Sender: TObject; Value: Double);
@@ -191,6 +198,62 @@ type
     Function _AddRef: Integer; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
     Function _Release: Integer; {$IFDEF Windows}stdcall{$ELSE}cdecl{$ENDIF};
   end;
+
+//==============================================================================
+type
+{
+  TChangesTrackingState
+
+  Used internally as storage for change tracking. You should have no need to
+  use this type in normal code.
+}
+  TChangesTrackingState = record
+    ChangingDone:   Boolean;
+    ChangeCounter:  Integer;
+  end;
+  PChangesTrackingState = ^TChangesTrackingState;
+
+const
+  ChangesTrackingStateInit: TChangesTrackingState = (
+    ChangingDone:   False;
+    ChangeCounter:  0);
+
+//------------------------------------------------------------------------------
+type    
+{
+  TItemChangePropagation
+
+  Used to select how are changes made to list items propagated to global or
+  list change tracking and reporting.
+
+    prpNone       - changes are not propagated
+
+    prpToGlobal   - changes are propagated to global changes (DoChanging,
+                    DoChange)
+
+    prpToList     - item changes are propagated to list changes (DoListChanging,
+                    DoListChange)
+
+    prpToBoth     - item changes are propagated to both global and list changes.
+                    First list changes are called and then the global changes.
+                    Direct propagation to global changes occurs only if list
+                    changes are not itself propagated (PropagateListChanges
+                    property must be false).
+}
+  TItemChangePropagation = (prpNone,prpToGlobal,prpToList,prpToBoth);
+
+//------------------------------------------------------------------------------
+
+type
+  // change reporting events and callbacks
+  TListEvent    = procedure(Sender: TObject; List: Integer) of object;
+  TListCallback = procedure(Sender: TObject; List: Integer);
+
+  TListIndexEvent    = procedure(Sender: TObject; List: Integer; Index: Integer) of object;
+  TListIndexCallback = procedure(Sender: TObject; List: Integer; Index: Integer);
+
+  TListIndex64Event    = procedure(Sender: TObject; List: Integer; Index: Int64) of object;
+  TListIndex64Callback = procedure(Sender: TObject; List: Integer; Index: Int64);
 
 //==============================================================================
 // classes based on TObject
@@ -255,6 +318,14 @@ asm
 end;
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
+Function ConsumeArgs(const Args: array of const): Integer;
+begin
+// nothing to be seen here...
+Result := Length(Args);
+end;
+
 {===============================================================================
 --------------------------------------------------------------------------------
                              Classes implementation
@@ -309,3 +380,4 @@ end;
 {$UNDEF AC_Include_Implementation}
 
 end.
+

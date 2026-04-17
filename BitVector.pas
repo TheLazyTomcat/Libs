@@ -12,9 +12,9 @@
     Provides classes that can be used to access individual bits of memory in
     a list-like manner.
 
-  Version 1.4.3 (2024-04-14)
+  Version 1.4.4 (2026-04-15)
 
-  Last change 2026-02-14
+  Last change 2026-04-15
 
   ©2015-2026 František Milt
 
@@ -126,10 +126,6 @@ type
     fCount:             Integer;
     fPopCount:          Integer;
     fStatic:            Boolean;  // when true, the memory cannot be reallocated, but can be written into
-    fChangeCounter:     Integer;
-    fChanged:           Boolean;
-    fOnChangeEvent:     TNotifyEvent;
-    fOnChangeCallback:  TNotifyCallback;
     // following four methods do not check index for validity
     Function GetBytePtrBitIdx(BitIndex: Integer): PByte; virtual;
     Function GetBytePtrByteIdx(ByteIndex: Integer): PByte; virtual;
@@ -148,7 +144,6 @@ type
     procedure CombineInternal(Memory: Pointer; Count: Integer; Operations: TBVOperations); virtual;
     procedure Initialize; virtual;
     procedure Finalize; virtual;
-    procedure DoChange; virtual;
   public
     constructor Create(Memory: Pointer; Count: Integer); overload; virtual;
     constructor Create(InitialCount: Integer = 0; InitialValue: Boolean = False); overload; virtual;
@@ -205,9 +200,6 @@ type
     property Memory: Pointer read fMemory;
     property PopCount: Integer read fPopCount;
     property Static: Boolean read fStatic;
-    property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
   end;
 
 {===============================================================================
@@ -717,10 +709,6 @@ fMemory := nil;
 fCount := 0;
 fPopCount := 0;
 fStatic := False;
-fChangeCounter := 0;
-fChanged := False;
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
 end;
 
 //------------------------------------------------------------------------------
@@ -729,20 +717,6 @@ procedure TBitVector.Finalize;
 begin
 If fOwnsMemory then
   FreeMem(fMemory,fMemSize);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TBitVector.DoChange;
-begin
-fChanged := True;
-If (fChangeCounter <= 0) then
-  begin
-    If Assigned(fOnChangeEvent) then
-      fOnChangeEvent(Self)
-    else If Assigned(fOnChangeCallback) then
-      fOnChangeCallback(Self);
-  end;
 end;
 
 {-------------------------------------------------------------------------------
@@ -793,23 +767,14 @@ end;
 
 procedure TBitVector.BeginChanging;
 begin
-If fChangeCounter <= 0 then
-  fChanged := False;
-Inc(fChangeCounter);
+BeginUpdate;
 end;
 
 //------------------------------------------------------------------------------
 
 Function TBitVector.EndChanging: Integer;
 begin
-Dec(fChangeCounter);
-If fChangeCounter <= 0 then
-  begin
-    fChangeCounter := 0;
-    If fChanged then
-      DoChange;
-  end;
-Result := fChangeCounter;  
+Result := EndUpdate;
 end;
 
 //------------------------------------------------------------------------------

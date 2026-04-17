@@ -30,9 +30,9 @@
              converted to a value of High(Integer), as maximum count of
              zero or less has no meaning.
 
-  Version 1.1 (2025-02-05)
+  Version 1.1.1 (2026-04-16)
 
-  Last change 2026-02-25
+  Last change 2026-04-16
 
   ©2024-2026 František Milt
 
@@ -382,10 +382,6 @@ type
     fHighMemory:        Pointer;  // fMemory + fMemorySize
     fFirstItemPosition: Integer;
     fMaxCount:          Integer;
-    fUpdateCounter:     Integer;
-    fChanged:           Boolean;
-    fOnChangeEvent:     TNotifyEvent;
-    fOnChangeCallback:  TNotifyCallback;
     // getters, setters
   {$IFDEF Debug}
     Function GetPositionPtr(Index: Integer): Pointer; virtual;
@@ -413,7 +409,6 @@ type
     // internals
     Function ItemsMemorySize(Count: Integer): TMemSize; virtual;
     Function NextItemPtr(ItemPtr: Pointer): Pointer; virtual;
-    procedure DoChange; virtual;
     procedure FinalizeAllItems; virtual;
     class Function ManagedItemStreaming: Boolean; virtual;
     procedure PeekFirst(ItemPtr: Pointer); virtual;
@@ -424,8 +419,6 @@ type
   public
     constructor Create(OperationMode: TSVOperationMode; ItemSize: TMemSize; MaxCount: Integer = -1);
     destructor Destroy; override;
-    procedure BeginUpdate; virtual;
-    procedure EndUpdate; virtual;
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
     // vector control
@@ -456,9 +449,6 @@ type
     property MemorySize: TMemSize read fMemorySize;
     property MaxCount: Integer read fMaxCount;
     property Pointers[Index: Integer]: Pointer read GetItemPtr;
-    property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
   end;
 
 {===============================================================================
@@ -885,10 +875,6 @@ If MaxCount <= 0 then
   fMaxCount := High(Integer)
 else
   fMaxCount := MaxCount;
-fUpdateCounter := 0;
-fChanged := False;
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
 end;
 
 //------------------------------------------------------------------------------
@@ -913,20 +899,6 @@ begin
 Result := PtrAdvance(ItemPtr,fItemSize);
 If PtrCompare(Result,fHighMemory) >= 0 then
   Result := fMemory;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSequentialVector.DoChange;
-begin
-fChanged := True;
-If (fUpdateCounter <= 0) then
-  begin
-    If Assigned(fOnChangeEvent) then
-      fOnChangeEvent(Self)
-    else If Assigned(fOnChangeCallback) then
-      fOnChangeCallback(Self);
-  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -1031,32 +1003,6 @@ destructor TSequentialVector.Destroy;
 begin
 Finalize;
 inherited;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSequentialVector.BeginUpdate;
-begin
-If fUpdateCounter <= 0 then
-  begin
-    fUpdateCounter := 0;
-    fChanged := False;
-  end;
-Inc(fUpdateCounter);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSequentialVector.EndUpdate;
-begin
-Dec(fUpdateCounter);
-If fUpdateCounter <= 0 then
-  begin
-    fUpdateCounter := 0;
-    If fChanged then
-      DoChange;
-    fChanged := False;
-  end;
 end;
 
 //------------------------------------------------------------------------------

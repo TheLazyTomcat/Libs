@@ -19,9 +19,9 @@
     A specialized class (TIntegerLinkedListArray) with Integer as item type is
     implemented and provided as an example.
 
-  Version 1.1.1 (2024-05-02)
+  Version 1.1.2 (2025-04-16)
 
-  Last change 2026-02-25
+  Last change 2026-04-16
 
   ©2018-2026 František Milt
 
@@ -400,21 +400,17 @@ type
 type
   TLinkedListArray = class(TCustomListObject)
   protected
-    fPayloadSize:       TMemSize;
-    fItemSize:          TMemSize;
-    fMemorySize:        TMemSize;
-    fMemory:            Pointer;
-    fCount:             Integer;
-    fUpdateCounter:     Integer;
-    fChanged:           Boolean;
-    fOnChangeEvent:     TNotifyEvent;
-    fOnChangeCallback:  TNotifyCallback;
-    fLoading:           Boolean;
-    fTempPayload:       Pointer;
-    fFirstFree:         TLLAArrayIndex;
-    fLastFree:          TLLAArrayIndex;
-    fFirstUsed:         TLLAArrayIndex;
-    fLastUsed:          TLLAArrayIndex;
+    fPayloadSize: TMemSize;
+    fItemSize:    TMemSize;
+    fMemorySize:  TMemSize;
+    fMemory:      Pointer;
+    fCount:       Integer;
+    fLoading:     Boolean;
+    fTempPayload: Pointer;
+    fFirstFree:   TLLAArrayIndex;
+    fLastFree:    TLLAArrayIndex;
+    fFirstUsed:   TLLAArrayIndex;
+    fLastUsed:    TLLAArrayIndex;
     // getters, setters
     Function GetItemPtr_LL(ArrayIndex: TLLAArrayIndex): Pointer; virtual; // does no check index for validity
     Function GetItemPtr(ArrayIndex: TLLAArrayIndex): Pointer; virtual;
@@ -441,8 +437,6 @@ type
     procedure SortExchange(ListIndex1,ListIndex2: Integer); virtual;
     Function DefragCompare(Index1,Index2: Integer): Integer; virtual;
     procedure DefragExchange(Index1,Index2: Integer); virtual;
-    // changes
-    procedure DoChange; virtual;
     // initialization/finalization
     procedure Initialize(PayloadSize: TMemSize); virtual;
     procedure Finalize; virtual;
@@ -456,9 +450,6 @@ type
   public
     constructor Create(PayloadSize: TMemSize); overload;
     destructor Destroy; override;
-    // updates
-    procedure BeginUpdate; virtual;
-    Function EndUpdate: Integer; virtual;
     // indices bounds (LowIndex, HighIndex and CheckIndex are returning/accepting list indices)
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
@@ -550,9 +541,6 @@ type
     property PayloadSize: TMemSize read fPayloadSize;
     property ArrayPointers[ArrayIndex: TLLAArrayIndex]: PLLAPayload read GetPayloadPtrByArrayIndex;
     property ListPointers[ListIndex: TLLAListIndex]: PLLAPayload read GetPayloadPtrByListIndex;
-    property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
   end;
 
 {===============================================================================
@@ -1002,20 +990,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TLinkedListArray.DoChange;
-begin
-fChanged := True;
-If (fUpdateCounter <= 0) then
-  begin
-    If Assigned(fOnChangeEvent) then
-      fOnChangeEvent(Self)
-    else If Assigned(fOnChangeCallback) then
-      fOnChangeCallback(Self);
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
 procedure TLinkedListArray.Initialize(PayloadSize: TMemSize);
 begin
 fPayloadSize := PayloadSize;
@@ -1023,10 +997,6 @@ fItemSize := SizeOf(TLLAItem) + fPayloadSize;
 fMemorySize := 0;
 fMemory := nil;
 fCount := 0;
-fUpdateCounter := 0;
-fChanged := False;
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
 fLoading := False;
 fTempPayload := AllocMem(fPayloadSize);
 fFirstFree := -1;
@@ -1224,30 +1194,6 @@ destructor TLinkedListArray.Destroy;
 begin
 Finalize;
 inherited;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TLinkedListArray.BeginUpdate;
-begin
-If fUpdateCounter <= 0 then
-  fChanged := False;
-Inc(fUpdateCounter);
-end;
-
-//------------------------------------------------------------------------------
-
-Function TLinkedListArray.EndUpdate: Integer;
-begin
-Dec(fUpdateCounter);
-If fUpdateCounter <= 0 then
-  begin
-    fUpdateCounter := 0;
-    If fChanged then
-      DoChange;
-    fChanged := False;
-  end;
-Result := fUpdateCounter;
 end;
 
 //------------------------------------------------------------------------------

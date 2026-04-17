@@ -64,9 +64,9 @@
     Therefore, in this mode, you are not responsible for managing instances of
     the named value list.
 
-  Version 1.3.5 (2024-05-03)
+  Version 1.3.6 (2026-04-16)
 
-  Last change 2026-02-25
+  Last change 2026-04-16
 
   ©2020-2026 František Milt
 
@@ -168,8 +168,8 @@ type
                         nvtCurrency,nvtString,nvtPointer,nvtGUID,nvtBuffer);
 
   TSNVNamedValue = record
-    Name:     String;
-    Changed:  Boolean;  // internal field
+    Name:         String;
+    ChangeState:  TChangesTrackingState;
     case ValueType: TSNVNamedValueType of
       nvtBool:     (BoolValue:      Boolean);
       nvtInteger:  (IntegerValue:   Integer);
@@ -189,16 +189,11 @@ type
 type
   TSimpleNamedValues = class(TCustomListObject)
   protected
-    fValues:                array of TSNVNamedValue;
-    fCount:                 Integer;
-    fUpdateCounter:         Integer;
-    fChanged:               Boolean;
-    fOnChangeEvent:         TNotifyEvent;
-    fOnChangeCallback:      TNotifyCallback;
-    fOnValueChangeEvent:    TIntegerEvent;
-    fOnValueChangeCallback: TIntegerCallback;
+    fValues:  array of TSNVNamedValue;
+    fCount:   Integer;
     // getters/setters
     Function GetValue(Index: Integer): TSNVNamedValue; virtual;
+    Function GetItemChangeStatePtr(Index: Integer): PChangesTrackingState; override;
     // value getters/setters
     Function GetBoolValue(const Name: String): Boolean; virtual;
     procedure SetBoolValue(const Name: String; Value: Boolean); virtual;
@@ -227,9 +222,6 @@ type
     procedure SetCapacity(Value: Integer); override;
     Function GetCount: Integer; override;
     procedure SetCount(Value: Integer); override;
-    // change reporting
-    procedure DoChange; virtual;
-    procedure DoValueChange(Index: Integer); virtual;
     // utility
     Function PrepareValue(const Name: String; ValueType: TSNVNamedValueType): Integer; virtual;
     class procedure InitializeNamedValue(var NamedValue: TSNVNamedValue); virtual;
@@ -237,8 +229,6 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    procedure BeginUpdate; virtual;
-    procedure EndUpdate; virtual;
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
     Function IndexOf(const Name: String): Integer; overload; virtual;
@@ -270,12 +260,9 @@ type
     property BufferValueMemory[const Name: String]: Pointer read GetBufferValueMemory;
     property BufferValueSize[const Name: String]: TMemSize read GetBufferValueSize;
     // events, callbacks
-    property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
-    property OnValueChange: TIntegerEvent read fOnValueChangeEvent write fOnValueChangeEvent;
-    property OnValueChangeEvent: TIntegerEvent read fOnValueChangeEvent write fOnValueChangeEvent;
-    property OnValueChangeCallback: TIntegerCallback read fOnValueChangeCallback write fOnValueChangeCallback;
+    property OnValueChange: TIndexEvent read fItemChangeEvent write fItemChangeEvent;
+    property OnValueChangeEvent: TIndexEvent read fItemChangeEvent write fItemChangeEvent;
+    property OnValueChangeCallback: TIndexCallback read fItemChangeCallback write fItemChangeCallback;
   end;
 
 {===============================================================================
@@ -425,6 +412,16 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TSimpleNamedValues.GetItemChangeStatePtr(Index: Integer): PChangesTrackingState;
+begin
+If CheckIndex(Index) then
+  Result := Addr(fValues[Index].ChangeState)
+else
+  raise ESNVIndexOutOfBounds.CreateFmt('TSimpleNamedValues.GetItemChangeStatePtr: Index (%d) out of bounds.',[Index]);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TSimpleNamedValues.GetBoolValue(const Name: String): Boolean;
 var
   Index:  Integer;
@@ -443,7 +440,7 @@ var
 begin
 Index := PrepareValue(Name,nvtBool);
 fValues[Index].BoolValue := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -466,7 +463,7 @@ var
 begin
 Index := PrepareValue(Name,nvtInteger);
 fValues[Index].IntegerValue := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -489,7 +486,7 @@ var
 begin
 Index := PrepareValue(Name,nvtInt64);
 fValues[Index].Int64Value := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
  
 //------------------------------------------------------------------------------
@@ -512,7 +509,7 @@ var
 begin
 Index := PrepareValue(Name,nvtFloat);
 fValues[Index].FloatValue := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
   
 //------------------------------------------------------------------------------
@@ -535,7 +532,7 @@ var
 begin
 Index := PrepareValue(Name,nvtDateTime);
 fValues[Index].DateTimeValue := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
    
 //------------------------------------------------------------------------------
@@ -558,7 +555,7 @@ var
 begin
 Index := PrepareValue(Name,nvtCurrency);
 fValues[Index].CurrencyValue := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -586,7 +583,7 @@ with fValues[Index] do
       StrDispose(StringValue);
     StringValue := StrNew(PChar(Value));
   end;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -609,7 +606,7 @@ var
 begin
 Index := PrepareValue(Name,nvtPointer);
 fValues[Index].PointerValue := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -632,7 +629,7 @@ var
 begin
 Index := PrepareValue(Name,nvtGUID);
 fValues[Index].GUIDValue := Value;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -666,7 +663,7 @@ with fValues[Index] do
     GetMem(BufferValue.Memory,BufferValue.Size);
     System.Move(Value.Memory^,BufferValue.Memory^,BufferValue.Size);
   end;
-DoValueChange(Index);
+DoItemChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -742,53 +739,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleNamedValues.DoChange;
-begin
-fChanged := True;
-If fUpdateCounter <= 0 then
-  begin
-    If Assigned(fOnChangeEvent) then
-      fOnChangeEvent(Self)
-    else If Assigned(fOnChangeCallback) then
-      fOnChangeCallback(Self);
-  end
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSimpleNamedValues.DoValueChange(Index: Integer);
-var
-  i:  Integer;
-begin
-If CheckIndex(Index) then
-  begin
-    If fUpdateCounter <= 0 then
-      begin
-        If Assigned(fOnValueChangeEvent) then
-          fOnValueChangeEvent(Self,Index)
-        else If Assigned(fOnValueChangeCallback) then
-          fOnValueChangeCallback(Self,Index);
-      end
-    else fValues[Index].Changed := True;
-  end
-else
-  begin
-    // report all changed values
-    If (fUpdateCounter <= 0) and (Assigned(fOnValueChangeEvent) or Assigned(fOnValueChangeCallback)) then
-      For i := LowIndex to HighIndex do
-        If fValues[i].Changed then
-          begin
-            If Assigned(fOnValueChangeEvent) then
-              fOnValueChangeEvent(Self,i);
-            If Assigned(fOnValueChangeCallback) then
-              fOnValueChangeCallback(Self,i);
-            fValues[i].Changed := False;
-          end;
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
 Function TSimpleNamedValues.PrepareValue(const Name: String; ValueType: TSNVNamedValueType): Integer;
 begin
 // do create-on-write
@@ -833,49 +783,16 @@ begin
 inherited Create;
 SetLength(fValues,0);
 fCount := 0;
-fUpdateCounter := 0;
-fChanged := False;
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
-fOnValueChangeEvent := nil;
-fOnValueChangeCallback := nil;
 end;
 
 //------------------------------------------------------------------------------
 
 destructor TSimpleNamedValues.Destroy;
 begin
-// prevent change reporting
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
-fOnValueChangeEvent := nil;
-fOnValueChangeCallback := nil;
+// prevent events execution
+DisableChangeTracking := True;
 Clear;
 inherited;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSimpleNamedValues.BeginUpdate;
-begin
-If fUpdateCounter <= 0 then
-  fChanged := False;
-Inc(fUpdateCounter);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSimpleNamedValues.EndUpdate;
-begin
-Dec(fUpdateCounter);
-If fUpdateCounter <= 0 then
-  begin
-    fUpdateCounter := 0;
-    If fChanged then
-      DoChange;
-    DoValueChange(-1);  
-    fChanged := False;
-  end;
 end;
 
 //------------------------------------------------------------------------------

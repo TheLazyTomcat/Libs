@@ -42,9 +42,9 @@
     and other two each 1/4, we can achieve so when defining absolute length of
     the first stage as 2 and as 1 for the other two.
 
-  Version 2.0.3 (2024-05-03)
+  Version 2.0.4 (2026-04-17)
 
-  Last change 2026-02-25
+  Last change 2026-04-17
 
   ©2017-2026 František Milt
 
@@ -189,7 +189,7 @@ type
     fGlobalSettings:              Boolean;
     // updates
     fChanged:                     Boolean;
-    fUpdateCounter:               Integer;
+  //fUpdateCounter:               Integer;  // already declared in AxuClasses
     // events
     fOnProgressInternal:          TNotifyEvent;
     fOnProgressEvent:             TFloatEvent;
@@ -233,8 +233,8 @@ type
     constructor CreateAsStage(SuperStageNode: TProgressStageNode; AbsoluteLength: Double; ID: TPTStageID);
     destructor Destroy; override;
     // updating
-    Function BeginUpdate: Integer; virtual;
-    Function EndUpdate: Integer; virtual;
+    Function BeginUpdate: Integer; override;
+    Function EndUpdate: Integer; override;
     // list functions
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
@@ -377,8 +377,8 @@ type
     constructor Create;
     destructor Destroy; override;
     // updates
-    procedure BeginUpdate; virtual;
-    procedure EndUpdate; virtual;
+    procedure BeginUpdate; reintroduce;
+    procedure EndUpdate; reintroduce;
     // index and ID methods
   {
     LowIndex/HighIndex returns low/high bound of indices used when accessing

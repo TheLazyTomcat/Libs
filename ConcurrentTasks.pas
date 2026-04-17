@@ -48,9 +48,9 @@
           Result := not Terminated;
         end;
 
-  Version 1.2.1 (2024-05-03)
+  Version 1.2.2 (2026-04-16)
 
-  Last change 2026-02-25
+  Last change 2026-04-16
 
   ©2017-2026 František Milt
 
@@ -285,8 +285,6 @@ type
     fOnTaskRemovingCallback:      TCNTSTaskCallback;
     fOnMessageEvent:              TCNTSMessageEvent;
     fOnMessageCallback:           TCNTSMessageCallback;
-    fOnChangeEvent:               TNotifyEvent;
-    fOnChangeCallback:            TNotifyCallback;
     // getters, setters
     Function GetTask(Index: Integer): TCNTSTaskItem; virtual;
     procedure SetMaxConcurrentTasks(Value: Integer); virtual;
@@ -302,7 +300,6 @@ type
     procedure DoTaskComplete(TaskIndex: Integer); virtual;
     procedure DoTaskRemoving(TaskIndex: Integer); virtual;
     procedure DoMessage(TaskIndex: Integer; var Msg: TCNTSMessage); virtual;
-    procedure DoChange; virtual;
     // internal processing methods
     Function FindCommEndpoint(CommIndpointID: TMsgrEndpointID; out TaskIndex: Integer): Boolean; virtual;
     procedure MessageHandler(Sender: TObject; Msg: TMsgrMessageIn; var Flags: TMsgrDispatchFlags); virtual;
@@ -381,9 +378,6 @@ type
     property OnMessageCallback: TCNTSMessageCallback read fOnMessageCallback write fOnMessageCallback;
     property OnMessageEvent: TCNTSMessageEvent read fOnMessageEvent write fOnMessageEvent;
     property OnMessage: TCNTSMessageEvent read fOnMessageEvent write fOnMessageEvent;
-    property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
-    property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
   end;
 
 implementation
@@ -726,16 +720,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TCNTSManager.DoChange;
-begin
-If Assigned(fOnChangeEvent) then
-  fOnChangeEvent(Self)
-else If Assigned(fOnChangeCallback) then
-  fOnChangeCallback(Self);
-end;
-
-//------------------------------------------------------------------------------
-
 Function TCNTSManager.FindCommEndpoint(CommIndpointID: TMsgrEndpointID; out TaskIndex: Integer): Boolean;
 var
   i:  Integer;
@@ -969,8 +953,6 @@ fOnTaskRemovingEvent := nil;
 fOnTaskRemovingCallback := nil;
 fOnMessageEvent := nil;
 fOnMessageCallback := nil;
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
 end;
 
 //------------------------------------------------------------------------------
@@ -988,8 +970,6 @@ fOnTaskCompleteEvent := nil;
 fOnTaskCompleteCallback := nil;
 fOnMessageEvent := nil;
 fOnMessageCallback := nil;
-fOnChangeEvent := nil;
-fOnChangeCallback := nil;
 // clear
 ClearTasks;
 fCommEndpoint.Free;

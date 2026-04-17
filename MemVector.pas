@@ -22,9 +22,9 @@
     to be inherited from in a descendant class that implements vector for a
     specific item type. An integer vector is implemented as an example.
 
-  Version 1.2.4 (2024-05-02)
+  Version 1.2.5 (2026-04-16)
 
-  Last change 2026-02-25
+  Last change 2026-04-16
 
   ©2016-2026 František Milt
 
@@ -329,17 +329,13 @@ type
 type
   TMemVector = class(TCustomListObject)
   protected
-    fItemSize:          TMemSize;
-    fOwnsMemory:        Boolean;
-    fMemory:            Pointer;
-    fCapacity:          Integer;
-    fCount:             Integer;
-    fUpdateCounter:     Integer;
-    fChanged:           Boolean;
-    fOnChangeEvent:     TNotifyEvent;
-    fOnChangeCallback:  TNotifyCallback;
-    fTempItem:          Pointer;
-    fLoading:           Boolean;
+    fItemSize:    TMemSize;
+    fOwnsMemory:  Boolean;
+    fMemory:      Pointer;
+    fCapacity:    Integer;
+    fCount:       Integer;
+    fTempItem:    Pointer;
+    fLoading:     Boolean;
     // getters, setters
     Function GetItemPtr(Index: Integer): Pointer; virtual;
     procedure SetItemPtr(Index: Integer; Value: Pointer); virtual;
@@ -363,15 +359,11 @@ type
     Function GetNextItemPtr(ItemPtr: Pointer): Pointer; virtual;
     Function CompareItems(Index1,Index2: Integer): Integer; virtual;
     procedure FinalizeAllItems; virtual;
-    procedure DoChange; virtual;
     procedure ReadFromStreamInternal(Stream: TStream); virtual;
   public
     constructor Create(ItemSize: TMemSize); overload;
     constructor Create(Memory: Pointer; Count: Integer; ItemSize: TMemSize); overload;
     destructor Destroy; override;
-    // updates
-    procedure BeginUpdate; virtual;
-    Function EndUpdate: Integer; virtual;
     // first/last
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
@@ -425,9 +417,6 @@ type
     property Size: TMemSize read GetSize;
     property AllocatedSize: TMemSize read GetAllocatedSize;
     property Pointers[Index: Integer]: Pointer read GetItemPtr;
-    property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
-    property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
   end;
 
 {===============================================================================
@@ -702,20 +691,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TMemVector.DoChange;
-begin
-fChanged := True;
-If (fUpdateCounter <= 0) then
-  begin
-    If Assigned(fOnChangeEvent) then
-      fOnChangeEvent(Self)
-    else If Assigned(fOnChangeCallback) then
-      fOnChangeCallback(Self);
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
 procedure TMemVector.ReadFromStreamInternal(Stream: TStream);
 var
   i:  Integer;
@@ -739,10 +714,6 @@ If ItemSize > 0 then
     fMemory := nil;
     fCapacity := 0;
     fCount := 0;
-    fUpdateCounter := 0;
-    fChanged := False;
-    fOnChangeEvent := nil;
-    fOnChangeCallback := nil;
     GetMem(fTempItem,fItemSize);
     fLoading := False;
   end
@@ -777,30 +748,6 @@ FreeMem(fTempItem,fItemSize);
 If fOwnsMemory then
   FreeMem(fMemory,TMemSize(fCapacity) * fItemSize);
 inherited;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TMemVector.BeginUpdate;
-begin
-If fUpdateCounter <= 0 then
-  fChanged := False;
-Inc(fUpdateCounter);
-end;
-
-//------------------------------------------------------------------------------
-
-Function TMemVector.EndUpdate: Integer;
-begin
-Dec(fUpdateCounter);
-If fUpdateCounter <= 0 then
-  begin
-    fUpdateCounter := 0;
-    If fChanged then
-      DoChange;
-    fChanged := False;
-  end;
-Result := fUpdateCounter;
 end;
 
 //------------------------------------------------------------------------------
