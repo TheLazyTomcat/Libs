@@ -16,13 +16,13 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.7 (2024-10-14)
+  Version 1.1.8 (2026-04-18)
 
-  Build against zlib version 1.3.1
+  Build against zlib version 1.3.2
 
-  Last change 2024-10-14
+  Last change 2026-04-18
 
-  ©2017-2024 František Milt
+  ©2017-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -89,7 +89,9 @@ var
   deflateParams:        Function(strm: z_streamp; level, strategy: int): int; cdecl = nil;
   deflateTune:          Function(strm: z_streamp; good_length, max_lazy, nice_length, max_chain: int): int; cdecl = nil;
   deflateBound:         Function(strm: z_streamp; sourceLen: uLong): uLong; cdecl = nil;
+  deflateBound_z:       Function(strm: z_streamp; sourceLen: z_size_t): z_size_t; cdecl = nil;
   deflatePending:       Function(strm: z_streamp; pending: punsigned; bits: pint): int; cdecl = nil;
+  deflateUsed:          Function(strm: z_streamp; bits: pint): int; cdecl = nil;
   deflatePrime:         Function(strm: z_streamp; bits, value: int): int; cdecl = nil;
   deflateSetHeader:     Function(strm: z_streamp; head: gz_headerp): int; cdecl = nil;
 
@@ -109,10 +111,15 @@ var
   zlibCompileFlags:     Function: uLong; cdecl = nil;
 
   compress:             Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong): int; cdecl = nil;
+  compress_z:           Function(dest: PByte; destLen: pz_size_t; source: PByte; sourceLen: z_size_t): int; cdecl = nil;
   compress2:            Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong; level: int): int; cdecl = nil;
+  compress2_z:          Function(dest: PByte; destLen: pz_size_t; source: PByte; sourceLen: z_size_t; level: int): int; cdecl = nil;
   compressBound:        Function(sourceLen: uLong): uLong; cdecl = nil;
+  compressBound_z:      Function(sourceLen: z_size_t): z_size_t; cdecl = nil;
   uncompress:           Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: uLong): int; cdecl = nil;
+  uncompress_z:         Function(dest: PByte; destLen: pz_size_t; source: PByte; sourceLen: z_size_t): int; cdecl = nil;
   uncompress2:          Function(dest: PByte; destLen: puLong; source: PByte; sourceLen: puLong): int; cdecl = nil;
+  uncompress2_z:        Function(dest: PByte; destLen: pz_size_t; source: PByte; sourceLen: pz_size_t): int; cdecl = nil;  
 
 {$IFDEF GZIP_Support}
   gzopen:               Function(path: PAnsiChar; mode: PAnsiChar): gzFile; cdecl = nil;
@@ -267,7 +274,9 @@ Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryContext,[
   Symbol(@@deflateParams       ,'deflateParams'),
   Symbol(@@deflateTune         ,'deflateTune'),
   Symbol(@@deflateBound        ,'deflateBound'),
+  Symbol(@@deflateBound_z      ,'deflateBound_z'),
   Symbol(@@deflatePending      ,'deflatePending'),
+  Symbol(@@deflateUsed         ,'deflateUsed'),
   Symbol(@@deflatePrime        ,'deflatePrime'),
   Symbol(@@deflateSetHeader    ,'deflateSetHeader'),
   // inflate - specials
@@ -285,10 +294,15 @@ Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryContext,[
   // itility and macro
   Symbol(@@zlibCompileFlags    ,'zlibCompileFlags'),
   Symbol(@@compress            ,'compress'),
+  Symbol(@@compress_z          ,'compress_z'),
   Symbol(@@compress2           ,'compress2'),
+  Symbol(@@compress2_z         ,'compress2_z'),
   Symbol(@@compressBound       ,'compressBound'),
+  Symbol(@@compressBound_z     ,'compressBound_z'),
   Symbol(@@uncompress          ,'uncompress'),
+  Symbol(@@uncompress_z        ,'uncompress_z'),  
   Symbol(@@uncompress2         ,'uncompress2'),
+  Symbol(@@uncompress2_z       ,'uncompress2_z'),
   // gzip
 {$IFDEF GZIP_Support}
   Symbol(@@gzopen              ,'gzopen'),
@@ -356,7 +370,7 @@ Result := OpenLibraryAndResolveSymbols(LibPath,ZLib_LibraryContext,[
 {$IF Defined(GZIP_Support) and Defined(Windows)}
  ,Symbol(@@gzopen_w            ,'gzopen_w')
 {$IFEND}
-],[optExceptionOnFailure]) = {$IFDEF GZIP_Support}{$IFDEF Windows}88{$ELSE}87{$ENDIF}{$ELSE}56{$ENDIF};
+],[optExceptionOnFailure]) = {$IFDEF GZIP_Support}{$IFDEF Windows}95{$ELSE}94{$ENDIF}{$ELSE}56{$ENDIF};
 {$IFDEF CheckCompatibility}
 CheckCompatibility(zlibCompileFlags);
 {$ENDIF}

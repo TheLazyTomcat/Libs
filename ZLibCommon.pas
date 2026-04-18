@@ -16,13 +16,13 @@
     This binding is distributed with all necessary binaries (object files,
     DLLs) precompiled. For details please refer to file bin_readme.txt.
 
-  Version 1.1.7 (2024-10-14)
+  Version 1.1.8 (2026-04-18)
 
-  Build against zlib version 1.3.1
+  Build against zlib version 1.3.2
 
-  Last change 2024-10-14
+  Last change 2026-04-18
 
-  ©2017-2024 František Milt
+  ©2017-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -75,7 +75,7 @@ const
 {$IFDEF Windows}
   LibName = 'zlib1.dll';
 {$ELSE}
-  LibName = 'libz.so.1.3.1';
+  LibName = 'libz.so.1.3.2';
 {$ENDIF}
 
 type
@@ -113,8 +113,12 @@ const
     '');
 
 type
-  z_size_t  = size_t;
+  z_size_t  = size_t;     pz_size_t = ^z_size_t;
+{$IFDEF Windows}
+  z_off_t   = off64_t;
+{$ELSE}
   z_off_t   = off_t;
+{$ENDIF}
   z_off64_t = off64_t;
   z_crc_t   = UInt32;     pz_crc_t = ^z_crc_t;
 
@@ -134,11 +138,11 @@ const
   WBITS_GZIP = 31;
 
 const
-  ZLIB_VERSION         = AnsiString('1.3.1');
-  ZLIB_VERNUM          = $1310;
+  ZLIB_VERSION         = AnsiString('1.3.2');
+  ZLIB_VERNUM          = $1320;
   ZLIB_VER_MAJOR       = 1;
   ZLIB_VER_MINOR       = 3;
-  ZLIB_VER_REVISION    = 1;
+  ZLIB_VER_REVISION    = 2;
   ZLIB_VER_SUBREVISION = 0;
 
 (*
@@ -337,16 +341,19 @@ begin
 Assert((Flags and 3) = 1,'uInt is not 32bit in size');
 {$IF Defined(Linux) and Defined(x64)}
 Assert(((Flags shr 2) and 3) = 2,'uLong is not 64bit in size');
-Assert(((Flags shr 6) and 3) = 2,'z_off_t is not 64bit in size');
 {$ELSE}
 Assert(((Flags shr 2) and 3) = 1,'uLong is not 32bit in size');
-Assert(((Flags shr 6) and 3) = 1,'z_off_t is not 32bit in size');
 {$IFEND}
 {$IFDEF x64}
 Assert(((Flags shr 4) and 3) = 2,'voidpf is not 64bit in size');
 {$ELSE}
 Assert(((Flags shr 4) and 3) = 1,'voidpf is not 32bit in size');
 {$ENDIF}
+{$IF Defined(Windows) or Defined(x64)}
+Assert(((Flags shr 6) and 3) = 2,'z_off_t is not 64bit in size');
+{$ELSE}
+Assert(((Flags shr 6) and 3) = 1,'z_off_t is not 32bit in size');
+{$IFEND}
 // check whether calling convention is *not* STDCALL (ie. it is CDECL))
 Assert(((Flags shr 10) and 1) = 0,'incomatible calling convention');
 // check if all funcionality is available
