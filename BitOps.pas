@@ -19,9 +19,9 @@
                 Namely all memory and pointer operations will be moved (eg.
                 CopyBits, PtrAdvance or MemoryFind*).
 
-  Version 1.26.1 (2026-03-24)
+  Version 1.27 (2026-04-21)
 
-  Last change 2026-03-24
+  Last change 2026-04-21
 
   ©2014-2026 František Milt
 
@@ -878,6 +878,167 @@ procedure SARValue(var Value: Int8; Shift: Integer); overload;{$IFDEF CanInline}
 procedure SARValue(var Value: Int16; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SARValue(var Value: Int32; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
 procedure SARValue(var Value: Int64; Shift: Integer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                System endianness
+================================================================================
+-------------------------------------------------------------------------------}
+{
+  Following types and functions are here to provide information about what
+  byte order, also known as endianness (further on, these two terms are used
+  interchangeably), is used by currently running system (hardware).
+  Byte order indicates how are multi-byte types (eg. integers) stored in
+  memory, specifically how are their constituent bytes ordered (where is the
+  least significant byte and where most significant byte).
+}
+type
+{
+  TEndianness
+
+  Used to indicate byte order of selected type or in general across the entire
+  system (see type TTypeEndianness for details).
+  Values from endMixed_2BL onward are used only on individual types and cannot
+  appear for global endianness - they indicate specific mixed order schemes.
+
+    endUnknown    - Initial value. It is never returned by provided functions
+                    as rather than indicating unknown order an exception is
+                    raised.
+
+    endLittle     - Values are stored with least significant byte first (at
+                    lowest memory address), most significant byte last (at
+                    highest address). Bytes are stored in strictly ascending
+                    order. This is the most common endianness as it is used
+                    by all x86 processors and their derivatives (eg. x86-64)
+                    and modern ARM processors.
+
+    endBig        - Values are stored with most significant byte first, least
+                    significant byte last, in strictly descending order. This
+                    is exact opposite of endLittle.
+
+    endMixed      - When indicated for global endianness, it means either that
+                    at least one type has mixed order in itself or that not all
+                    types have the same order (ie. some are little and some big
+                    endian).
+                    If indicated for a single type, it means it is stored as
+                    multiple parts where byte order within the parts does not
+                    match order of the parts - in such cases, the Detailed
+                    field of TypeEndianness indicates precise order.
+
+    endMixed_2LB  - Two-byte parts of the value are inside ordered from least
+                    significant to most significant byte, the parts themselves
+                    are ordered from most significant to least significant
+                    part.
+                    Following example shows order of bytes (represented by
+                    their order - 0 for least significant) as stored for 32bit
+                    and 64bit values, left corresponds to low address, right
+                    side to high address:
+
+                        32bit:  2, 3, 0, 1
+                        64bit:  6, 7, 4, 5, 2, 3, 0, 1
+
+    endMixed_2BL  - Similar to previous case, but the orders are switched
+                    (bytes within parts are ordered from most significant,
+                    parts themselves are ordered from least significant).
+
+                        32bit:  1, 0, 3, 2
+                        64bit:  1, 0, 3, 2, 5, 4, 7, 6
+
+    endMixed_4LB  - Value is split to four-byte parts where bytes within each
+                    part are stored from least significant to most significant
+                    and parts are stored from most to least significant. This
+                    order is applicable only to 64bit values.
+
+                        64bit:  4, 5, 6, 7, 0, 1, 2, 3
+
+    endMixed_4BL  - Bytes within four-byte parts are ordered from most to
+                    least significant, parts are ordered from least to most
+                    significant. Applicable only to 64bit values.
+
+                        64bit:  3, 2, 1, 0, 7, 6, 5, 4
+
+    endMixed_2LBL - Value is split into two-byte parts, two consecutive parts
+                    form a block and two these blocks create a 64bit value (to
+                    wchich this scheme is only applicable). Bytes within parts
+                    are ordered from least to most significant, parts within
+                    blocks are ordered from most to least significant and
+                    blocks are ordered from least to most significant.
+
+                        64bit:  2, 3, 0, 1, 6, 7, 4, 5
+
+    endMixed_2BLB - Bytes within two-byte parts are ordered from most to least
+                    fignificant, parts within blocks are ordered from least to
+                    most and blocks are ordered from most to least significant. 
+
+                        64bit:  5, 4, 7, 6, 1, 0, 3, 2
+}
+  TEndianness = (endUnknown,endLittle,endBig,endMixed,endMixed_2LB,endMixed_2BL,
+                 endMixed_4LB,endMixed_4BL,endMixed_2LBL,endMixed_2BLB);
+
+{
+  TEndianType
+
+  This enumeration prescribes types that are to be tested for byte order during
+  endianess probing (function ProbeEndianness).
+
+  Currently only signed and usigned integers and 32bit and 64bit floats are
+  present, but more can be added later. Note that, on sane systems, all integer
+  types, no matter whether signed or unsigned, should have the same endianness,
+  and the same goes for all floats. But as there is no such guarantee, they are
+  tested separtely.
+}
+  TEndianType = (etInt16,etUInt16,etInt32,etUInt32,etInt64,etUInt64,etFloat32,
+                 etFloat64);
+
+{
+  TTypeEndianness
+
+  Record used to return information about byte order obtained when probing.
+
+  Array field Types contain two walues for each type precribed for testing by
+  TEndianType - field Detailed is set to precise byte order discovered (that
+  is, when order is mixed, is is set to specific combination, eg. endMixed_4BL).
+  Field General is, as name suggests, general byte order, meaning for mixed
+  orders it will be set just to endMixed.
+
+  Field Global indicates endiannes across all probed types. If all types are
+  of little endianness, it will be set to endLittle, if all are big endian,
+  it will be endBig. If any probed type has mixed order or the types have
+  differing orders (some little, some big), then it will be set to endMixed -
+  you then need to check required individual type to obtain detailed
+  information.
+}
+  TTypeEndianness = record
+    Global:   TEndianness;
+    Types:    array[TEndianType] of record
+      General:  TEndianness;
+      Detailed: TEndianness;
+    end;
+  end;
+
+{
+  ProbeEndianness
+
+  Performs number of runtime tests to discern which byte order is used for
+  selected types (see type TEndianType) and returns the result.
+}
+Function ProbeEndianness: TTypeEndianness;
+
+{
+  SystemEndianness
+
+  Returns result of endianness probing performed at unit initialization.
+
+  The byte order really should not change during process lifetime and therefore
+  it is a waste of resources to do probing every time the information is needed.
+  Probing (a call to ProbeEndianness) is done only once at unit initialization
+  and its result is stored in a global variable. This function merely returns
+  what is stored there and does not perform any more calculation.
+  
+  Since the global variable is written only at initialization, it is safe to
+  call this function from multiple threads.
+}
+Function SystemEndianness: TTypeEndianness;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -6657,6 +6818,173 @@ procedure SARValue(var Value: Int64; Shift: Integer);
 begin
 Value := Int64(SAR(U64Type(Value),Shift));
 end;
+
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                System endianness
+================================================================================
+-------------------------------------------------------------------------------}
+
+Function ProbeEndianness: TTypeEndianness;
+var
+  TestData: array[0..15] of Byte;
+
+  Function SetTestData(const Bytes: array of Byte): Pointer;
+  var
+    i: Integer;
+  begin
+    For i := Low(TestData) to High(TestData) do
+      If i <= High(Bytes) then
+        TestData[i] := Bytes[i]
+      else
+        TestData[i] := 0;
+    Result := Addr(TestData);
+  end;
+
+var
+  EndType:  TEndianType;
+  TempF32:  Float32;
+  TempF64:  Float64;
+begin
+// init data
+FillChar(Addr(Result)^,SizeOf(TTypeEndianness),0);
+SetTestData([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
+
+// do the probing...
+// int16
+If Int16(Addr(TestData)^) = Int16($0100) then
+  Result.Types[etInt16].Detailed := endLittle
+else If Int16(Addr(TestData)^) = Int16($0001) then
+  Result.Types[etInt16].Detailed := endBig;
+
+// uint16
+If UInt16(Addr(TestData)^) = UInt16($0100) then
+  Result.Types[etUInt16].Detailed := endLittle
+else If UInt16(Addr(TestData)^) = UInt16($0001) then
+  Result.Types[etUInt16].Detailed := endBig;
+
+// int32
+If Int32(Addr(TestData)^) = Int32($03020100) then
+  Result.Types[etInt32].Detailed := endLittle
+else If Int32(Addr(TestData)^) = Int32($00010203) then
+  Result.Types[etInt32].Detailed := endBig
+else If Int32(Addr(TestData)^) = Int32($01000302) then
+  Result.Types[etInt32].Detailed := endMixed_2LB
+else If Int32(Addr(TestData)^) = Int32($02030001) then
+  Result.Types[etInt32].Detailed := endMixed_2BL;
+  
+// uint32
+If UInt32(Addr(TestData)^) = UInt32($03020100) then
+  Result.Types[etUInt32].Detailed := endLittle
+else If UInt32(Addr(TestData)^) = UInt32($00010203) then
+  Result.Types[etUInt32].Detailed := endBig
+else If UInt32(Addr(TestData)^) = UInt32($01000302) then
+  Result.Types[etUInt32].Detailed := endMixed_2LB
+else If UInt32(Addr(TestData)^) = UInt32($02030001) then
+  Result.Types[etUInt32].Detailed := endMixed_2BL;
+
+// int64
+If Int64(Addr(TestData)^) = Int64($0706050403020100) then
+  Result.Types[etInt64].Detailed := endLittle
+else If Int64(Addr(TestData)^) = Int64($0001020304050607) then
+  Result.Types[etInt64].Detailed := endBig
+else If Int64(Addr(TestData)^) = Int64($0100030205040706) then
+  Result.Types[etInt64].Detailed := endMixed_2LB
+else If Int64(Addr(TestData)^) = Int64($0607040502030001) then
+  Result.Types[etInt64].Detailed := endMixed_2BL
+else If Int64(Addr(TestData)^) = Int64($0302010007060504) then
+  Result.Types[etInt64].Detailed := endMixed_4LB
+else If Int64(Addr(TestData)^) = Int64($0405060700010203) then
+  Result.Types[etInt64].Detailed := endMixed_4BL
+else If Int64(Addr(TestData)^) = Int64($0504070601000302) then
+  Result.Types[etInt64].Detailed := endMixed_2LBL
+else If Int64(Addr(TestData)^) = Int64($0203000106070405) then
+  Result.Types[etInt64].Detailed := endMixed_2BLB;
+
+// uint64
+If UInt64(Addr(TestData)^) = UInt64($0706050403020100) then
+  Result.Types[etUInt64].Detailed := endLittle
+else If UInt64(Addr(TestData)^) = UInt64($0001020304050607) then
+  Result.Types[etUInt64].Detailed := endBig
+else If UInt64(Addr(TestData)^) = UInt64($0100030205040706) then
+  Result.Types[etUInt64].Detailed := endMixed_2LB
+else If UInt64(Addr(TestData)^) = UInt64($0607040502030001) then
+  Result.Types[etUInt64].Detailed := endMixed_2BL
+else If UInt64(Addr(TestData)^) = UInt64($0302010007060504) then
+  Result.Types[etUInt64].Detailed := endMixed_4LB
+else If UInt64(Addr(TestData)^) = UInt64($0405060700010203) then
+  Result.Types[etUInt64].Detailed := endMixed_4BL
+else If UInt64(Addr(TestData)^) = UInt64($0504070601000302) then
+  Result.Types[etUInt64].Detailed := endMixed_2LBL
+else If UInt64(Addr(TestData)^) = UInt64($0203000106070405) then
+  Result.Types[etUInt64].Detailed := endMixed_2BLB;
+
+// float32
+TempF32 := 1/7 {0x3E124925};
+If Float32(SetTestData([$25,$49,$12,$3E])^) = TempF32 then
+  Result.Types[etFloat32].Detailed := endLittle
+else If Float32(SetTestData([$3E,$12,$49,$25])^) = TempF32 then
+  Result.Types[etFloat32].Detailed := endBig
+else If Float32(SetTestData([$12,$3E,$25,$49])^) = TempF32 then
+  Result.Types[etFloat32].Detailed := endMixed_2LB
+else If Float32(SetTestData([$49,$25,$3E,$12])^) = TempF32 then
+  Result.Types[etFloat32].Detailed := endMixed_2BL;
+
+// float64
+TempF64 := 1/1337 {0x3F488233B2A50CD4};
+If Float64(SetTestData([$D4,$0C,$A5,$B2,$33,$82,$48,$3F])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endLittle
+else If Float64(SetTestData([$3F,$48,$82,$33,$B2,$A5,$0C,$D4])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endBig
+else If Float64(SetTestData([$48,$3F,$33,$82,$A5,$B2,$D4,$0C])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endMixed_2LB
+else If Float64(SetTestData([$0C,$D4,$B2,$A5,$82,$33,$3F,$48])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endMixed_2BL
+else If Float64(SetTestData([$33,$82,$48,$3F,$D4,$0C,$A5,$B2])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endMixed_4LB
+else If Float64(SetTestData([$B2,$A5,$0C,$D4,$3F,$48,$82,$33])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endMixed_4BL
+else If Float64(SetTestData([$A5,$B2,$D4,$0C,$48,$3F,$33,$82])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endMixed_2LBL
+else If Float64(SetTestData([$82,$33,$3F,$48,$0C,$D4,$B2,$A5])^) = TempF64 then
+  Result.Types[etFloat64].Detailed := endMixed_2BLB;
+
+// process results  
+For EndType := Low(TEndianType) to High(TEndianType) do
+  If Result.Types[EndType].Detailed <> endUnknown then
+    begin
+      If Result.Types[EndType].Detailed > endMixed then
+        Result.Types[EndType].General := endMixed
+      else
+        Result.Types[EndType].General := Result.Types[EndType].Detailed;
+      // set global endianness
+      If Result.Global <> endUnknown then
+        begin
+          If Result.Global <> Result.Types[EndType].General then
+            Result.Global := endMixed;
+        end
+      else Result.Global := Result.Types[EndType].General;
+    end
+  else raise EBOInvalidValue.CreateFmt('ProbeEndianness: Unknown endianness (type %d).',[Ord(EndType)]);
+end;
+
+//------------------------------------------------------------------------------
+var
+  VAR_SystemEndianness: TTypeEndianness;
+
+Function SystemEndianness: TTypeEndianness;
+begin
+Result := VAR_SystemEndianness;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure InitializeEndianness;
+begin
+VAR_SystemEndianness := ProbeEndianness;
+end;
+
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -15722,6 +16050,8 @@ AddRoutingSelect(varImplManager,TUIMIdentifier(fnParallelBitsDeposit64),@Var_Par
 For i := Low(TUIM_BitOps_Function) to High(TUIM_BitOps_Function) do
   If imAssembly in UIM_BitOps_SupportedFuncImpl(i) then
     UIM_BitOps_SetFuncImpl(i,imAssembly);
+// others
+InitializeEndianness;
 end;
 
 //------------------------------------------------------------------------------
