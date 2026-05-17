@@ -12,9 +12,9 @@
     This unit provides a small set of functions intended to help with selected
     operations performed on variables and function arguments/parameters.
 
-  version 1.0 (2026-04-19)
+  version 1.0.1 (2026-05-03)
 
-  Last change 2026-04-19
+  Last change 2026-05-03
 
   ©2026 František Milt
 
@@ -155,17 +155,19 @@ Function ConsumeArgs(const Args: array of const): Integer;
   a product of some token operation performed on the passed argument) - result
   is meant to be ignored anyway, so do not use it in any capacity.
 }
-Function ConsumeArg(Num: Int32): Integer; overload;{$IF not Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
-Function ConsumeArg(Num: Int64): Integer; overload;{$IF not Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
+Function ConsumeArg(Num: Int32): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+Function ConsumeArg(Num: Int64): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
-Function ConsumeArg(Num: UInt32): Integer; overload;{$IF not Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
-Function ConsumeArg(Num: UInt64): Integer; overload;{$IF not Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
+Function ConsumeArg(Num: UInt32): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF Declared(NativeUInt64E)}
+Function ConsumeArg(Num: UInt64): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
 
-Function ConsumeArg(Num: Extended): Integer; overload;{$IF not Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
+Function ConsumeArg(Num: Extended): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
-Function ConsumeArg(const Str: String): Integer; overload;{$IF not Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
+Function ConsumeArg(const Str: String): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
-Function ConsumeArg(Ptr: Pointer): Integer; overload;{$IF not Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
+Function ConsumeArg(Ptr: Pointer): Integer; overload;{$IFDEF CanInline} inline;{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -188,11 +190,75 @@ Function ConsumeArg(Ptr: Pointer): Integer; overload;{$IF not Defined(FPC) and D
 }
 Function VarRecToVariant(const Value: TVarRec): Variant;
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 Values swapping
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  SwapValues
+
+  All these functions are simply swapping (exchanging) values of tvo given
+  variables. Of course, swapping values of two variables is very trivial task,
+  but it requires use of temporary storage (unless xor-swap is used), which
+  needs to be declared. These functions are here just to simplify the task by
+  wrapping it into a single call.
+
+  To minimize memory footprint, overload swapping buffers is doing it without
+  use of temporary storage, the buffers are streamed and swapped in small
+  parts. That being said, passing even partially overlapping buffers is
+  undefined operation and most probably will create bogus data in both buffers.
+}
+procedure SwapValues(var A,B: Boolean); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapValues(var A,B: Int8); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: Int16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: Int32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: Int64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapValues(var A,B: UInt8); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: UInt16); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: UInt32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: UInt64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapValues(var A,B: Float32); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: Float64); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: Float80); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapValues(var A,B: Pointer); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: TObject); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: TClass); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: IInterface); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapValues(var A,B: Variant); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapValues(var A,B: AnsiChar); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: WideChar); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: UCS4Char); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+procedure SwapValues(var A,B: ShortString); overload;{$IF Defined(FPC) and Defined(CanInline)} inline;{$IFEND}
+procedure SwapValues(var A,B: AnsiString); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: UTF8String); overload;{$IFDEF CanInline} inline;{$ENDIF}
+procedure SwapValues(var A,B: WideString); overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IF not Declared(UnicodeIsWideE)}
+procedure SwapValues(var A,B: UnicodeString); overload;{$IFDEF CanInline} inline;{$ENDIF}
+{$IFEND}
+procedure SwapValues(var A,B: UCS4String); overload;{$IFDEF CanInline} inline;{$ENDIF}
+
+{
+  Following overload can be used not only to swap untyped buffers, but also
+  to exchange values of matching structured types (records, arrays, ...).
+}
+procedure SwapValues(var A,B; Size: TMemSize); overload;
+
 implementation
+
+uses
+  Variants;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
-  {$PUSH}{$WARN 2005 OFF}           // Comment level $1 found
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
   {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
     {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
   {$ELSE}
@@ -233,6 +299,7 @@ begin
 Result := Integer(Num);
 end;
 
+{$IF Declared(NativeUInt64E)}
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function ConsumeArg(Num: UInt64): Integer;
@@ -240,11 +307,13 @@ begin
 Result := Integer(Num);
 end;
 
+{$IFEND}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function ConsumeArg(Num: Extended): Integer;
 begin
-Result := Ord(Num <> 0);
+Result := Ord(Num <> 0.0);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -260,6 +329,7 @@ Function ConsumeArg(Ptr: Pointer): Integer;
 begin
 Result := Ord(Assigned(Ptr));
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -315,5 +385,335 @@ else
 end;
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 Values swapping
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  NOTE - I know about XOR-swapping (or whatever following algorithm is called:
+         B := B xor A -> A := A xor B -> B := B xor A). I have not tested it,
+         but I seriously doubt it would bring better performance.
+}
+
+procedure SwapValues(var A,B: Boolean);
+var
+  Temp: Boolean;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Int8);
+var
+  Temp: Int8;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Int16); 
+var
+  Temp: Int16;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Int32);
+var
+  Temp: Int32;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Int64);
+var
+  Temp: Int64;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UInt8);
+var
+  Temp: UInt8;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UInt16);
+var
+  Temp: UInt16;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UInt32);
+var
+  Temp: UInt32;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UInt64);
+var
+  Temp: UInt64;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Float32);
+var
+  Temp: Float32;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Float64);
+var
+  Temp: Float64;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Float80);
+var
+  Temp: Float80;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Pointer);
+var
+  Temp: Pointer;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: TObject);
+var
+  Temp: TObject;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: TClass);
+var
+  Temp: TClass;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: IInterface);
+var
+  Temp: IInterface;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: Variant);
+var
+  Temp: Variant;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: AnsiChar);
+var
+  Temp: AnsiChar;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: WideChar);
+var
+  Temp: WideChar;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UCS4Char);
+var
+  Temp: UCS4Char;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: ShortString);
+var
+  Temp: ShortString;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: AnsiString);
+var
+  Temp: AnsiString;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UTF8String);
+var
+  Temp: UTF8String;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: WideString);
+var
+  Temp: WideString;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+{$IF not Declared(UnicodeIsWideE)}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UnicodeString);
+var
+  Temp: UnicodeString;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+{$IFEND}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B: UCS4String);
+var
+  Temp: UCS4String;
+begin
+Temp := A;
+A := B;
+B := Temp
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure SwapValues(var A,B; Size: TMemSize);
+var
+  APtr: PByte;
+  BPtr: PByte;
+  Temp: NativeUInt;
+begin
+// tried implementing this in asm, there was no measurable performance gain
+APtr := @A;
+BPtr := @B;
+while Size > SizeOf(NativeUInt) do
+  begin
+    Temp := PNativeUInt(APtr)^;
+    PNativeUInt(APtr)^ := PNativeUInt(BPtr)^;
+    PNativeUInt(BPtr)^ := Temp;
+    Inc(APtr,SizeOf(NativeUInt));
+    Inc(BPtr,SizeOf(NativeUInt));
+    Dec(Size,SizeOf(NativeUInt));
+  end;
+while Size > 0 do
+  begin
+    Temp := NativeUInt(APtr^);
+    APtr^ := BPtr^;
+    BPtr^ := Byte(Temp);
+    Inc(APtr);
+    Inc(BPtr);
+    Dec(Size);
+  end;
+end;
 
 end.

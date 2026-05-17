@@ -160,9 +160,9 @@
           -t                general object
           string'string     general object
 
-  Version 2.0.2 (2024-05-03)
+  Version 2.0.3 (2026-04-22)
 
-  Last change 2026-02-25
+  Last change 2026-04-22
 
   ©2017-2026 František Milt
 
@@ -1241,7 +1241,7 @@ end;
 
 constructor TSimpleCmdLineParser.CreateEmpty;
 begin
-inherited;
+inherited Create;
 Initialize;
 end;
 

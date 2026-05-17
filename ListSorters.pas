@@ -28,9 +28,9 @@
       - quick sort (could use some testing and optimizations)
       - bogo sort (only for fun and tests)
 
-  Version 1.1.3 (2024-05-02)
+  Version 1.1.4 (2026-05-12)
 
-  Last change 2026-02-25
+  Last change 2026-05-12
 
   ©2018-2026 František Milt
 
@@ -582,10 +582,9 @@ while not Sorted do
   begin
     If fBreakProcessing then
       Exit;
-    For i := fLowIndex to Pred(fHighIndex) do
+    For i := fLowIndex to fHighIndex do
       begin
-        If Random(2) <> 0 then
-          ExchangeItems(i,i + 1);
+        ExchangeItems(i,Random(Succ(fHighIndex)));
         If fBreakProcessing then
           Exit;
       end;

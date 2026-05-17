@@ -22,9 +22,9 @@
     to be inherited from in a descendant class that implements vector for a
     specific item type. An integer vector is implemented as an example.
 
-  Version 1.2.5 (2026-04-16)
+  Version 1.2.6 (2026-05-02)
 
-  Last change 2026-04-16
+  Last change 2026-05-02
 
   ©2016-2026 František Milt
 
@@ -94,7 +94,9 @@
     constructor Create(Memory: Pointer; Count: Integer); overload;
     Function First: @Type@; reintroduce;
     Function Last: @Type@; reintroduce;
+    Function IndexOfNext(FromIndex: Integer; Item: @Type@): Integer; reintroduce;
     Function IndexOf(Item: @Type@): Integer; reintroduce;
+    Function FindNext(FromIndex: Integer; Item: @Type@; out Index: Integer): Boolean; reintroduce;
     Function Find(Item: @Type@; out Index: Integer): Boolean; reintroduce;
     Function Add(Item: @Type@): Integer; reintroduce;
     procedure Insert(Index: Integer; Item: @Type@); reintroduce;
@@ -230,9 +232,23 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function @ClassName@.IndexOfNext(FromIndex: Integer; Item: @Type@): Integer;
+begin
+Result := inherited IndexOfNext(FromIndex,@Item);
+end;
+
+//------------------------------------------------------------------------------
+
 Function @ClassName@.IndexOf(Item: @Type@): Integer;
 begin
 Result := inherited IndexOf(@Item);
+end;
+
+//------------------------------------------------------------------------------
+
+Function @ClassName@.FindNext(FromIndex: Integer; Item: @Type@; out Index: Integer): Boolean;
+begin
+Result := inherited FindNext(FromIndex,@Item,Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -370,7 +386,9 @@ type
     Function First: Pointer; virtual;
     Function Last: Pointer; virtual;
     // list methods
+    Function IndexOfNext(FromIndex: Integer; Item: Pointer): Integer; virtual;
     Function IndexOf(Item: Pointer): Integer; virtual;
+    Function FindNext(FromIndex: Integer; Item: Pointer; out Index: Integer): Boolean; virtual;
     Function Find(Item: Pointer; out Index: Integer): Boolean; virtual;
     Function Add(Item: Pointer): Integer; virtual;
     procedure Insert(Index: Integer; Item: Pointer); virtual;
@@ -440,8 +458,10 @@ type
     constructor Create(Memory: Pointer; Count: Integer); overload;
     Function First: Integer; reintroduce;
     Function Last: Integer; reintroduce;
+    Function IndexOfNext(FromIndex: Integer; Item: Integer): Integer; reintroduce;
     Function IndexOf(Item: Integer): Integer; reintroduce;
     Function Find(Item: Integer; out Index: Integer): Boolean; reintroduce;
+    Function FindNext(FromIndex: Integer; Item: Integer; out Index: Integer): Boolean; reintroduce;
     Function Add(Item: Integer): Integer; reintroduce;
     procedure Insert(Index: Integer; Item: Integer); reintroduce;
     Function Remove(Item: Integer): Integer; reintroduce;
@@ -780,6 +800,25 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TMemVector.IndexOfNext(FromIndex: Integer; Item: Pointer): Integer;
+var
+  i:  Integer;
+begin
+Result := -1;
+If CheckIndex(FromIndex) or (FromIndex = Pred(LowIndex)) then
+  begin
+    For i := Succ(FromIndex) to HighIndex do
+      If ItemEquals(Item,GetItemPtr(i)) then
+        begin
+          Result := i;
+          Exit;
+        end;
+  end
+else raise EMVIndexOutOfBounds.CreateFmt('TMemVector.IndexOfNext: Index (%d) out of bounds.',[FromIndex]);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TMemVector.IndexOf(Item: Pointer): Integer;
 var
   i:  Integer;
@@ -791,6 +830,14 @@ For i := LowIndex to HighIndex do
       Result := i;
       Exit;
     end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMemVector.FindNext(FromIndex: Integer; Item: Pointer; out Index: Integer): Boolean;
+begin
+Index := IndexOfNext(FromIndex,Item);
+Result := CheckIndex(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -1335,9 +1382,24 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TIntegerVector.IndexOfNext(FromIndex: Integer; Item: Integer): Integer;
+begin
+Result := inherited IndexOfNext(FromIndex,@Item);
+end;
+
+
+//------------------------------------------------------------------------------
+
 Function TIntegerVector.IndexOf(Item: Integer): Integer;
 begin
 Result := inherited IndexOf(@Item);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TIntegerVector.FindNext(FromIndex: Integer; Item: Integer; out Index: Integer): Boolean;
+begin
+Result := inherited FindNext(FromIndex,@Item,Index);
 end;
 
 //------------------------------------------------------------------------------
