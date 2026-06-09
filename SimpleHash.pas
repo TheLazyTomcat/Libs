@@ -24,9 +24,9 @@
     simply because I do not remember them. So if anyone thinks it is a stealed
     code, it is not, but that does not mean someone cannot recognize it, sorry!
 
-  Version 1.0.2 (2026-03-03)
+  Version 1.0.2 (2026-06-07)
 
-  Last change 2026-03-03
+  Last change 2026-06-07
 
   ©2026 František Milt
 
@@ -88,7 +88,8 @@ unit SimpleHash;
 {$IFEND}
 
 {$IFDEF FPC}
-  {$MODE ObjFPC}{$MODESWITCH CLASSICPROCVARS+}
+  {$MODE ObjFPC}
+  {$MODESWITCH CLASSICPROCVARS+}
   {$IFNDEF PurePascal}
     {$ASMMODE Intel}
   {$ENDIF}
@@ -107,6 +108,7 @@ uses
 type
   ESHException = class(EHashException);
 
+  ESHNoImplementation  = class(ESHException);
   ESHIncompatibleClass = class(ESHException);
 
 {===============================================================================
@@ -166,7 +168,6 @@ type
   protected
     fInitialValue:  TSimpleHash32Sys;
     fSimpleHash32:  TSimpleHash32Sys;
-    fImplManager:   TImplementationManager;
     fProcessBuffer: Function(Init: TSimpleHash32Sys; const Buffer; Size: TMemSize): TSimpleHash32Sys register;
     Function GetInitialValue: TSimpleHash32; virtual;
     Function GetSimpleHash32: TSimpleHash32; virtual;
@@ -174,7 +175,6 @@ type
     procedure SetHashImplementation(Value: THashImplementation); override;
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure Initialize; override;
-    procedure Finalize; override;
   public
     class Function SimpleHash32ToSys(Hash: TSimpleHash32): TSimpleHash32Sys; virtual;
     class Function SimpleHash32FromSys(Hash: TSimpleHash32Sys): TSimpleHash32; virtual;
@@ -243,7 +243,6 @@ type
   protected
     fInitialValue:  TSimpleHash64Sys;
     fSimpleHash64:  TSimpleHash64Sys;
-    fImplManager:   TImplementationManager;
     fProcessBuffer: Function(Init: TSimpleHash64Sys; const Buffer; Size: TMemSize): TSimpleHash64Sys register;
     Function GetInitialValue: TSimpleHash64; virtual;
     Function GetSimpleHash64: TSimpleHash64; virtual;
@@ -251,7 +250,6 @@ type
     procedure SetHashImplementation(Value: THashImplementation); override;
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure Initialize; override;
-    procedure Finalize; override;
   public
     class Function SimpleHash64ToSys(Hash: TSimpleHash64): TSimpleHash64Sys; virtual;
     class Function SimpleHash64FromSys(Hash: TSimpleHash64Sys): TSimpleHash64; virtual;
@@ -313,7 +311,7 @@ type
   TSimpleHash32Init and TSimpleHash64Init classes and their methods - meaning,
   among other facts, that they calculate the hash using non-zero initial value.
   Function that are not wrappers around mentioned classes are (more-or-less)
-  dirrectly calling core implementation for the sake of better performance
+  directly calling core implementation for the sake of better performance
   (also using non-zero initial value, where applicable). These non-wrappers
   are:
 
@@ -404,6 +402,13 @@ implementation
 
 uses
   SysUtils;
+
+{===============================================================================
+    UIM variables
+===============================================================================}
+var
+  ImplManager:        TImplementationManager = nil;
+  ProcessBufferDummy: Pointer = nil;  
 
 {===============================================================================
     Main implementation
@@ -649,15 +654,30 @@ end;
 //------------------------------------------------------------------------------
 
 Function TSimpleHash32Base.GetHashImplementation: THashImplementation;
+var
+  Routing:  TUIMRouting;
+  Index:    Integer;
 begin
-Result := THashImplementation(fImplManager.RoutingFindObj(0).Selected);
+Routing := ImplManager.RoutingFindObj(0);
+If Routing.Find(@fProcessBuffer,Index) then
+  Result := THashImplementation(Routing[Index].ImplementationID)
+else
+  raise ESHNoImplementation.Create('TSimpleHash32Base.GetHashImplementation: No implementation selected.');
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleHash32Base.SetHashImplementation(Value: THashImplementation);
+var
+  Routing:  TUIMRouting;
+  Index:    Integer;
 begin
-fImplManager.RoutingFindObj(0).Select(TUIMIdentifier(Value));
+// do not call inherited
+Routing := ImplManager.RoutingFindObj(0);
+If Routing.Follow(TUIMIdentifier(Value),Index) then
+  @fProcessBuffer := Routing[Index].ImplementorFunction
+else
+  raise ESHNoImplementation.CreateFmt('TSimpleHash32Base.SetHashImplementation: Selected implementation (%d) not found.',[Ord(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -674,24 +694,7 @@ begin
 inherited;
 fInitialValue := SimpleHash32ToSys(ZeroSimpleHash32);
 fSimpleHash32 := fInitialValue;
-fImplManager := TImplementationManager.Create;
-// fill routings (also assigns fProcessBuffer)
-AddRoutingSelect(fImplManager,0,@fProcessBuffer,[
-  ImplInfo(TUImIdentifier(hiPascal),@SimpleHash32_PAS)
-{$IFNDEF PurePascal},
-  ImplInfo(TUImIdentifier(hiAssembly),@SimpleHash32_ASM)
-],TUImIdentifier(hiAssembly));
-{$ELSE}
-],TUImIdentifier(hiPascal));
-{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSimpleHash32Base.Finalize;
-begin
-FreeAndNil(fImplManager);
-inherited;
+HashImplementation := hiAssembly;
 end;
 
 {-------------------------------------------------------------------------------
@@ -741,15 +744,27 @@ end;
 //------------------------------------------------------------------------------
 
 class Function TSimpleHash32Base.HashImplementationsAvailable: THashImplementations;
+var
+  i:  Integer;
 begin
-Result := [hiPascal{$IFNDEF PurePascal}, hiAssembly{$ENDIF}];
+Result := [];
+with ImplManager.RoutingFindObj(0) do
+  For i := LowIndex to HighIndex do
+    If ifAvailable in Implementations[i].ImplementationFlags then
+      Include(Result,THashImplementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TSimpleHash32Base.HashImplementationsSupported: THashImplementations;
+var
+  i:  Integer;
 begin
-Result := [hiPascal{$IFNDEF PurePascal}, hiAssembly{$ENDIF}];
+Result := [];
+with ImplManager.RoutingFindObj(0) do
+  For i := LowIndex to HighIndex do
+    If [ifAvailable,ifSupported] <= Implementations[i].ImplementationFlags then
+      Include(Result,THashImplementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
@@ -967,15 +982,29 @@ end;
 //------------------------------------------------------------------------------
 
 Function TSimpleHash64Base.GetHashImplementation: THashImplementation;
+var
+  Routing:  TUIMRouting;
+  Index:    Integer;
 begin
-Result := THashImplementation(fImplManager.RoutingFindObj(0).Selected);
+Routing := ImplManager.RoutingFindObj(1);
+If Routing.Find(@fProcessBuffer,Index) then
+  Result := THashImplementation(Routing[Index].ImplementationID)
+else
+  raise ESHNoImplementation.Create('TSimpleHash64Base.GetHashImplementation: No implementation selected.');
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleHash64Base.SetHashImplementation(Value: THashImplementation);
+var
+  Routing:  TUIMRouting;
+  Index:    Integer;
 begin
-fImplManager.RoutingFindObj(0).Select(TUIMIdentifier(Value));
+Routing := ImplManager.RoutingFindObj(1);
+If Routing.Follow(TUIMIdentifier(Value),Index) then
+  @fProcessBuffer := Routing[Index].ImplementorFunction
+else
+  raise ESHNoImplementation.CreateFmt('TSimpleHash64Base.SetHashImplementation: Selected implementation (%d) not found.',[Ord(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -992,23 +1021,7 @@ begin
 inherited;
 fInitialValue := SimpleHash64ToSys(ZeroSimpleHash64);
 fSimpleHash64 := fInitialValue;
-fImplManager := TImplementationManager.Create;
-AddRoutingSelect(fImplManager,0,@fProcessBuffer,[
-  ImplInfo(TUImIdentifier(hiPascal),@SimpleHash64_PAS)
-{$IFNDEF PurePascal},
-  ImplInfo(TUImIdentifier(hiAssembly),@SimpleHash64_ASM)
-],TUImIdentifier(hiAssembly));
-{$ELSE}
-],TUImIdentifier(hiPascal));
-{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSimpleHash64Base.Finalize;
-begin
-FreeAndNil(fImplManager);
-inherited;
+HashImplementation := hiAssembly;
 end;
 
 {-------------------------------------------------------------------------------
@@ -1058,15 +1071,27 @@ end;
 //------------------------------------------------------------------------------
 
 class Function TSimpleHash64Base.HashImplementationsAvailable: THashImplementations;
+var
+  i:  Integer;
 begin
-Result := [hiPascal{$IFNDEF PurePascal}, hiAssembly{$ENDIF}];
+Result := [];
+with ImplManager.RoutingFindObj(0) do
+  For i := LowIndex to HighIndex do
+    If ifAvailable in Implementations[i].ImplementationFlags then
+      Include(Result,THashImplementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TSimpleHash64Base.HashImplementationsSupported: THashImplementations;
+var
+  i:  Integer;
 begin
-Result := [hiPascal{$IFNDEF PurePascal}, hiAssembly{$ENDIF}];
+Result := [];
+with ImplManager.RoutingFindObj(0) do
+  For i := LowIndex to HighIndex do
+    If [ifAvailable,ifSupported] <= Implementations[i].ImplementationFlags then
+      Include(Result,THashImplementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
@@ -1765,5 +1790,48 @@ with TSimpleHash64Base do
   Result := SimpleHash64FromSys(SimpleHash64_ASM(SimpleHash64ToSys(InitialSimpleHash64),Buffer,Size));
 {$ENDIF}
 end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                         Unit implementation management                         
+--------------------------------------------------------------------------------
+===============================================================================}
+
+procedure UnitInitialiaze;
+begin
+ImplManager := TImplementationManager.Create;
+// TSimpleHash32Base...
+AddRoutingSelect(ImplManager,TUIMIdentifier(0),ProcessBufferDummy,[
+  ImplInfo(TUImIdentifier(hiPascal),@SimpleHash32_PAS),
+{$IFNDEF PurePascal}
+  ImplInfo(TUImIdentifier(hiAssembly),@SimpleHash32_ASM)],TUImIdentifier(hiAssembly));
+{$ELSE}
+  ImplInfo(TUImIdentifier(hiAssembly),@SimpleHash32_PAS,False,False)],TUImIdentifier(hiPascal));
+{$ENDIF}
+// TSimpleHash64Base...
+AddRoutingSelect(ImplManager,TUIMIdentifier(1),ProcessBufferDummy,[
+  ImplInfo(TUImIdentifier(hiPascal),@SimpleHash64_PAS),
+{$IFNDEF PurePascal}
+  ImplInfo(TUImIdentifier(hiAssembly),@SimpleHash64_ASM)],TUImIdentifier(hiAssembly));
+{$ELSE}
+  ImplInfo(TUImIdentifier(hiAssembly),@SimpleHash64_PAS,False,False)],TUImIdentifier(hiPascal));
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure UnitFinalize;
+begin
+FreeAndNil(ImplManager);
+end;
+
+//==============================================================================
+
+initialization
+  UnitInitialiaze;
+
+finalization
+  UnitFinalize;
 
 end.

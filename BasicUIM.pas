@@ -18,9 +18,9 @@
     be interested - eg. I might add some functionality or write documentation
     (at least in the form of notes and comments).
 
-  Version 1.2.2 (2026-01-06)
+  Version 1.2.3 (2026-06-07)
 
-  Last change 2026-01-12
+  Last change 2026-06-07
 
   ©2023-2026 František Milt
 
@@ -222,6 +222,8 @@ type
     Function Find(ImplementorMethodCode,ImplementorMethodData: Pointer; out Index: Integer): Boolean; overload; virtual;
     Function Find(ImplementorObject: TObject; out Index: Integer): Boolean; overload; virtual;
     Function Find(ImplementorClass: TClass; out Index: Integer): Boolean; overload; virtual;
+    // Follow - same as Find, but resolves aliases to their sources
+    Function Follow(ImplementationID: TUIMIdentifier; out Index: Integer): Boolean; virtual;
     Function Add(ImplementationID: TUIMIdentifier; ImplementorFunction: Pointer; ImplementationFlags: TUIMImplementationFlags = []): Integer; overload; virtual;
     Function Add(ImplementationID: TUIMIdentifier; ImplementorMethod: TMethod; ImplementationFlags: TUIMImplementationFlags = []): Integer; overload; virtual;
     Function Add(ImplementationID: TUIMIdentifier; ImplementorMethodCode,ImplementorMethodData: Pointer; ImplementationFlags: TUIMImplementationFlags = []): Integer; overload; virtual;
@@ -921,6 +923,20 @@ Function TUIMRouting.Find(ImplementorClass: TClass; out Index: Integer): Boolean
 begin
 Index := IndexOf(ImplementorClass);
 Result := CheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TUIMRouting.Follow(ImplementationID: TUIMIdentifier; out Index: Integer): Boolean;
+begin
+Result := False;
+while Find(ImplementationID,Index) do
+  If fImplementations[Index].ImplementorType <> itAlias then
+    begin
+      Result := True;
+      Break{while};
+    end
+  else ImplementationID := fImplementations[Index].ImplementorOriginal;
 end;
 
 //------------------------------------------------------------------------------

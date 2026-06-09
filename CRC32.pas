@@ -28,9 +28,9 @@
     functions that can be used. These functions are implemented above TCRC32Hash
     class and therefore are calculating CRC-32 with a polynomial of 0x104C11DB7.
 
-  Version 1.7.3 (2023-04-14)
+  Version 1.7.4 (2026-06-07)
 
-  Last change 2026-02-26
+  Last change 2026-06-07
 
   ©2011-2026 František Milt
 
@@ -98,8 +98,6 @@ unit CRC32;
   {$MODE ObjFPC}{$MODESWITCH CLASSICPROCVARS+}
   {$INLINE ON}
   {$DEFINE CanInline}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}  
   {$IFNDEF PurePascal}
     {$ASMMODE Intel}
   {$ENDIF}
@@ -188,13 +186,13 @@ type
 type
   TCRC32BaseHash = class(TStreamHash)
   protected
-    fImplManager:   TImplementationManager;
     fCRC32Value:    TCRC32Sys;
     fCRC32Table:    PCRC32Table;
     fProcessBuffer: procedure(const Buffer; Size: TMemSize) of object; register;
     Function GetCRC32: TCRC32; virtual;
     Function GetCRC32Poly: TCRC32Sys; virtual;
     Function GetCRC32PolyRef: TCRC32Sys; virtual; abstract;
+    class Function RoutingIdentifier: TUIMIdentifier; virtual; // used in uim
     Function GetHashImplementation: THashImplementation; override;
     procedure SetHashImplementation(Value: THashImplementation); override;
   {$IFNDEF PurePascal}
@@ -265,7 +263,7 @@ type
 type
   TCRC32CHash = class(TCRC32BaseHash)
   protected
-    class Function AccelerationSupported: Boolean; virtual;
+    class Function RoutingIdentifier: TUIMIdentifier; override;
     Function GetCRC32PolyRef: TCRC32Sys; override;
   {$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
     procedure ProcessBuffer_ACC(const Buffer; Size: TMemSize); virtual; register;
@@ -273,10 +271,7 @@ type
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure InitializeTable; override;
     procedure FinalizeTable; override;
-    procedure Initialize; override;
   public
-    class Function HashImplementationsAvailable: THashImplementations; override;
-    class Function HashImplementationsSupported: THashImplementations; override;
     class Function HashName: String; override;
     class Function HashFinalization: Boolean; override;
     procedure Init; override;
@@ -574,11 +569,6 @@ uses
   , SimpleCPUID
 {$IFEND};
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
-{$ENDIF}
-
 {$IF not Defined(FPC) and not Defined(x64)}
   {
     ASM_MachineCode
@@ -594,6 +584,12 @@ uses
   {$DEFINE ASM_MachineCode}
 {$IFEND}
 
+{===============================================================================
+    UIM variables
+===============================================================================}
+var
+  ImplManager:        TImplementationManager = nil;
+  ProcessBufferDummy: Pointer = nil;
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -717,13 +713,21 @@ end;
 
 //------------------------------------------------------------------------------
 
+class Function TCRC32BaseHash.RoutingIdentifier: TUIMIdentifier;
+begin
+Result := TUIMIdentifier(0);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCRC32BaseHash.GetHashImplementation: THashImplementation;
 var
-  SelectedImplID: TUIMIdentifier;
+  Routing:  TUIMRouting;
+  Index:    Integer;
 begin
-// do not call inherited
-If fImplManager.RoutingFindObj(0).Selected(SelectedImplID) then
-  Result := THashImplementation(SelectedImplID)
+Routing := ImplManager.RoutingFindObj(RoutingIdentifier);
+If Routing.Find(TMethod(fProcessBuffer).Code,Index) then
+  Result := THashImplementation(Routing[Index].ImplementationID)
 else
   raise ECRC32NoImplementation.Create('TCRC32BaseHash.GetHashImplementation: No implementation selected.');
 end;
@@ -731,9 +735,18 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TCRC32BaseHash.SetHashImplementation(Value: THashImplementation);
+var
+  Routing:  TUIMRouting;
+  Index:    Integer;
 begin
 // do not call inherited
-fImplManager.RoutingFindObj(0).Select(TUIMIdentifier(Value));
+Routing := ImplManager.RoutingFindObj(RoutingIdentifier);
+If Routing.Follow(TUIMIdentifier(Value),Index) then
+  begin
+    TMethod(fProcessBuffer).Code := Routing[Index].ImplementorFunction;
+    TMethod(fProcessBuffer).Data := Self;
+  end
+else raise ECRC32NoImplementation.CreateFmt('TCRC32BaseHash.SetHashImplementation: Selected implementation (%d) not found.',[Ord(Value)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -899,21 +912,13 @@ end;
 procedure TCRC32BaseHash.Initialize;
 begin
 inherited;
-fImplManager := TImplementationManager.Create;
-with fImplManager.RoutingAddObj(0,TMethod(fProcessBuffer)) do
-  begin
-    Add(TUIMIdentifier(hiPascal),@TCRC32BaseHash.ProcessBuffer_PAS,Self,[ifSelect]);
-  {$IFDEF PurePascal}
-    AddAlias(TUIMIdentifier(hiPascal),TUIMIdentifier(hiAssembly));
-    AddAlias(TUIMIdentifier(hiPascal),TUIMIdentifier(hiAccelerated));
-  {$ELSE}
-    Add(TUIMIdentifier(hiAssembly),@TCRC32BaseHash.ProcessBuffer_ASM,Self);
-    AddAlias(TUIMIdentifier(hiAssembly),TUIMIdentifier(hiAccelerated));
-  {$ENDIF}  
-  end;
 fCRC32Value := 0;
 InitializeTable;
-HashImplementation := hiAccelerated;  // sets fProcessBuffer
+If ifSupported in ImplManager.RoutingFindObj(RoutingIdentifier).
+  FlagsGet(TUIMIdentifier(hiAccelerated)) then
+  HashImplementation := hiAccelerated
+else
+  HashImplementation := hiAssembly; // sets fProcessBuffer
 end;
 
 //------------------------------------------------------------------------------
@@ -921,7 +926,6 @@ end;
 procedure TCRC32BaseHash.Finalize;
 begin
 FinalizeTable;
-FreeAndNil(fImplManager);
 inherited;
 end;
 
@@ -972,15 +976,27 @@ end;
 //------------------------------------------------------------------------------
 
 class Function TCRC32BaseHash.HashImplementationsAvailable: THashImplementations;
+var
+  i:  Integer;
 begin
-Result := [hiPascal{$IFNDEF PurePascal},hiAssembly{$ENDIF}];
+Result := [];
+with ImplManager.RoutingFindObj(RoutingIdentifier) do
+  For i := LowIndex to HighIndex do
+    If ifAvailable in Implementations[i].ImplementationFlags then
+      Include(Result,THashImplementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TCRC32BaseHash.HashImplementationsSupported: THashImplementations;
+var
+  i:  Integer;
 begin
-Result := [hiPascal{$IFNDEF PurePascal},hiAssembly{$ENDIF}];
+Result := [];
+with ImplManager.RoutingFindObj(RoutingIdentifier) do
+  For i := LowIndex to HighIndex do
+    If [ifAvailable,ifSupported] <= Implementations[i].ImplementationFlags then
+      Include(Result,THashImplementation(Implementations[i].ImplementationID));
 end;
 
 //------------------------------------------------------------------------------
@@ -1088,12 +1104,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TCRC32BaseHash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TCRC32;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TCRC32));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TCRC32));
 case Endianness of
   heSystem: fCRC32Value := CRC32ToSys({$IFDEF ENDIAN_BIG}CRC32FromBE{$ELSE}CRC32FromLE{$ENDIF}(Temp));
   heLittle: fCRC32Value := CRC32ToSys(CRC32FromLE(Temp));
@@ -1103,7 +1118,6 @@ else
   fCRC32Value := CRC32ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {-------------------------------------------------------------------------------
@@ -1265,18 +1279,9 @@ const
     TCRC32CHash - protected methods
 -------------------------------------------------------------------------------}
 
-class Function TCRC32CHash.AccelerationSupported: Boolean;
+class Function TCRC32CHash.RoutingIdentifier: TUIMIdentifier;
 begin
-{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
-with TSimpleCPUID.Create do
-try
-  Result := Info.SupportedExtensions.CRC32;
-finally
-  Free;
-end;
-{$ELSE}
-Result := False;
-{$IFEND}
+Result := TUIMIdentifier(1);
 end;
 
 //------------------------------------------------------------------------------
@@ -1497,51 +1502,9 @@ begin
 fCRC32Table := nil;
 end;
 
-//------------------------------------------------------------------------------
-
-procedure TCRC32CHash.Initialize;
-begin
-inherited;
-{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
-with fImplManager.RoutingFindObj(0) do
-  begin
-    Replace(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_ACC,Self);
-    If AccelerationSupported then
-      Select(TUIMIdentifier(hiAccelerated));
-  end;
-{$IFEND}
-end;
-
 {-------------------------------------------------------------------------------
     TCRC32Hash - public methods
 -------------------------------------------------------------------------------}
-
-class Function TCRC32CHash.HashImplementationsAvailable: THashImplementations;
-begin
-{$IFNDEF PurePascal}
-Result := [hiPascal,hiAssembly{$IFDEF CRC32C_Accelerated},hiAccelerated{$ENDIF}]
-{$ELSE}
-Result := [hiPascal];
-{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
-
-class Function TCRC32CHash.HashImplementationsSupported: THashImplementations;
-begin
-{$IFNDEF PurePascal}
-{$IFDEF CRC32C_Accelerated}
-If AccelerationSupported then
-  Result := [hiPascal,hiAssembly,hiAccelerated]
-else
-{$ENDIF}
-  Result := [hiPascal,hiAssembly]
-{$ELSE}
-Result := [hiPascal];
-{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
 
 class Function TCRC32CHash.HashName: String;
 begin
@@ -2185,4 +2148,70 @@ finally
 end;
 end;
 
+
+{-------------------------------------------------------------------------------
+================================================================================
+                         Unit implementation management
+================================================================================
+-------------------------------------------------------------------------------}
+
+procedure UnitInitialiaze;
+
+{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
+  Function CRC32CAccelerationSupported: Boolean;
+  begin
+    with TSimpleCPUID.Create do
+    try
+      Result := Info.SupportedExtensions.CRC32;
+    finally
+      Free;
+    end;
+  end;
+{$IFEND}  
+
+begin
+ImplManager := TImplementationManager.Create;
+// TCRC32BaseHash...
+AddRoutingSelect(ImplManager,TUIMIdentifier(0),ProcessBufferDummy,[
+  ImplInfo(TUIMIdentifier(hiPascal),@TCRC32BaseHash.ProcessBuffer_PAS),
+{$IFDEF PurePascal}
+  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32BaseHash.ProcessBuffer_PAS,False,False),
+  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32BaseHash.ProcessBuffer_PAS,False,False)
+{$ELSE}
+  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32BaseHash.ProcessBuffer_ASM),
+  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32BaseHash.ProcessBuffer_ASM,False,False)
+{$ENDIF}
+],TUIMIdentifier(hiPascal));
+// TCRC32CHash...
+AddRoutingSelect(ImplManager,TUIMIdentifier(1),ProcessBufferDummy,[
+  ImplInfo(TUIMIdentifier(hiPascal),@TCRC32CHash.ProcessBuffer_PAS),
+{$IFDEF PurePascal}
+  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32CHash.ProcessBuffer_PAS,False,False),
+  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_PAS,False,False)
+{$ELSE}
+  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32CHash.ProcessBuffer_ASM),
+{$IFDEF CRC32C_Accelerated}
+  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_ACC,CRC32CAccelerationSupported)
+{$ELSE}
+  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_ASM,False,False)
+{$ENDIF}
+{$ENDIF}
+],TUIMIdentifier(hiPascal));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure UnitFinalize;
+begin
+FreeAndNil(ImplManager);
+end;
+
+//==============================================================================
+
+initialization
+  UnitInitialiaze;
+
+finalization
+  UnitFinalize;
+  
 end.
