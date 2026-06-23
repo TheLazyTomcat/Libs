@@ -16,9 +16,9 @@
                 always make sure you use the same version of this library
                 in all sharing endpoints.
 
-  version 1.0 (2026-06-09)
+  version 1.0.1 (2026-06-18)
 
-  Last change 2026-06-09
+  Last change 2026-06-18
 
   ©2026 František Milt
 
@@ -40,7 +40,7 @@
   * AuxExceptions  - github.com/TheLazyTomcat/Lib.AuxExceptions
     AuxTypes       - github.com/TheLazyTomcat/Lib.AuxTypes
     BitOps         - github.com/TheLazyTomcat/Lib.BitOps
-    CRC32          - github.com/TheLazyTomcat/Lib.CRC32
+    CRCLite        - github.com/TheLazyTomcat/Lib.CRCLite
     InterlockedOps - github.com/TheLazyTomcat/Lib.InterlockedOps
     MD5            - github.com/TheLazyTomcat/Lib.MD5
     SHA2           - github.com/TheLazyTomcat/Lib.SHA2
@@ -189,14 +189,14 @@ type
   for data integrity check (see above).
 
   If you use csAuto, the actual type will be selected automatically depending
-  on size of shared data. Currently, sizes below 1024 bytes use csCRC32, from
-  1024 to 4095 use csMD5, 4096 to 16383 use csSHA256 (variant of SHA-2) and
-  larger use csSHA512 (also SHA-2). You can use function AsyncChecksumType to
-  resolve which checksum type will be used for given size of shared data when
-  csAuto is selected.
+  on size of shared data. Currently, sizes below 256 bytes use csCRC32, from
+  256 to 1023 use csCRC64, 1024 to 4095 use csMD5, 4096 to 16383 use csSHA256
+  (variant of SHA-2) and larger use csSHA512 (also SHA-2). You can use function
+  AsyncChecksumType to resolve which checksum type will be used for given size
+  of shared data when csAuto is selected.
 }
 type
-  TASChecksumType = (csAuto,csCRC32,{csCRC64,}csMD5,csSHA256,csSHA512);
+  TASChecksumType = (csAuto,csCRC32,csCRC64,csMD5,csSHA256,csSHA512);
 
 //------------------------------------------------------------------------------
 {
@@ -413,7 +413,7 @@ Function ProtectedLoad(const Storage; out Destination; Size: TMemSize): Boolean;
 implementation
 
 uses
-  CRC32, {CRC64,} MD5, SHA2, BitOps, InterlockedOps;
+  CRCLite, MD5, SHA2, BitOps, InterlockedOps;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -425,7 +425,7 @@ type
     case ChecksumType: TASChecksumType of
       csAuto:   (Dummy:   record end);
       csCRC32:  (CRC32:   TCRC32);
-    //csCRC64:  (CRC64:   TCRC64);
+      csCRC64:  (CRC64:   TCRC64);
       csMD5:    (MD5:     TMD5);
       csSHA256: (SHA256:  TSHA256);
       csSHA512: (SHA512:  TSHA512);
@@ -449,7 +449,7 @@ Function AsyncChecksumSize(ChecksumType: TASChecksumType): TMemSize;
 begin
 case ChecksumType of
   csCRC32:  Result := SizeOf(TCRC32);
-//csCRC64:  Result := SizeOf(TCRC64);
+  csCRC64:  Result := SizeOf(TCRC64);
   csMD5:    Result := SizeOf(TMD5);
   csSHA256: Result := SizeOf(TSHA256);
   csSHA512: Result := SizeOf(TSHA512);
@@ -465,7 +465,7 @@ begin
 Result.ChecksumType := ChecksumType;
 case ChecksumType of
   csCRC32:  Result.CRC32 := BufferCRC32(Buffer,Size);
-//csCRC64:  Result.CRC64 := BufferCRC64(Buffer,Size);
+  csCRC64:  Result.CRC64 := BufferCRC64(Buffer,Size);
   csMD5:    Result.MD5 := BufferMD5(Buffer,Size);
   csSHA256: Result.SHA256 := BufferSHA2(fnSHA256,Buffer,Size).SHA256;
   csSHA512: Result.SHA512 := BufferSHA2(fnSHA512,Buffer,Size).SHA512;
@@ -481,7 +481,7 @@ begin
 If A.ChecksumType = B.ChecksumType then
   case A.ChecksumType of
     csCRC32:  Result := SameCRC32(A.CRC32,B.CRC32);
-  //csCRC64:  Result := SameCRC64(A.CRC64,B.CRC64);
+    csCRC64:  Result := SameCRC64(A.CRC64,B.CRC64);
     csMD5:    Result := SameMD5(A.MD5,B.MD5);
     csSHA256: Result := SameSHA2(A.SHA256,B.SHA256);
     csSHA512: Result := SameSHA2(A.SHA512,B.SHA512);
@@ -505,8 +505,8 @@ else If Size >= (4 * KiB) then
   Result := csSHA256
 else If Size >= (1 * KiB) then
   Result := csMD5
-//else If Size >= (KiB div 4) then
-//  Result := csCRC64
+else If Size >= (KiB div 4) then
+  Result := csCRC64
 else
   Result := csCRC32;
 end;
