@@ -17,8 +17,6 @@
     It can be used either in form of objects, where you create an instance of
     approprite class (eg. TCRC24Hash) and use its methods to do the processing,
     or you can use provided procedural form (BufferCRC24, CRC24ToStr, ...).
-    But note that the procedural interface is implemented only as a wrapper
-    around class TCRC24Hash.
 
     There is also class TCRC24CustomHash, which allows you to change parameters
     of CRC-24 algorithm (eg. polynomial or initial value), so you can calculate
@@ -27,9 +25,9 @@
     of the known CRC-24 variants - you can use it to initialize an instance of
     TCRC24CustomHash, it will then calculate the selected crc version.
 
-  Version 1.0 (2026-06-22)
+  Version 1.1 (2026-07-03)
 
-  Last change 2026-06-24
+  Last change 2026-07-03
 
   ©2026 František Milt
 
@@ -154,6 +152,7 @@ type
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
     constructor CreateAndInitFrom(Hash: TCRC24); overload; virtual;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TCRC24); reintroduce;
@@ -409,24 +408,25 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  All following functions are implemented as wrappers around TCRC24Hash class
-  and its methods.
+  Most of the following functions are calling direct implementation, only
+  functions StreamCRC24 and FileCRC24 are using instance of TCRC16Hash class
+  to do the processing.  
 }
 {===============================================================================
     Standalone functions - declaration
 ===============================================================================}
 
-Function CRC24ToStr(CRC24: TCRC24): String;
+Function CRC24ToStr(const CRC24: TCRC24): String;
 Function StrToCRC24(const Str: String): TCRC24;
 Function TryStrToCRC24(const Str: String; out CRC24: TCRC24): Boolean;
 Function StrToCRC24Def(const Str: String; Default: TCRC24): TCRC24;
 
-Function CompareCRC24(A,B: TCRC24): Integer;
-Function SameCRC24(A,B: TCRC24): Boolean;
+Function CompareCRC24(const A,B: TCRC24): Integer;
+Function SameCRC24(const A,B: TCRC24): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferCRC24(CRC24: TCRC24; const Buffer; Size: TMemSize): TCRC24; overload;
+Function BufferCRC24(const CRC24: TCRC24; const Buffer; Size: TMemSize): TCRC24; overload;
 
 Function BufferCRC24(const Buffer; Size: TMemSize): TCRC24; overload;
 
@@ -440,10 +440,10 @@ Function FileCRC24(const FileName: String): TCRC24;
 //------------------------------------------------------------------------------
 
 type
-  TCRC24Context = type Pointer;
+  TCRC24Context = type TCRC24Sys;
 
 Function CRC24_Init: TCRC24Context;
-procedure CRC24_Update(Context: TCRC24Context; const Buffer; Size: TMemSize);
+procedure CRC24_Update(var Context: TCRC24Context; const Buffer; Size: TMemSize);
 Function CRC24_Final(var Context: TCRC24Context; const Buffer; Size: TMemSize): TCRC24; overload;
 Function CRC24_Final(var Context: TCRC24Context): TCRC24; overload;
 Function CRC24_Hash(const Buffer; Size: TMemSize): TCRC24;
@@ -530,26 +530,22 @@ end;
 
 Function ExpandCRC24(const Value: TCRC24): TCRC24Sys;
 begin
-{$IFDEF ENDIAN_BIG}
-Result := UInt32(Value[2]) or (UInt32(Value[1]) shl 8) or (UInt32(Value[0]) shl 16);
-{$ELSE}
+{
+  TCRC24 is always in little endian form, meaning byte 0 contains lowest byte
+  of the value. And since we are placing the bytes into integral number by
+  shifting, not by copying them into memory, there is no difference whether
+  we are in little or big endian system.
+}
 Result := UInt32(Value[0]) or (UInt32(Value[1]) shl 8) or (UInt32(Value[2]) shl 16);
-{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 Function CollapseCRC24(const Value: TCRC24Sys): TCRC24;
 begin
-{$IFDEF ENDIAN_BIG}
-Result[2] := Value and $FF;
-Result[1] := (Value shr 8) and $FF;
-Result[0] := (Value shr 16) and $FF;
-{$ELSE}
 Result[0] := Value and $FF;
 Result[1] := (Value shr 8) and $FF;
 Result[2] := (Value shr 16) and $FF;
-{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -576,6 +572,64 @@ If Length(Str) > 0 then
     If PartLength > 0 then
       Parts.Add(Trim(Copy(Str,PartStart,PartLength)));
   end;
+end;
+
+{===============================================================================
+    Main implementation
+===============================================================================}
+
+Function CRC24Process(const CRC24: TCRC24Sys; const Buffer; Size: TMemSize; CRC24TablePtr: PCRC24Table): TCRC24Sys; overload;
+var
+  i:    TMemSize;
+  Buff: PByte;
+begin
+Result := CRC24;
+Buff := @Buffer;
+For i := 1 to Size do
+  begin
+    Result := CRC24TablePtr^[Byte(Result) xor Buff^] xor (Result shr 8);
+    Inc(Buff);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC24Compare(const A,B: TCRC24Sys): Integer;
+begin
+If A > B then
+  Result := +1
+else If A < B then
+  Result := -1
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC24Same(const A,B: TCRC24Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC24AsString(const CRC24: TCRC24Sys): String;
+begin
+Result := IntToHex(CRC24,6);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC24FromString(const Str: String): TCRC24Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TCRC24Sys(StrToInt(Str))
+    else
+      Result := TCRC24Sys(StrToInt('$' + Str));
+  end
+else Result := TCRC24Hash.CRC24ToSys(ZeroCRC24);
 end;
 
 
@@ -606,19 +660,8 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TCRC24BaseHash.ProcessBuffer(const Buffer; Size: TMemSize);
-var
-  WorkCRC:  TCRC24Sys;
-  i:        TMemSize;
-  Buff:     PByte;
 begin
-WorkCRC := fCRC24Value;
-Buff := @Buffer;
-For i := 1 to Size do
-  begin
-    WorkCRC := fCRC24Table^[Byte(WorkCRC) xor Buff^] xor (WorkCRC shr 8);
-    Inc(Buff);
-  end;
-fCRC24Value := WorkCRC;
+fCRC24Value := CRC24Process(fCRC24Value,Buffer,Size,fCRC24Table);
 end;
 
 //------------------------------------------------------------------------------
@@ -644,14 +687,14 @@ end;
 
 class Function TCRC24BaseHash.CRC24ToSys(CRC24: TCRC24): TCRC24Sys;
 begin
-Result := {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(ExpandCRC24(CRC24));
+Result := ExpandCRC24(CRC24);
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TCRC24BaseHash.CRC24FromSys(CRC24: TCRC24Sys): TCRC24;
 begin
-Result := CollapseCRC24({$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(CRC24));
+Result := CollapseCRC24(CRC24);
 end;
 
 //------------------------------------------------------------------------------
@@ -727,36 +770,33 @@ end;
 Function TCRC24BaseHash.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TCRC24BaseHash then
-  begin
-    If fCRC24Value > TCRC24BaseHash(Hash).CRC24Sys then
-      Result := +1
-    else If fCRC24Value < TCRC24BaseHash(Hash).CRC24Sys then
-      Result := -1
-    else
-      Result := 0;
-  end
-else raise ECRC24IncompatibleClass.CreateFmt('TCRC24BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := CRC24Compare(fCRC24Value,TCRC24BaseHash(Hash).CRC24Sys)
+else
+  raise ECRC24IncompatibleClass.CreateFmt('TCRC24BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCRC24BaseHash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TCRC24BaseHash then
+  Result := CRC24Same(fCRC24Value,TCRC24BaseHash(Hash).CRC24Sys)
+else
+  raise ECRC24IncompatibleClass.CreateFmt('TCRC24BaseHash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TCRC24BaseHash.AsString: String;
 begin
-Result := IntToHex(fCRC24Value,6);
+Result := CRC24AsString(fCRC24Value);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TCRC24BaseHash.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fCRC24Value := TCRC24Sys(StrToInt(Str))
-    else
-      fCRC24Value := TCRC24Sys(StrToInt('$' + Str));
-  end
-else fCRC24Value := CRC24ToSys(ZeroCRC24);
+fCRC24Value := CRC24FRomString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -844,6 +884,13 @@ const
     $00A6B487, $005DF801, $00AB610D, $00502D8B, $00475214, $00BC1E92, $004A879E, $00B1CB18,
     $00167BE3, $00ED3765, $001BAE69, $00E0E2EF, $00F79D70, $000CD1F6, $00FA48FA, $0001047C,
     $002FFA42, $00D4B6C4, $00222FC8, $00D9634E, $00CE1CD1, $00355057, $00C3C95B, $003885DD);
+
+//------------------------------------------------------------------------------
+
+Function CRC24Process(const CRC24: TCRC24Sys; const Buffer; Size: TMemSize): TCRC24Sys; overload;
+begin
+Result := SwapEndian(CRC24Process(SwapEndian(CRC24),Buffer,Size,@CRC24_TABLE));
+end;
 
 {===============================================================================
     TCRC24Hash - class declaration
@@ -1273,179 +1320,87 @@ end;
     Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function CRC24ToStr(CRC24: TCRC24): String;
-var
-  Hash: TCRC24Hash;
+Function CRC24ToStr(const CRC24: TCRC24): String;
 begin
-Hash := TCRC24Hash.CreateAndInitFrom(CRC24);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := CRC24AsString(TCRC24Hash.CRC24ToSys(CRC24));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC24(const Str: String): TCRC24;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+Result := TCRC24Hash.CRC24FromSys(CRC24FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToCRC24(const Str: String; out CRC24: TCRC24): Boolean;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    CRC24 := Hash.CRC24;
-finally
-  Hash.Free;
+  CRC24 := TCRC24Hash.CRC24FromSys(CRC24FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC24Def(const Str: String; Default: TCRC24): TCRC24;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+If not TryStrToCRC24(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareCRC24(A,B: TCRC24): Integer;
-var
-  HashA:  TCRC24Hash;
-  HashB:  TCRC24Hash;
+Function CompareCRC24(const A,B: TCRC24): Integer;
 begin
-HashA := TCRC24Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC24Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC24Compare(TCRC24Hash.CRC24ToSys(A),TCRC24Hash.CRC24ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameCRC24(A,B: TCRC24): Boolean;
-var
-  HashA:  TCRC24Hash;
-  HashB:  TCRC24Hash;
+Function SameCRC24(const A,B: TCRC24): Boolean;
 begin
-HashA := TCRC24Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC24Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC24Same(TCRC24Hash.CRC24ToSys(A),TCRC24Hash.CRC24ToSys(B));
 end;
 
 {-------------------------------------------------------------------------------
     Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferCRC24(CRC24: TCRC24; const Buffer; Size: TMemSize): TCRC24;
-var
-  Hash: TCRC24Hash;
+Function BufferCRC24(const CRC24: TCRC24; const Buffer; Size: TMemSize): TCRC24;
 begin
-Hash := TCRC24Hash.CreateAndInitFrom(CRC24);
-try
-  Hash.Final(Buffer,Size);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+Result := TCRC24Hash.CRC24FromSys(CRC24Process(TCRC24Hash.CRC24ToSys(CRC24),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function BufferCRC24(const Buffer; Size: TMemSize): TCRC24;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+Result := TCRC24Hash.CRC24FromSys(CRC24Process(TCRC24Hash.CRC24ToSys(InitialCRC24),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringCRC24(const Str: AnsiString): TCRC24;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
-try
-  Hash.HashAnsiString(Str);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC24(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringCRC24(const Str: WideString): TCRC24;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
-try
-  Hash.HashWideString(Str);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC24(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StringCRC24(const Str: String): TCRC24;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
-try
-  Hash.HashString(Str);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC24(PChar(Str)^,Length(Str) * SizeOf(Char));
 end;
 
 //------------------------------------------------------------------------------
@@ -1483,18 +1438,16 @@ end;
 -------------------------------------------------------------------------------}
 
 Function CRC24_Init: TCRC24Context;
-var
-  Temp: TCRC24Hash;
 begin
-Temp := TCRC24Hash.CreateAndInit;
-Result := TCRC24Context(Temp);
+Result := TCRC24Context(TCRC24Hash.CRC24ToSys(InitialCRC24));
 end;
+
 
 //------------------------------------------------------------------------------
 
-procedure CRC24_Update(Context: TCRC24Context; const Buffer; Size: TMemSize);
+procedure CRC24_Update(var Context: TCRC24Context; const Buffer; Size: TMemSize);
 begin
-TCRC24Hash(Context).Update(Buffer,Size);
+TCRC24Sys(Context) := CRC24Process(TCRC24Sys(Context),Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
@@ -1509,24 +1462,15 @@ end;
 
 Function CRC24_Final(var Context: TCRC24Context): TCRC24;
 begin
-TCRC24Hash(Context).Final;
-Result := TCRC24Hash(Context).CRC24;
-FreeAndNil(TCRC24Hash(Context));
+Result := TCRC24Hash.CRC24FromSys(TCRC24Sys(Context));
+Context := TCRC24Context(TCRC24Hash.CRC24ToSys(ZeroCRC24));
 end;
 
 //------------------------------------------------------------------------------
 
 Function CRC24_Hash(const Buffer; Size: TMemSize): TCRC24;
-var
-  Hash: TCRC24Hash;
 begin
-Hash := TCRC24Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC24;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC24(Buffer,Size);
 end;
 
 end.

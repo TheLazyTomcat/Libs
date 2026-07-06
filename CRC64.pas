@@ -17,8 +17,6 @@
     It can be used either in form of objects, where you create an instance of
     approprite class (eg. TCRC64Hash) and use its methods to do the processing,
     or you can use provided procedural form (BufferCRC64, CRC64ToStr, ...).
-    But note that the procedural interface is implemented only as a wrapper
-    around class TCRC64Hash.
 
     There is also class TCRC64CustomHash, which allows you to change parameters
     of CRC-64 algorithm (eg. polynomial or initial value), so you can calculate
@@ -27,9 +25,9 @@
     of the known CRC-64 variants - you can use it to initialize an instance of
     TCRC64CustomHash, it will then calculate the selected crc version.
 
-  Version 1.0 (2026-06-23)
+  Version 1.1.1 (2026-07-04)
 
-  Last change 2026-06-24
+  Last change 2026-07-04
 
   ©2026 František Milt
 
@@ -47,7 +45,6 @@
 
       github.com/TheLazyTomcat/Lib.CRC64
 
-  Dependencies:
   Dependencies:
     AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
     HashBase    - github.com/TheLazyTomcat/Lib.HashBase
@@ -160,6 +157,7 @@ type
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
     constructor CreateAndInitFrom(Hash: TCRC64); overload; virtual;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TCRC64); reintroduce;
@@ -496,24 +494,25 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  All following functions are implemented as wrappers around TCRC64Hash class
-  and its methods.
+  Most of the following functions are calling direct implementation, only
+  functions StreamCRC64 and FileCRC64 are using instance of TCRC16Hash class
+  to do the processing.  
 }
 {===============================================================================
     Standalone functions - declaration
 ===============================================================================}
 
-Function CRC64ToStr(CRC64: TCRC64): String;
+Function CRC64ToStr(const CRC64: TCRC64): String;
 Function StrToCRC64(const Str: String): TCRC64;
 Function TryStrToCRC64(const Str: String; out CRC64: TCRC64): Boolean;
 Function StrToCRC64Def(const Str: String; Default: TCRC64): TCRC64;
 
-Function CompareCRC64(A,B: TCRC64): Integer;
-Function SameCRC64(A,B: TCRC64): Boolean;
+Function CompareCRC64(const A,B: TCRC64): Integer;
+Function SameCRC64(const A,B: TCRC64): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferCRC64(CRC64: TCRC64; const Buffer; Size: TMemSize): TCRC64; overload;
+Function BufferCRC64(const CRC64: TCRC64; const Buffer; Size: TMemSize): TCRC64; overload;
 
 Function BufferCRC64(const Buffer; Size: TMemSize): TCRC64; overload;
 
@@ -527,10 +526,10 @@ Function FileCRC64(const FileName: String): TCRC64;
 //------------------------------------------------------------------------------
 
 type
-  TCRC64Context = type Pointer;
+  TCRC64Context = type TCRC64Sys;
 
 Function CRC64_Init: TCRC64Context;
-procedure CRC64_Update(Context: TCRC64Context; const Buffer; Size: TMemSize);
+procedure CRC64_Update(var Context: TCRC64Context; const Buffer; Size: TMemSize);
 Function CRC64_Final(var Context: TCRC64Context; const Buffer; Size: TMemSize): TCRC64; overload;
 Function CRC64_Final(var Context: TCRC64Context): TCRC64; overload;
 Function CRC64_Hash(const Buffer; Size: TMemSize): TCRC64;
@@ -643,6 +642,59 @@ If Length(Str) > 0 then
   end;
 end;
 
+{===============================================================================
+    Main implementation
+===============================================================================}
+
+Function CRC64Process(const CRC64: TCRC64Sys; const Buffer; Size: TMemSize; CRC64TablePtr: PCRC64Table): TCRC64Sys; overload;
+var
+  i:    TMemSize;
+  Buff: PByte;
+begin
+Result := CRC64;
+Buff := @Buffer;
+For i := 1 to Size do
+  begin
+    Result := CRC64TablePtr^[Byte(Result) xor Buff^] xor (Result shr 8);
+    Inc(Buff);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC64Compare(const A,B: TCRC64Sys): Integer;
+begin
+Result := CompareUInt64(A,B);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC64Same(const A,B: TCRC64Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC64AsString(const CRC64: TCRC64Sys): String;
+begin
+Result := IntToHex(CRC64,16);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC64FromString(const Str: String): TCRC64Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TCRC64Sys(StrToInt64(Str))
+    else
+      Result := TCRC64Sys(StrToInt64('$' + Str));
+  end
+else Result := TCRC64Hash.CRC64ToSys(ZeroCRC64);
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -671,19 +723,8 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TCRC64BaseHash.ProcessBuffer(const Buffer; Size: TMemSize);
-var
-  WorkCRC:  TCRC64Sys;
-  i:        TMemSize;
-  Buff:     PByte;
 begin
-WorkCRC := fCRC64Value;
-Buff := @Buffer;
-For i := 1 to Size do
-  begin
-    WorkCRC := fCRC64Table^[Byte(WorkCRC) xor Buff^] xor (WorkCRC shr 8);
-    Inc(Buff);
-  end;
-fCRC64Value := WorkCRC;
+fCRC64Value := CRC64Process(fCRC64Value,Buffer,Size,fCRC64Table);
 end;
 
 //------------------------------------------------------------------------------
@@ -792,30 +833,33 @@ end;
 Function TCRC64BaseHash.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TCRC64BaseHash then
-  Result := CompareUInt64(fCRC64Value,TCRC64BaseHash(Hash).CRC64Sys)
+  Result := CRC64Compare(fCRC64Value,TCRC64BaseHash(Hash).CRC64Sys)
 else
   raise ECRC64IncompatibleClass.CreateFmt('TCRC64BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
+Function TCRC64BaseHash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TCRC64BaseHash then
+  Result := CRC64Same(fCRC64Value,TCRC64BaseHash(Hash).CRC64Sys)
+else
+  raise ECRC64IncompatibleClass.CreateFmt('TCRC64BaseHash.Same: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TCRC64BaseHash.AsString: String;
 begin
-Result := IntToHex(fCRC64Value,16);
+Result := CRC64AsString(fCRC64Value);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TCRC64BaseHash.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fCRC64Value := TCRC64Sys(StrToInt64(Str))
-    else
-      fCRC64Value := TCRC64Sys(StrToInt64('$' + Str));
-  end
-else fCRC64Value := CRC64ToSys(ZeroCRC64);
+fCRC64Value := CRC64FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -999,6 +1043,14 @@ const
     TCRC64Sys($4B6F2D6988613F91), TCRC64Sys($D859C7C06380CFD3),
     TCRC64Sys($B2EEBB341AC4ED5D), TCRC64Sys($21D8519DF1251D1F),
     TCRC64Sys($94836F67CD070CD8), TCRC64Sys($07B585CE26E6FC9A));
+
+//------------------------------------------------------------------------------
+
+// this overload is used only by procedural interface
+Function CRC64Process(const CRC64: TCRC64Sys; const Buffer; Size: TMemSize): TCRC64Sys; overload;
+begin
+Result := SwapEndian(CRC64Process(SwapEndian(CRC64),Buffer,Size,@CRC64_TABLE));
+end;
 
 {===============================================================================
     TCRC64Hash - class declaration
@@ -1459,179 +1511,87 @@ end;
     Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function CRC64ToStr(CRC64: TCRC64): String;
-var
-  Hash: TCRC64Hash;
+Function CRC64ToStr(const CRC64: TCRC64): String;
 begin
-Hash := TCRC64Hash.CreateAndInitFrom(CRC64);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := CRC64AsString(TCRC64Hash.CRC64ToSys(CRC64));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC64(const Str: String): TCRC64;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+Result := TCRC64Hash.CRC64FromSys(CRC64FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToCRC64(const Str: String; out CRC64: TCRC64): Boolean;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    CRC64 := Hash.CRC64;
-finally
-  Hash.Free;
+  CRC64 := TCRC64Hash.CRC64FromSys(CRC64FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC64Def(const Str: String; Default: TCRC64): TCRC64;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+If not TryStrToCRC64(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareCRC64(A,B: TCRC64): Integer;
-var
-  HashA:  TCRC64Hash;
-  HashB:  TCRC64Hash;
+Function CompareCRC64(const A,B: TCRC64): Integer;
 begin
-HashA := TCRC64Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC64Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC64Compare(TCRC64Hash.CRC64ToSys(A),TCRC64Hash.CRC64ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameCRC64(A,B: TCRC64): Boolean;
-var
-  HashA:  TCRC64Hash;
-  HashB:  TCRC64Hash;
+Function SameCRC64(const A,B: TCRC64): Boolean;
 begin
-HashA := TCRC64Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC64Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC64Same(TCRC64Hash.CRC64ToSys(A),TCRC64Hash.CRC64ToSys(B));
 end;
 
 {-------------------------------------------------------------------------------
     Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferCRC64(CRC64: TCRC64; const Buffer; Size: TMemSize): TCRC64;
-var
-  Hash: TCRC64Hash;
+Function BufferCRC64(const CRC64: TCRC64; const Buffer; Size: TMemSize): TCRC64;
 begin
-Hash := TCRC64Hash.CreateAndInitFrom(CRC64);
-try
-  Hash.Final(Buffer,Size);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+Result := TCRC64Hash.CRC64FromSys(CRC64Process(TCRC64Hash.CRC64ToSys(CRC64),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function BufferCRC64(const Buffer; Size: TMemSize): TCRC64;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+Result := TCRC64Hash.CRC64FromSys(CRC64Process(TCRC64Hash.CRC64ToSys(InitialCRC64),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringCRC64(const Str: AnsiString): TCRC64;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
-try
-  Hash.HashAnsiString(Str);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC64(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringCRC64(const Str: WideString): TCRC64;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
-try
-  Hash.HashWideString(Str);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC64(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StringCRC64(const Str: String): TCRC64;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
-try
-  Hash.HashString(Str);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC64(PChar(Str)^,Length(Str) * SizeOf(Char));
 end;
 
 //------------------------------------------------------------------------------
@@ -1669,18 +1629,14 @@ end;
 -------------------------------------------------------------------------------}
 
 Function CRC64_Init: TCRC64Context;
-var
-  Temp: TCRC64Hash;
 begin
-Temp := TCRC64Hash.CreateAndInit;
-Result := TCRC64Context(Temp);
+Result := TCRC64Context(TCRC64Hash.CRC64ToSys(InitialCRC64));
 end;
-
 //------------------------------------------------------------------------------
 
-procedure CRC64_Update(Context: TCRC64Context; const Buffer; Size: TMemSize);
+procedure CRC64_Update(var Context: TCRC64Context; const Buffer; Size: TMemSize);
 begin
-TCRC64Hash(Context).Update(Buffer,Size);
+TCRC64Sys(Context) := CRC64Process(TCRC64Sys(Context),Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
@@ -1695,24 +1651,15 @@ end;
 
 Function CRC64_Final(var Context: TCRC64Context): TCRC64;
 begin
-TCRC64Hash(Context).Final;
-Result := TCRC64Hash(Context).CRC64;
-FreeAndNil(TCRC64Hash(Context));
+Result := TCRC64Hash.CRC64FromSys(TCRC64Sys(Context));
+Context := TCRC64Context(TCRC64Hash.CRC64ToSys(ZeroCRC64));
 end;
 
 //------------------------------------------------------------------------------
 
 Function CRC64_Hash(const Buffer; Size: TMemSize): TCRC64;
-var
-  Hash: TCRC64Hash;
 begin
-Hash := TCRC64Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC64;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC64(Buffer,Size);
 end;
 
 end.

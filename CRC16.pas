@@ -17,8 +17,6 @@
     It can be used either in form of objects, where you create an instance of
     approprite class (eg. TCRC16Hash) and use its methods to do the processing,
     or you can use provided procedural form (BufferCRC16, CRC16ToStr, ...).
-    But note that the procedural interface is implemented only as a wrapper
-    around class TCRC16Hash.
 
     There is also class TCRC16CustomHash, which allows you to change parameters
     of CRC-16 algorithm (eg. polynomial or initial value), so you can calculate
@@ -27,9 +25,9 @@
     about 30 known CRC-16 variants - you can use it to initialize an instance
     of TCRC16CustomHash, it will then calculate the selected crc version.
 
-  Version 1.0 (2026-06-21)
+  Version 1.1 (2026-07-03)
 
-  Last change 2026-06-24
+  Last change 2026-07-03
 
   ©2026 František Milt
 
@@ -159,6 +157,7 @@ type
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
     constructor CreateAndInitFrom(Hash: TCRC16); overload; virtual;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TCRC16); reintroduce;
@@ -815,24 +814,25 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  All following functions are implemented as wrappers around TCRC16Hash class
-  and its methods.
+  Most of the following functions are calling direct implementation, only
+  functions StreamCRC16 and FileCRC16 are using instance of TCRC16Hash class
+  to do the processing.  
 }
 {===============================================================================
     Standalone functions - declaration
 ===============================================================================}
 
-Function CRC16ToStr(CRC16: TCRC16): String;
+Function CRC16ToStr(const CRC16: TCRC16): String;
 Function StrToCRC16(const Str: String): TCRC16;
 Function TryStrToCRC16(const Str: String; out CRC16: TCRC16): Boolean;
 Function StrToCRC16Def(const Str: String; Default: TCRC16): TCRC16;
 
-Function CompareCRC16(A,B: TCRC16): Integer;
-Function SameCRC16(A,B: TCRC16): Boolean;
+Function CompareCRC16(const A,B: TCRC16): Integer;
+Function SameCRC16(const A,B: TCRC16): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferCRC16(CRC16: TCRC16; const Buffer; Size: TMemSize): TCRC16; overload;
+Function BufferCRC16(const CRC16: TCRC16; const Buffer; Size: TMemSize): TCRC16; overload;
 
 Function BufferCRC16(const Buffer; Size: TMemSize): TCRC16; overload;
 
@@ -846,10 +846,10 @@ Function FileCRC16(const FileName: String): TCRC16;
 //------------------------------------------------------------------------------
 
 type
-  TCRC16Context = type Pointer;
+  TCRC16Context = type TCRC16Sys;
 
 Function CRC16_Init: TCRC16Context;
-procedure CRC16_Update(Context: TCRC16Context; const Buffer; Size: TMemSize);
+procedure CRC16_Update(var Context: TCRC16Context; const Buffer; Size: TMemSize);
 Function CRC16_Final(var Context: TCRC16Context; const Buffer; Size: TMemSize): TCRC16; overload;
 Function CRC16_Final(var Context: TCRC16Context): TCRC16; overload;
 Function CRC16_Hash(const Buffer; Size: TMemSize): TCRC16;
@@ -946,6 +946,64 @@ If Length(Str) > 0 then
   end;
 end;
 
+{===============================================================================
+    Main implementation
+===============================================================================}
+
+Function CRC16Process(const CRC16: TCRC16Sys; const Buffer; Size: TMemSize; CRC16TablePtr: PCRC16Table): TCRC16Sys;
+var
+  i:    TMemSize;
+  Buff: PByte;
+begin
+Result := CRC16;
+Buff := @Buffer;
+For i := 1 to Size do
+  begin
+    Result := CRC16TablePtr^[Byte(Result) xor Buff^] xor (Result shr 8);
+    Inc(Buff);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC16Compare(const A,B: TCRC16Sys): Integer;
+begin
+If A > B then
+  Result := +1
+else If A < B then
+  Result := -1
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC16Same(const A,B: TCRC16Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC16AsString(const CRC16: TCRC16Sys): String;
+begin
+Result := IntToHex(CRC16,4);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC16FromString(const Str: String): TCRC16Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TCRC16Sys(StrToInt(Str))
+    else
+      Result := TCRC16Sys(StrToInt('$' + Str));
+  end
+else Result := TCRC16Hash.CRC16ToSys(ZeroCRC16);
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -974,19 +1032,8 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TCRC16BaseHash.ProcessBuffer(const Buffer; Size: TMemSize);
-var
-  WorkCRC:  TCRC16Sys;
-  i:        TMemSize;
-  Buff:     PByte;
 begin
-WorkCRC := fCRC16Value;
-Buff := @Buffer;
-For i := 1 to Size do
-  begin
-    WorkCRC := fCRC16Table^[Byte(WorkCRC) xor Buff^] xor (WorkCRC shr 8);
-    Inc(Buff);
-  end;
-fCRC16Value := WorkCRC;
+fCRC16Value := CRC16Process(fCRC16Value,Buffer,Size,fCRC16Table);
 end;
 
 //------------------------------------------------------------------------------
@@ -1095,36 +1142,33 @@ end;
 Function TCRC16BaseHash.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TCRC16BaseHash then
-  begin
-    If fCRC16Value > TCRC16BaseHash(Hash).CRC16Sys then
-      Result := +1
-    else If fCRC16Value < TCRC16BaseHash(Hash).CRC16Sys then
-      Result := -1
-    else
-      Result := 0;
-  end
-else raise ECRC16IncompatibleClass.CreateFmt('TCRC16BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := CRC16Compare(fCRC16Value,TCRC16BaseHash(Hash).CRC16Sys)
+else
+  raise ECRC16IncompatibleClass.CreateFmt('TCRC16BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCRC16BaseHash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TCRC16BaseHash then
+  Result := CRC16Same(fCRC16Value,TCRC16BaseHash(Hash).CRC16Sys)
+else
+  raise ECRC16IncompatibleClass.CreateFmt('TCRC16BaseHash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TCRC16BaseHash.AsString: String;
 begin
-Result := IntToHex(fCRC16Value,4);
+Result := CRC16AsString(fCRC16Value);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TCRC16BaseHash.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fCRC16Value := TCRC16Sys(StrToInt(Str))
-    else
-      fCRC16Value := TCRC16Sys(StrToInt('$' + Str));
-  end
-else fCRC16Value := CRC16ToSys(ZeroCRC16);
+fCRC16Value := CRC16FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -1661,179 +1705,87 @@ end;
     Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function CRC16ToStr(CRC16: TCRC16): String;
-var
-  Hash: TCRC16Hash;
+Function CRC16ToStr(const CRC16: TCRC16): String;
 begin
-Hash := TCRC16Hash.CreateAndInitFrom(CRC16);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := CRC16AsString(TCRC16Hash.CRC16ToSys(CRC16));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC16(const Str: String): TCRC16;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+Result := TCRC16Hash.CRC16FromSys(CRC16FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToCRC16(const Str: String; out CRC16: TCRC16): Boolean;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    CRC16 := Hash.CRC16;
-finally
-  Hash.Free;
+  CRC16 := TCRC16Hash.CRC16FromSys(CRC16FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC16Def(const Str: String; Default: TCRC16): TCRC16;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+If not TryStrToCRC16(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareCRC16(A,B: TCRC16): Integer;
-var
-  HashA:  TCRC16Hash;
-  HashB:  TCRC16Hash;
+Function CompareCRC16(const A,B: TCRC16): Integer;
 begin
-HashA := TCRC16Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC16Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC16Compare(TCRC16Hash.CRC16ToSys(A),TCRC16Hash.CRC16ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameCRC16(A,B: TCRC16): Boolean;
-var
-  HashA:  TCRC16Hash;
-  HashB:  TCRC16Hash;
+Function SameCRC16(const A,B: TCRC16): Boolean;
 begin
-HashA := TCRC16Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC16Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC16Same(TCRC16Hash.CRC16ToSys(A),TCRC16Hash.CRC16ToSys(B));
 end;
 
 {-------------------------------------------------------------------------------
     Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferCRC16(CRC16: TCRC16; const Buffer; Size: TMemSize): TCRC16;
-var
-  Hash: TCRC16Hash;
+Function BufferCRC16(const CRC16: TCRC16; const Buffer; Size: TMemSize): TCRC16;
 begin
-Hash := TCRC16Hash.CreateAndInitFrom(CRC16);
-try
-  Hash.Final(Buffer,Size);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+Result := TCRC16Hash.CRC16FromSys(CRC16Process(TCRC16Hash.CRC16ToSys(CRC16),Buffer,Size,@CRC16_TABLE));
 end;
 
 //------------------------------------------------------------------------------
 
 Function BufferCRC16(const Buffer; Size: TMemSize): TCRC16;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+Result := TCRC16Hash.CRC16FromSys(CRC16Process(TCRC16Hash.CRC16ToSys(InitialCRC16),Buffer,Size,@CRC16_TABLE));
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringCRC16(const Str: AnsiString): TCRC16;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
-try
-  Hash.HashAnsiString(Str);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC16(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringCRC16(const Str: WideString): TCRC16;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
-try
-  Hash.HashWideString(Str);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC16(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StringCRC16(const Str: String): TCRC16;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
-try
-  Hash.HashString(Str);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC16(PChar(Str)^,Length(Str) * SizeOf(Char));
 end;
 
 //------------------------------------------------------------------------------
@@ -1871,18 +1823,15 @@ end;
 -------------------------------------------------------------------------------}
 
 Function CRC16_Init: TCRC16Context;
-var
-  Temp: TCRC16Hash;
 begin
-Temp := TCRC16Hash.CreateAndInit;
-Result := TCRC16Context(Temp);
+Result := TCRC16Context(TCRC16Hash.CRC16ToSys(InitialCRC16));
 end;
 
 //------------------------------------------------------------------------------
 
-procedure CRC16_Update(Context: TCRC16Context; const Buffer; Size: TMemSize);
+procedure CRC16_Update(var Context: TCRC16Context; const Buffer; Size: TMemSize);
 begin
-TCRC16Hash(Context).Update(Buffer,Size);
+TCRC16Sys(Context) := CRC16Process(TCRC16Sys(Context),Buffer,Size,@CRC16_TABLE);
 end;
 
 //------------------------------------------------------------------------------
@@ -1897,24 +1846,15 @@ end;
 
 Function CRC16_Final(var Context: TCRC16Context): TCRC16;
 begin
-TCRC16Hash(Context).Final;
-Result := TCRC16Hash(Context).CRC16;
-FreeAndNil(TCRC16Hash(Context));
+Result := TCRC16Hash.CRC16FromSys(TCRC16Sys(Context));
+Context := TCRC16Context(TCRC16Hash.CRC16ToSys(ZeroCRC16));
 end;
 
 //------------------------------------------------------------------------------
 
 Function CRC16_Hash(const Buffer; Size: TMemSize): TCRC16;
-var
-  Hash: TCRC16Hash;
 begin
-Hash := TCRC16Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC16;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC16(Buffer,Size);
 end;
 
 end.

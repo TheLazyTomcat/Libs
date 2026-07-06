@@ -9,9 +9,9 @@
 
   MD5 calculation
 
-  Version 1.6.1 (2020-07-13)
+  Version 1.6.2 (2026-07-05)
 
-  Last change 2026-02-26
+  Last change 2026-07-05
 
   ©2015-2026 František Milt
 
@@ -50,8 +50,6 @@ unit MD5;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -66,6 +64,15 @@ uses
   AuxTypes, HashBase;
 
 {===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  EMD5Exception = class(EHashException);
+
+  EMD5IncompatibleClass = class(EMD5Exception);
+  EMD5ProcessingError   = class(EMD5Exception);
+
+{===============================================================================
     Common types and constants
 ===============================================================================}
 {
@@ -74,10 +81,6 @@ uses
 
   Type TMD5Sys has no such guarantee and its internal structure depends on
   current implementation.
-
-  MD5 does not differ in little and big endian form, as it is not a single
-  quantity, therefore methods like MD5ToLE or MD5ToBE do nothing and are
-  present only for the sake of completeness.
 }
 type
   TMD5 = packed array[0..15] of UInt8;
@@ -95,17 +98,11 @@ const
   InitialMD5: TMD5 = ($01,$23,$45,$67,$89,$AB,$CD,$EF,$FE,$DC,$BA,$98,$76,$54,$32,$10);
   ZeroMD5:    TMD5 = ($00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00);
 
-type
-  EMD5Exception = class(EHashException);
-
-  EMD5IncompatibleClass = class(EMD5Exception);
-  EMD5ProcessingError   = class(EMD5Exception);
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TMD5Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TMD5Hash - class declaration
 ===============================================================================}
@@ -133,6 +130,7 @@ type
     constructor CreateAndInitFrom(Hash: TMD5); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TMD5); reintroduce;
@@ -143,25 +141,30 @@ type
   end;
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - declaration
 ===============================================================================}
 
-Function MD5toStr(MD5: TMD5): String;
-Function StrToMD5(Str: String): TMD5;
+Function MD5toStr(const MD5: TMD5): String;
+Function StrToMD5(const Str: String): TMD5;
 Function TryStrToMD5(const Str: String; out MD5: TMD5): Boolean;
 Function StrToMD5Def(const Str: String; Default: TMD5): TMD5;
 
-Function CompareMD5(A,B: TMD5): Integer;
-Function SameMD5(A,B: TMD5): Boolean;
+Function CompareMD5(const A,B: TMD5): Integer;
+Function SameMD5(const A,B: TMD5): Boolean;
 
-Function BinaryCorrectMD5(MD5: TMD5): TMD5;
+Function BinaryCorrectMD5(const MD5: TMD5): TMD5; deprecated;
 
 //------------------------------------------------------------------------------
 
 procedure BufferMD5(var MD5: TMD5; const Buffer; Size: TMemSize); overload;
 
-Function LastBufferMD5(MD5: TMD5; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD5; overload;
-Function LastBufferMD5(MD5: TMD5; const Buffer; Size: TMemSize): TMD5; overload;
+Function LastBufferMD5(const MD5: TMD5; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD5; overload;
+Function LastBufferMD5(const MD5: TMD5; const Buffer; Size: TMemSize): TMD5; overload;
 
 Function BufferMD5(const Buffer; Size: TMemSize): TMD5; overload;
 
@@ -172,8 +175,7 @@ Function StringMD5(const Str: String): TMD5;
 Function StreamMD5(Stream: TStream; Count: Int64 = -1): TMD5;
 Function FileMD5(const FileName: String): TMD5;
 
-//------------------------------------------------------------------------------
-
+//------------------------------------------------------------------------------   
 type
   TMD5Context = type Pointer;
 
@@ -189,18 +191,11 @@ uses
   SysUtils,
   BitOps;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable  
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
-{$ENDIF}
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TMD5Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TMD5Hash - calculation constants
 ===============================================================================}
@@ -226,6 +221,74 @@ const
     1,  6, 11,  0,  5, 10, 15,  4,  9, 14,  3,  8, 13,  2,  7, 12,
     5,  8, 11, 14,  1,  4,  7, 10, 13,  0,  3,  6,  9, 12, 15,  2,
     0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9);
+
+{===============================================================================
+    TMD5Hash - auxiliary functions
+===============================================================================}
+
+Function MD5Compare(const A,B: TMD5): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+For i := Low(A) to High(A) do
+  If A[i] > B[i] then
+    begin
+      Result := +1;
+      Break;
+    end
+  else If A[i] < B[i] then
+    begin
+      Result := -1;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD5Same(const A,B: TMD5): Boolean;
+var
+  i:  Integer;
+begin
+Result := True;
+For i := Low(A) to High(A) do
+  If A[i] <> B[i] then
+    begin
+      Result := False;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD5AsString(const MD5: TMD5): String;
+var
+  i:  Integer;
+begin
+Result := StringOfChar('0',SizeOf(TMD5) * 2);
+For i := Low(MD5) to High(MD5) do
+  begin
+    Result[(i * 2) + 2] := IntToHex(MD5[i] and $0F,1)[1];
+    Result[(i * 2) + 1] := IntToHex(MD5[i] shr 4,1)[1];
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD5FromString(const Str: String): TMD5;
+var
+  TempStr:  String;
+  i:        Integer;
+begin
+If Length(Str) < (SizeOf(TMD5) * 2) then
+  TempStr := StringOfChar('0',(SizeOf(TMD5) * 2) - Length(Str)) + Str
+else If Length(Str) > (SizeOf(TMD5) * 2) then
+  TempStr := Copy(Str,Length(Str) - Pred(SizeOf(TMD5) * 2),SizeOf(TMD5) * 2)
+else
+  TempStr := Str;
+For i := Low(Result) to High(Result) do
+  Result[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
+end;
 
 {===============================================================================
     TMD5Hash - class implementation
@@ -289,12 +352,10 @@ begin
 If (fBlockSize - fTransCount) >= (SizeOf(UInt64) + 1) then
   begin
     // padding and length can fit
-  {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-    FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
-    PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := $80;
-    PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
+    FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,0);
+    PUInt8(PtrAdvance(fTransBlock,TMemOff(fTransCount)))^ := $80;
+    PUInt64(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - SizeOf(UInt64)))^ :=
       {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
     ProcessBlock(fTransBlock^);
   end
 else
@@ -302,16 +363,12 @@ else
     // padding and length cannot fit  
     If fBlockSize > fTransCount then
       begin
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
-        PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := $80;
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,0);
+        PUInt8(PtrAdvance(fTransBlock,TMemOff(fTransCount)))^ := $80;
         ProcessBlock(fTransBlock^);
         FillChar(fTransBlock^,fBlockSize,0);
-      {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-        PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
+        PUInt64(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - SizeOf(UInt64)))^ :=
           {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
         ProcessBlock(fTransBlock^);        
       end
     else raise EMD5ProcessingError.CreateFmt('TMD5Hash.ProcessLast: Invalid data transfer (%d).',[fTransCount]);
@@ -364,6 +421,7 @@ end;
 class Function TMD5Hash.MD5ToLE(MD5: TMD5): TMD5;
 begin
 Result := MD5;
+SwapEndian(Result,SizeOf(TMD5));
 end;
 
 //------------------------------------------------------------------------------
@@ -378,6 +436,7 @@ end;
 class Function TMD5Hash.MD5FromLE(MD5: TMD5): TMD5;
 begin
 Result := MD5;
+SwapEndian(Result,SizeOf(TMD5));
 end;
 
 //------------------------------------------------------------------------------
@@ -446,63 +505,35 @@ end;
 //------------------------------------------------------------------------------
 
 Function TMD5Hash.Compare(Hash: THashBase): Integer;
-var
-  A,B:  TMD5;
-  i:    Integer;
 begin
 If Hash is TMD5Hash then
-  begin
-    Result := 0;
-    A := MD5FromSys(fMD5);
-    B := TMD5Hash(Hash).MD5;
-    For i := Low(A) to High(A) do
-      If A[i] > B[i] then
-        begin
-          Result := +1;
-          Break;
-        end
-      else If A[i] < B[i] then
-        begin
-          Result := -1;
-          Break;
-        end;
-  end
-else raise EMD5IncompatibleClass.CreateFmt('TMD5Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := MD5Compare(MD5FromSys(fMD5),TMD5Hash(Hash).MD5)
+else
+  raise EMD5IncompatibleClass.CreateFmt('TMD5Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD5Hash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TMD5Hash then
+  Result := MD5Same(MD5FromSys(fMD5),TMD5Hash(Hash).MD5)
+else
+  raise EMD5IncompatibleClass.CreateFmt('TMD5Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TMD5Hash.AsString: String;
-var
-  Temp: TMD5;
-  i:    Integer;
 begin
-Result := StringOfChar('0',HashSize * 2);
-Temp := MD5FromSys(fMD5);
-For i := Low(Temp) to High(Temp) do
-  begin
-    Result[(i * 2) + 2] := IntToHex(Temp[i] and $0F,1)[1];
-    Result[(i * 2) + 1] := IntToHex(Temp[i] shr 4,1)[1];
-  end;
+Result := MD5AsString(MD5FromSys(fMD5));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TMD5Hash.FromString(const Str: String);
-var
-  TempStr:  String;
-  i:        Integer;
-  TempMD5:  TMD5;
 begin
-If Length(Str) < Integer(HashSize * 2) then
-  TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
-else If Length(Str) > Integer(HashSize * 2) then
-  TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
-else
-  TempStr := Str;
-For i := Low(TempMD5) to High(TempMD5) do
-  TempMD5[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
-fMD5 := MD5ToSys(TempMD5);
+fMD5 := MD5ToSys(MD5FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
@@ -533,12 +564,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TMD5Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TMD5;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TMD5));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TMD5));
 case Endianness of
   heSystem: fMD5 := MD5ToSys({$IFDEF ENDIAN_BIG}MD5FromBE{$ELSE}MD5FromLE{$ENDIF}(Temp));
   heLittle: fMD5 := MD5ToSys(MD5FromLE(Temp));
@@ -548,123 +578,75 @@ else
   fMD5 := MD5ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - utility functions
+    Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function MD5toStr(MD5: TMD5): String;
-var
-  Hash: TMD5Hash;
+Function MD5toStr(const MD5: TMD5): String;
 begin
-Hash := TMD5Hash.CreateAndInitFrom(MD5);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := MD5AsString(MD5);
 end;
 
 //------------------------------------------------------------------------------
 
-Function StrToMD5(Str: String): TMD5;
-var
-  Hash: TMD5Hash;
+Function StrToMD5(const Str: String): TMD5;
 begin
-Hash := TMD5Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.MD5;
-finally
-  Hash.Free;
-end;
+Result := MD5FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToMD5(const Str: String; out MD5: TMD5): Boolean;
-var
-  Hash: TMD5Hash;
 begin
-Hash := TMD5Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    MD5 := Hash.MD5;
-finally
-  Hash.Free;
+  MD5 := MD5FromString(Str);
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToMD5Def(const Str: String; Default: TMD5): TMD5;
-var
-  Hash: TMD5Hash;
 begin
-Hash := TMD5Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.MD5;
-finally
-  Hash.Free;
-end;
+If not TryStrToMD5(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareMD5(A,B: TMD5): Integer;
-var
-  HashA:  TMD5Hash;
-  HashB:  TMD5Hash;
+Function CompareMD5(const A,B: TMD5): Integer;
 begin
-HashA := TMD5Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD5Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD5Compare(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameMD5(A,B: TMD5): Boolean;
-var
-  HashA:  TMD5Hash;
-  HashB:  TMD5Hash;
+Function SameMD5(const A,B: TMD5): Boolean;
 begin
-HashA := TMD5Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD5Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD5Same(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function BinaryCorrectMD5(MD5: TMD5): TMD5;
+Function BinaryCorrectMD5(const MD5: TMD5): TMD5;
 begin
 Result := MD5;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - processing functions
+    Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
 procedure BufferMD5(var MD5: TMD5; const Buffer; Size: TMemSize);
@@ -689,7 +671,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferMD5(MD5: TMD5; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD5;
+Function LastBufferMD5(const MD5: TMD5; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD5;
 var
   Hash: TMD5Hash;
 begin
@@ -705,7 +687,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferMD5(MD5: TMD5; const Buffer; Size: TMemSize): TMD5;
+Function LastBufferMD5(const MD5: TMD5; const Buffer; Size: TMemSize): TMD5;
 var
   Hash: TMD5Hash;
 begin
@@ -809,7 +791,7 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - context functions
+    Standalone functions - context functions
 -------------------------------------------------------------------------------}
 
 Function MD5_Init: TMD5Context;

@@ -37,7 +37,7 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2026-02-26
+  Last change 2026-07-03
 
   ©2016-2026 František Milt
 
@@ -470,11 +470,6 @@ uses
   SysUtils, Math,
   UInt64Utils;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
-{$ENDIF}
-
 {===============================================================================
 --------------------------------------------------------------------------------
                                    TCityHash
@@ -554,6 +549,7 @@ If Hash is TCityHash then
   end
 else raise ECITYIncompatibleClass.CreateFmt('TCityHash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -780,12 +776,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TCity32Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TCity32;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TCity32));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TCity32));
 case Endianness of
   heSystem: fCity32 := City32ToSys({$IFDEF ENDIAN_BIG}City32FromBE{$ELSE}City32FromLE{$ENDIF}(Temp));
   heLittle: fCity32 := City32ToSys(City32FromLE(Temp));
@@ -795,7 +790,7 @@ else
   fCity32 := City32ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1048,12 +1043,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TCity64Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TCity64;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TCity64));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TCity64));
 case Endianness of
   heSystem: fCity64 := City64ToSys({$IFDEF ENDIAN_BIG}City64FromBE{$ELSE}City64FromLE{$ENDIF}(Temp));
   heLittle: fCity64 := City64ToSys(City64FromLE(Temp));
@@ -1063,7 +1057,6 @@ else
   fCity64 := City64ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1257,12 +1250,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TCity128HashBase.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TCity128;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TCity128));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TCity128));
 case Endianness of
   heSystem: fCity128 := City128ToSys({$IFDEF ENDIAN_BIG}City128FromBE{$ELSE}City128FromLE{$ENDIF}(Temp));
   heLittle: fCity128 := City128ToSys(City128FromLE(Temp));
@@ -1272,7 +1264,7 @@ else
   fCity128 := City128ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -1689,12 +1681,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TCity256HashBase.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TCity256;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TCity256));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TCity256));
 case Endianness of
   heSystem: fCity256 := City256ToSys({$IFDEF ENDIAN_BIG}City256FromBE{$ELSE}City256FromLE{$ENDIF}(Temp));
   heLittle: fCity256 := City256ToSys(City256FromLE(Temp));
@@ -1704,7 +1695,6 @@ else
   fCity256 := City256ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================

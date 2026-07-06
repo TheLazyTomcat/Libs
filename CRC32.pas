@@ -20,17 +20,17 @@
     must be defined for this feature).
 
     There is also a class for custom calculation (TCRC32CustomHash) that offers
-    an option to set arbitrary polynomial, intial value and other parameters.
+    an option to set arbitrary polynomial, initial value and other parameters.
     Along with this class, an array containing several preset CRC-32 variants
     is provided.
 
-    For the sake of backward compatibility, there is a set of standalone
-    functions that can be used. These functions are implemented above TCRC32Hash
-    class and therefore are calculating CRC-32 with a polynomial of 0x104C11DB7.
+    For the sake of convenience, there is also a set of standalone functions
+    that you can use. These functions are calculating CRC-32 using the same
+    parameters as class TCRC32Hash.
 
-  Version 1.7.6 (2026-06-21)
+  Version 1.8.1 (2026-07-04)
 
-  Last change 2026-06-24
+  Last change 2026-07-04
 
   ©2011-2026 František Milt
 
@@ -82,6 +82,8 @@ unit CRC32;
   {$DEFINE PurePascal}
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
 {$IF Defined(CPUX86_64) or Defined(CPUX64)}
   {$DEFINE x64}
 {$ELSEIF Defined(CPU386)}
@@ -95,7 +97,8 @@ unit CRC32;
 {$IFEND}
 
 {$IFDEF FPC}
-  {$MODE ObjFPC}{$MODESWITCH CLASSICPROCVARS+}
+  {$MODE ObjFPC}
+  {$MODESWITCH ClassicProcVars+}
   {$INLINE ON}
   {$DEFINE CanInline}
   {$IFNDEF PurePascal}
@@ -110,6 +113,7 @@ unit CRC32;
 {$ENDIF}
 {$H+}
 
+//------------------------------------------------------------------------------
 {
   CRC32C_Accelerated
 
@@ -134,8 +138,18 @@ uses
   AuxTypes, BasicUIM, HashBase;
 
 {===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  ECRC32Exception = class(EHashException);
+
+  ECRC32IncompatibleClass = class(ECRC32Exception);
+  ECRC32IndexOutOfBounds  = class(ECRC32Exception);
+  ECRC32NoImplementation  = class(ECRC32Exception);
+
+{===============================================================================
     Common types and constants
-===============================================================================}   
+===============================================================================}
 {
   Bytes in TCRC32 are always ordered from least significant byte to most
   significant byte (little endian).
@@ -158,27 +172,16 @@ type
   PCRC32Table = ^TCRC32Table;
 
 const
-{
-  Initial value of CRC-32.
-  
-  WARNING - use only in standalone, backward compatibility functions!
-}
+  // Initial value of CRC-32 for use in standalone functions.
   InitialCRC32: TCRC32 = ($00,$00,$00,$00);
 
   ZeroCRC32: TCRC32 = (0,0,0,0);
 
-type
-  ECRC32Exception = class(EHashException);
-
-  ECRC32IncompatibleClass = class(ECRC32Exception);
-  ECRC32IndexOutOfBounds  = class(ECRC32Exception);
-  ECRC32NoImplementation  = class(ECRC32Exception);
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TCRC32BaseHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TCRC32BaseHash - class declaration
 ===============================================================================}
@@ -187,17 +190,13 @@ type
   protected
     fCRC32Value:    TCRC32Sys;
     fCRC32Table:    PCRC32Table;
-    fProcessBuffer: procedure(const Buffer; Size: TMemSize) of object; register;
+    fCRC32Process:  Function(const CRC32: TCRC32Sys; const Buffer; Size: TMemSize; CRCTablePtr: PCRC32Table): TCRC32Sys; register;
     Function GetCRC32: TCRC32; virtual;
     Function GetCRC32Poly: TCRC32Sys; virtual;
     Function GetCRC32PolyRef: TCRC32Sys; virtual; abstract;
-    class Function RoutingIdentifier: TUIMIdentifier; virtual; // used in uim
+    class Function RoutingIdentifier: TUIMIdentifier; virtual;  // used in uim
     Function GetHashImplementation: THashImplementation; override;
     procedure SetHashImplementation(Value: THashImplementation); override;
-  {$IFNDEF PurePascal}
-    procedure ProcessBuffer_ASM(const Buffer; Size: TMemSize); virtual; register;
-  {$ENDIF}
-    procedure ProcessBuffer_PAS(const Buffer; Size: TMemSize); virtual; register;
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure InitializeTable; virtual; abstract;
     procedure FinalizeTable; virtual; abstract;
@@ -218,6 +217,7 @@ type
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
     constructor CreateAndInitFrom(Hash: TCRC32); overload; virtual;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TCRC32); reintroduce;
@@ -230,11 +230,11 @@ type
     property CRC32Table: PCRC32Table read fCRC32Table;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                    TCRC32Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {
   Hardcoded implementation of CRC-32/ISO-HDLC:
 
@@ -260,13 +260,13 @@ type
     procedure Init; override;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
-                                   TCRC32CHash                                  
-================================================================================
--------------------------------------------------------------------------------}
+{===============================================================================
+--------------------------------------------------------------------------------
+                                   TCRC32CHash
+--------------------------------------------------------------------------------
+===============================================================================}
 {
-  Hardcoded implementation of CRC-32/ISCSI:
+  Hardcoded implementation of CRC-32/ISCSI (Castagnoli):
 
                   polynomial        0x11EDC6F41
                initial value        0xFFFFFFFF
@@ -282,9 +282,6 @@ type
   protected
     class Function RoutingIdentifier: TUIMIdentifier; override;
     Function GetCRC32PolyRef: TCRC32Sys; override;
-  {$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
-    procedure ProcessBuffer_ACC(const Buffer; Size: TMemSize); virtual; register;
-  {$IFEND}
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure InitializeTable; override;
     procedure FinalizeTable; override;
@@ -294,11 +291,11 @@ type
     procedure Init; override;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                 TCRC32CustomHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {
   Set of presets (algorithm parameters) for some of the known CRC-32 variants.
 
@@ -501,6 +498,7 @@ const
 type
   TCRC32CustomHash = class(TCRC32BaseHash)
   protected
+    fName:          String;
     fCRC32Poly:     TCRC32Sys;  // actually in reflected bit order
     fInitialValue:  TCRC32;
     fReflectIn:     Boolean;
@@ -511,13 +509,14 @@ type
     procedure SetCRC32PolyRef(Value: TCRC32Sys); virtual;
     procedure SetInitialValue(Value: TCRC32); virtual;
     procedure SetReflectIn(Value: Boolean); virtual;
+    procedure SetReflectOut(Value: Boolean); virtual;
+    procedure SetXOROutValue(Value: TCRC32); virtual;
     procedure BuildTable; virtual;
     procedure InitializeTable; override;
     procedure FinalizeTable; override;
     procedure Initialize; override;
-    procedure Finalize; override;
   public
-    class Function HashName: String; override;
+    Function HashName: String; reintroduce; virtual;
     constructor CreateAndInitFrom(Hash: THashBase); override;
     constructor CreateAndLoadPreset(Preset: TCRC32CustomPreset); overload;
     constructor CreateAndLoadPreset(PresetIndex: Integer); overload;
@@ -532,29 +531,31 @@ type
     property CRC32PolyRef: TCRC32Sys read GetCRC32PolyRef write SetCRC32PolyRef;
     property InitialValue: TCRC32 read fInitialValue write SetInitialValue;
     property ReflectIn: Boolean read fReflectIn write SetReflectIn;
-    property ReflectOut: Boolean read fReflectOut write fReflectOut;
-    property XOROutValue: TCRC32 read fXOROutValue write fXOROutValue;
+    property ReflectOut: Boolean read fReflectOut write SetReflectOut;
+    property XOROutValue: TCRC32 read fXOROutValue write SetXOROutValue;
   end;
 
-{===============================================================================
-    Backward compatibility functions
-===============================================================================}
-{
-  All following functions are implemented as simple wrappers for TCRC32Hash
-  class and its methods.
-}
 
-Function CRC32ToStr(CRC32: TCRC32): String;
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - declaratio
+===============================================================================}
+
+Function CRC32ToStr(const CRC32: TCRC32): String;
 Function StrToCRC32(const Str: String): TCRC32;
 Function TryStrToCRC32(const Str: String; out CRC32: TCRC32): Boolean;
 Function StrToCRC32Def(const Str: String; Default: TCRC32): TCRC32;
 
-Function CompareCRC32(A,B: TCRC32): Integer;
-Function SameCRC32(A,B: TCRC32): Boolean;
+Function CompareCRC32(const A,B: TCRC32): Integer;
+Function SameCRC32(const A,B: TCRC32): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferCRC32(CRC32: TCRC32; const Buffer; Size: TMemSize): TCRC32; overload;
+Function BufferCRC32(const CRC32: TCRC32; const Buffer; Size: TMemSize): TCRC32; overload;
 
 Function BufferCRC32(const Buffer; Size: TMemSize): TCRC32; overload;
 
@@ -568,10 +569,10 @@ Function FileCRC32(const FileName: String): TCRC32;
 //------------------------------------------------------------------------------
 
 type
-  TCRC32Context = type Pointer;
+  TCRC32Context = type TCRC32Sys;
 
 Function CRC32_Init: TCRC32Context;
-procedure CRC32_Update(Context: TCRC32Context; const Buffer; Size: TMemSize);
+procedure CRC32_Update(var Context: TCRC32Context; const Buffer; Size: TMemSize);
 Function CRC32_Final(var Context: TCRC32Context; const Buffer; Size: TMemSize): TCRC32; overload;
 Function CRC32_Final(var Context: TCRC32Context): TCRC32; overload;
 Function CRC32_Hash(const Buffer; Size: TMemSize): TCRC32;
@@ -604,16 +605,10 @@ uses
 ===============================================================================}
 var
   ImplManager:        TImplementationManager = nil;
-  ProcessBufferDummy: Pointer = nil;
-
-{-------------------------------------------------------------------------------
-================================================================================
-                                 TCRC32BaseHash
-================================================================================
--------------------------------------------------------------------------------}
+  CRC32ProcessDummy:  Pointer = nil;
 
 {===============================================================================
-    TCRC32BaseHash - Utility functions
+    Internals implementation
 ===============================================================================}
 
 Function SwapEndian(Value: TCRC32Sys): TCRC32Sys; overload;
@@ -708,6 +703,299 @@ If Length(Str) > 0 then
 end;
 
 {===============================================================================
+    Main implementation
+===============================================================================}
+
+Function CRC32Process_PAS(const CRC32: TCRC32Sys; const Buffer; Size: TMemSize; CRC32TablePtr: PCRC32Table): TCRC32Sys; register;
+var
+  i:    TMemSize;
+  Buff: PByte;
+begin
+Result := CRC32;
+Buff := @Buffer;
+For i := 1 to Size do
+  begin
+    Result := CRC32TablePtr^[Byte(Result) xor Buff^] xor (Result shr 8);
+    Inc(Buff);
+  end;
+end;
+
+{$IFNDEF PurePascal}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CRC32Process_ASM(const CRC32: TCRC32Sys; const Buffer; Size: TMemSize; CRC32TablePtr: PCRC32Table): TCRC32Sys; register; assembler;
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+                       win32 & lin32       win64           lin64
+            CRC32           EAX             ECX             EDI
+           Buffer           EDX             RDX             RSI
+             Size           ECX             R8              RDX
+    CRC32TablePtr        [EBP + 8]          R9              RCX
+           Result           EAX             EAX             EAX
+
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}
+
+                MOV   EAX, ECX
+
+                TEST  R8, R8
+                JZ    @RoutineEnd
+
+  @MainLoop:    MOV   R10B, byte ptr [RDX]
+                XOR   R10B, AL
+                AND   R10, $00000000000000FF
+                MOV   R10D, dword ptr [R9 + R10 * 4]
+                SHR   EAX, 8
+                XOR   EAX, R10D
+
+                INC   RDX
+                DEC   R8
+                JNZ   @MainLoop
+
+  @RoutineEnd:   
+
+  {$ELSE}
+
+                MOV   EAX, EDI
+
+                TEST  RDX, RDX
+                JZ    @RoutineEnd
+
+  @MainLoop:    MOV   R8B, byte ptr [RSI]
+                XOR   R8B, AL
+                AND   R8, $00000000000000FF
+                MOV   R8D, dword ptr [RCX + R8 * 4]
+                SHR   EAX, 8
+                XOR   EAX, R8D
+
+                INC   RSI
+                DEC   RDX
+                JNZ   @MainLoop
+
+  @RoutineEnd:      
+
+  {$ENDIF}
+{$ELSE}
+
+                PUSH  ESI                   // preserve ESI on stack
+
+                LEA   ESI, CRC32TablePtr
+                MOV   ESI, dword ptr [ESI]  // address of CRC table into ESI
+
+                TEST  ECX, ECX              // check whether size is zero...
+                JZ    @RoutineEnd           // ...end calculation when it is
+
+
+                PUSH  EBX                   // preserve EBX on stack                
+                MOV   EBX, EDX              // move @Buffer to EBX (EDX is used for computations)
+
+  @MainLoop:    MOV   DL,  byte ptr [EBX]
+                XOR   DL,  AL
+                AND   EDX, $000000FF
+                MOV   EDX, dword ptr [ESI + EDX * 4]
+                SHR   EAX, 8
+                XOR   EAX, EDX
+
+                INC   EBX
+                DEC   ECX
+                JNZ   @MainLoop
+
+                POP   EBX                   // restore EBX register
+
+  @RoutineEnd:  POP   ESI                   // restore ESI register
+
+{$ENDIF}
+end;
+
+{$IFDEF CRC32C_Accelerated}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CRC32Process_ACC(const CRC32: TCRC32Sys; const Buffer; Size: TMemSize; CRC32TablePtr: PCRC32Table): TCRC32Sys; register; assembler;
+asm
+{ --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+                       win32 & lin32       win64           lin64
+            CRC32           EAX             ECX             EDI
+           Buffer           EDX             RDX             RSI
+             Size           ECX             R8              RDX
+    CRC32TablePtr        [EBP + 8]          R9              RCX
+           Result           EAX             EAX             EAX
+
+  Note that parameter CRC32TablePtr is completely ignored by this function and
+  is accepted only to make the function compliant with prescribed signature.
+
+  Current implementation expects relatively long buffers, so it is written with
+  larger overhead but shorter calculation cycles.
+
+--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- }
+{$IFDEF x64}
+  {$IFDEF Windows}//--  win64  -------------------------------------------------
+
+                MOV   EAX, ECX
+
+                TEST  R8, R8
+                JZ    @RoutineEnd
+
+                PUSH  R8
+                SHR   R8, 3
+                JZ    @ByteProc
+
+  @QuadLoop:  {$IFDEF ASM_MachineCode}
+                DB $F2, $48, $0F, $38, $F1, $02
+              {$ELSE}
+                CRC32 RAX, qword ptr [RDX]
+              {$ENDIF}
+                ADD   RDX, 8
+
+                DEC   R8
+                JNZ   @QuadLoop
+
+  @ByteProc:    POP   R8
+                AND   R8, 7
+                JZ    @RoutineEnd
+
+  @ByteLoop:  {$IFDEF ASM_MachineCode}
+                DB $F2, $48, $0F, $38, $F0, $02
+              {$ELSE}
+                CRC32 RAX, byte ptr [RDX]
+              {$ENDIF}
+                INC   RDX
+
+                DEC   R8
+                JNZ   @ByteLoop
+
+  @RoutineEnd: 
+
+  {$ELSE}//--  lin64  ----------------------------------------------------------
+
+                MOV   EAX, EDI
+
+                TEST  RDX, RDX
+                JZ    @RoutineEnd             
+
+                PUSH  RDX
+                SHR   RDX, 3
+                JZ    @ByteProc
+
+  @QuadLoop:  {$IFDEF ASM_MachineCode}
+                DB $F2, $48, $0F, $38, $F1, $06
+              {$ELSE}
+                CRC32 RAX, qword ptr [RSI]
+              {$ENDIF}
+                ADD   RSI, 8
+
+                DEC   RDX
+                JNZ   @QuadLoop
+
+  @ByteProc:    POP   RDX
+                AND   RDX, 7
+                JZ    @RoutineEnd
+
+  @ByteLoop:  {$IFDEF ASM_MachineCode}
+                DB $F2, $48, $0F, $38, $F0, $06
+              {$ELSE}
+                CRC32 RAX, byte ptr [RSI]
+              {$ENDIF}
+                INC   RSI
+
+                DEC   RDX
+                JNZ   @ByteLoop
+
+  @RoutineEnd:
+
+  {$ENDIF}
+{$ELSE}//--  win32 & lin32  ----------------------------------------------------
+
+                PUSH  EBX             // preserve EBX on stack
+
+                TEST  ECX, ECX        // check the size
+                JZ    @RoutineEnd     // end calculation when it is zero
+
+                PUSH  ECX
+                SHR   ECX, 2
+                JZ    @ByteProc
+
+  @LongLoop:  {$IFDEF ASM_MachineCode}
+                DB $F2, $0F, $38, $F1, $02
+              {$ELSE}
+                CRC32 EAX, dword ptr [EDX]
+              {$ENDIF}
+                ADD   EDX, 4
+
+                DEC   ECX
+                JNZ   @LongLoop
+
+  @ByteProc:    POP   ECX
+                AND   ECX, 3
+                JZ    @RoutineEnd
+
+  @ByteLoop:  {$IFDEF ASM_MachineCode}
+                DB $F2, $0F, $38, $F0, $02
+              {$ELSE}
+                CRC32 EAX, byte ptr [EDX]
+              {$ENDIF}
+                INC   EDX
+
+                DEC   ECX
+                JNZ   @ByteLoop
+
+  @RoutineEnd:  POP   EBX             // restore EBX register
+
+{$ENDIF}
+end;
+
+{$ENDIF}
+{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function CRC32Compare(const A,B: TCRC32Sys): Integer;
+begin
+If A > B then
+  Result := +1
+else If A < B then
+  Result := -1
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC32Same(const A,B: TCRC32Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC32AsString(const CRC32: TCRC32Sys): String;
+begin
+Result := IntToHex(CRC32,8);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC32FromString(const Str: String): TCRC32Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TCRC32Sys(StrToInt(Str))
+    else
+      Result := TCRC32Sys(StrToInt('$' + Str));
+  end
+else Result := TCRC32Hash.CRC32ToSys(ZeroCRC32);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 TCRC32BaseHash
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
     TCRC32BaseHash - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
@@ -741,7 +1029,7 @@ var
   Index:    Integer;
 begin
 Routing := ImplManager.RoutingFindObj(RoutingIdentifier);
-If Routing.Find(TMethod(fProcessBuffer).Code,Index) then
+If Routing.Find(@fCRC32Process,Index) then
   Result := THashImplementation(Routing[Index].ImplementationID)
 else
   raise ECRC32NoImplementation.Create('TCRC32BaseHash.GetHashImplementation: No implementation selected.');
@@ -757,176 +1045,16 @@ begin
 // do not call inherited
 Routing := ImplManager.RoutingFindObj(RoutingIdentifier);
 If Routing.Follow(TUIMIdentifier(Value),Index) then
-  begin
-    TMethod(fProcessBuffer).Code := Routing[Index].ImplementorFunction;
-    TMethod(fProcessBuffer).Data := Self;
-  end
-else raise ECRC32NoImplementation.CreateFmt('TCRC32BaseHash.SetHashImplementation: Selected implementation (%d) not found.',[Ord(Value)]);
-end;
-
-//------------------------------------------------------------------------------
-
-{$IFNDEF PurePascal}
-procedure TCRC32BaseHash.ProcessBuffer_ASM(const Buffer; Size: TMemSize); assembler;
-asm
-{$IFDEF x64}
-{$IFDEF Windows}
-{-------------------------------------------------------------------------------
-  x86-64 assembly (64bit) - Windows
-
-  Content of registers on enter:
-
-    RCX   Self
-    RDX   pointer to Buffer
-    R8    Size
-
-  Used registers:
-    RAX, RCX, RDX, R8, R9, R10
--------------------------------------------------------------------------------}
-
-                MOV   R10, qword ptr Self.fCRC32Table // address of CRC table into R10
-                LEA   RCX, Self.fCRC32Value           // load address of CRC
-                MOV   R9D, dword ptr [RCX]            // move old CRC into R9D
-
-                TEST  R8, R8                          // check whether size is zero...
-                JZ    @RoutineEnd                     // ...end calculation when it is
-
-//-- Main calculation, loop executed RCX times ---------------------------------
-
-  @MainLoop:    MOV   AL,  byte ptr [RDX]
-                XOR   AL,  R9B
-                AND   RAX, $00000000000000FF
-                MOV   EAX, dword ptr [R10 + RAX * 4]
-                SHR   R9D, 8
-                XOR   R9D, EAX
-                INC   RDX
-
-                DEC   R8
-                JNZ   @MainLoop
-
-//-- Routine end ---------------------------------------------------------------
-
-  @RoutineEnd:  MOV   dword ptr [RCX], R9D        // store result
-
-{$ELSE Windows}
-{-------------------------------------------------------------------------------
-  x86-64 assembly (64bit) - Linux
-
-  Content of registers on enter:
-
-    RDI   Self
-    RSI   pointer to Buffer
-    RDX   Size
-
-  Used registers:
-    RAX, RDX, RDI, RSI, R8, R9
--------------------------------------------------------------------------------}
-
-                MOV   R9, qword ptr Self.fCRC32Table  // address of CRC table into R9
-                LEA   RDI, Self.fCRC32Value           // load address of CRC
-                MOV   R8D, dword ptr [RDI]            // move old CRC into R8D
-
-                TEST  RDX, RDX                        // check whether size is zero...
-                JZ    @RoutineEnd                     // ...end calculation when it is
-
-//-- Main calculation, loop executed RCX times ---------------------------------
-
-  @MainLoop:    MOV   AL,  byte ptr [RSI]
-                XOR   AL,  R8B
-                AND   RAX, $00000000000000FF
-                MOV   EAX, dword ptr [R9 + RAX * 4]
-                SHR   R8D, 8
-                XOR   R8D, EAX
-                INC   RSI
-
-                DEC   RDX
-                JNZ   @MainLoop
-
-//-- Routine end ---------------------------------------------------------------
-
-  @RoutineEnd:  MOV   dword ptr [RDI], R8D        // store result
-
-{$ENDIF Windows}
-{$ELSE x64}
-{-------------------------------------------------------------------------------
-  x86 assembly (32bit) - Windows, Linux
-
-  Content of registers on enter:
-
-    EAX   Self
-    EDX   pointer to Buffer
-    ECX   Size
-
-  Used registers:
-    EAX, EBX (value preserved), ECX, EDX, ESI (value preserved)
--------------------------------------------------------------------------------}
-
-                PUSH  ESI                               // preserve ESI on stack
-                MOV   ESI, dword ptr Self.fCRC32Table   // address of CRC table into ESI
-
-                LEA   EAX, Self.fCRC32Value             // load address of CRC
-                PUSH  EAX                               // preserve address of CRC on stack
-                MOV   EAX, dword ptr [EAX]              // move old CRC into EAX
-
-                TEST  ECX, ECX                          // check whether size is zero...
-                JZ    @RoutineEnd                       // ...end calculation when it is
-
-                PUSH  EBX                               // preserve EBX on stack
-                MOV   EBX, EDX                          // move @Buffer to EBX
-
-//-- Main calculation, loop executed ECX times ---------------------------------
-
-  @MainLoop:    MOV   DL,  byte ptr [EBX]
-                XOR   DL,  AL
-                AND   EDX, $000000FF
-                MOV   EDX, dword ptr [ESI + EDX * 4]
-                SHR   EAX, 8
-                XOR   EAX, EDX
-                INC   EBX
-
-                DEC   ECX
-                JNZ   @MainLoop
-
-//-- Routine end ---------------------------------------------------------------
-
-                POP   EBX                   // restore EBX register
-
-  @RoutineEnd:  POP   EDX                   // get address of CRC from stack
-                MOV   dword ptr [EDX], EAX  // store result
-
-                POP   ESI                   // restore ESI register
-
-{$ENDIF x64}
-end;
-{$ENDIF PurePascal}
-
-//------------------------------------------------------------------------------
-
-procedure TCRC32BaseHash.ProcessBuffer_PAS(const Buffer; Size: TMemSize);
-var
-  WorkCRC:  TCRC32Sys;
-  i:        TMemSize;
-  Buff:     PByte;
-begin
-{
-  Make local copy of CRC and work on it - it should be faster than constantly
-  accessing object field.
-}
-WorkCRC := fCRC32Value;
-Buff := @Buffer;
-For i := 1 to Size do
-  begin
-    WorkCRC := fCRC32Table^[Byte(WorkCRC) xor Buff^] xor (WorkCRC shr 8);
-    Inc(Buff);
-  end;
-fCRC32Value := WorkCRC;
+  @fCRC32Process := Routing[Index].ImplementorFunction
+else
+  raise ECRC32NoImplementation.CreateFmt('TCRC32BaseHash.SetHashImplementation: Selected implementation (%d) not found.',[Ord(Value)]);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TCRC32BaseHash.ProcessBuffer(const Buffer; Size: TMemSize);
 begin
-fProcessBuffer(Buffer,Size);
+fCRC32Value := fCRC32Process(fCRC32Value,Buffer,Size,fCRC32Table);
 end;
 
 //------------------------------------------------------------------------------
@@ -1066,36 +1194,33 @@ end;
 Function TCRC32BaseHash.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TCRC32BaseHash then
-  begin
-    If fCRC32Value > TCRC32BaseHash(Hash).CRC32Sys then
-      Result := +1
-    else If fCRC32Value < TCRC32BaseHash(Hash).CRC32Sys then
-      Result := -1
-    else
-      Result := 0;
-  end
-else raise ECRC32IncompatibleClass.CreateFmt('TCRC32BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := CRC32Compare(fCRC32Value,TCRC32BaseHash(Hash).CRC32Sys)
+else
+  raise ECRC32IncompatibleClass.CreateFmt('TCRC32BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCRC32BaseHash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TCRC32BaseHash then
+  Result := CRC32Same(fCRC32Value,TCRC32BaseHash(Hash).CRC32Sys)
+else
+  raise ECRC32IncompatibleClass.CreateFmt('TCRC32BaseHash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TCRC32BaseHash.AsString: String;
 begin
-Result := IntToHex(fCRC32Value,8);
+Result := CRC32AsString(fCRC32Value);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TCRC32BaseHash.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fCRC32Value := TCRC32Sys(StrToInt(Str))
-    else
-      fCRC32Value := TCRC32Sys(StrToInt('$' + Str));
-  end
-else fCRC32Value := CRC32ToSys(ZeroCRC32);
+fCRC32Value := CRC32FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -1142,11 +1267,11 @@ end;
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                    TCRC32Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TCRC32Hash - calculation constants
 ===============================================================================}
@@ -1186,6 +1311,17 @@ const
     $AED16A4A, $D9D65ADC, $40DF0B66, $37D83BF0, $A9BCAE53, $DEBB9EC5, $47B2CF7F, $30B5FFE9,
     $BDBDF21C, $CABAC28A, $53B39330, $24B4A3A6, $BAD03605, $CDD70693, $54DE5729, $23D967BF,
     $B3667A2E, $C4614AB8, $5D681B02, $2A6F2B94, $B40BBE37, $C30C8EA1, $5A05DF1B, $2D02EF8D);
+
+//------------------------------------------------------------------------------
+
+Function CRC32Process(const CRC32: TCRC32Sys; const Buffer; Size: TMemSize): TCRC32Sys;
+begin
+{$IFDEF PurePascal}
+Result := not CRC32Process_PAS(not CRC32,Buffer,Size,@CRC32_TABLE);
+{$ELSE}
+Result := not CRC32Process_ASM(not CRC32,Buffer,Size,@CRC32_TABLE);
+{$ENDIF}
+end;
 
 {===============================================================================
     TCRC32Hash - class implementation
@@ -1247,11 +1383,11 @@ fCRC32Value := CRC32ToSys(InitialCRC32);
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                    TCRC32CHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TCRC32CHash - calculation constants
 ===============================================================================}
@@ -1313,194 +1449,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IF not Defined(PurePascal) and Defined(CRC32C_Accelerated)}
-{
-  Note that following implementation expects relatively long buffers, so it is
-  written with larger overhead but shorter calculation cycles.
-}
-procedure TCRC32CHash.ProcessBuffer_ACC(const Buffer; Size: TMemSize); assembler;
-asm
-{$IFDEF x64}
-{$IFDEF Windows}
-{-------------------------------------------------------------------------------
-  x86-64 assembly (64bit) - Windows
-
-  Content of registers on enter:
-
-    RCX   Self
-    RDX   pointer to Buffer
-    R8    Size
-
-  Used registers:
-    RAX, RCX, RDX, R8
--------------------------------------------------------------------------------}
-
-                LEA   RCX, Self.fCRC32Value   // load address of CRC
-
-                TEST  R8, R8                  // check the size
-                JZ    @RoutineEnd             // end calculation when it is zero
-
-//-- Main calculation ----------------------------------------------------------
-
-                MOV   EAX, dword ptr [RCX]    // load old crc value
-
-                PUSH  R8
-                SHR   R8, 3
-                JZ    @ByteProc
-
-  @QuadLoop:  {$IFDEF ASM_MachineCode}
-                DB $F2, $48, $0F, $38, $F1, $02
-              {$ELSE}
-                CRC32 RAX, qword ptr [RDX]
-              {$ENDIF}
-                ADD   RDX, 8
-
-                DEC   R8
-                JNZ   @QuadLoop
-
-  @ByteProc:    POP   R8
-                AND   R8, 7
-                JZ    @ProcDone
-
-  @ByteLoop:  {$IFDEF ASM_MachineCode}
-                DB $F2, $48, $0F, $38, $F0, $02
-              {$ELSE}
-                CRC32 RAX, byte ptr [RDX]
-              {$ENDIF}
-                INC   RDX
-
-                DEC   R8
-                JNZ   @ByteLoop
-
-  @ProcDone:    MOV   dword ptr [RCX], EAX    // store resulting crc
-
-//-- Routine end ---------------------------------------------------------------
-
-  @RoutineEnd:
-
-{$ELSE Windows}
-{-------------------------------------------------------------------------------
-  x86-64 assembly (64bit) - Linux
-
-  Content of registers on enter:
-
-    RDI   Self
-    RSI   pointer to Buffer
-    RDX   Size
-
-  Used registers:
-    RAX, RDX, RDI, RSI
--------------------------------------------------------------------------------}
-
-                LEA   RDI, Self.fCRC32Value   // load address of CRC
-
-                TEST  RDX, RDX                // check the size
-                JZ    @RoutineEnd             // end calculation when it is zero
-
-//-- Main calculation ----------------------------------------------------------
-
-                MOV   EAX, dword ptr [RDI]    // load old crc value
-
-                PUSH  RDX
-                SHR   RDX, 3
-                JZ    @ByteProc
-
-  @QuadLoop:  {$IFDEF ASM_MachineCode}
-                DB $F2, $48, $0F, $38, $F1, $06
-              {$ELSE}
-                CRC32 RAX, qword ptr [RSI]
-              {$ENDIF}
-                ADD   RSI, 8
-
-                DEC   RDX
-                JNZ   @QuadLoop
-
-  @ByteProc:    POP   RDX
-                AND   RDX, 7
-                JZ    @ProcDone
-
-  @ByteLoop:  {$IFDEF ASM_MachineCode}
-                DB $F2, $48, $0F, $38, $F0, $06
-              {$ELSE}
-                CRC32 RAX, byte ptr [RSI]
-              {$ENDIF}
-                INC   RSI
-
-                DEC   RDX
-                JNZ   @ByteLoop
-
-  @ProcDone:    MOV   dword ptr [RDI], EAX    // store resulting crc
-
-//-- Routine end ---------------------------------------------------------------
-
-  @RoutineEnd:
-
-{$ENDIF Windows}
-{$ELSE x64}
-{-------------------------------------------------------------------------------
-  x86 assembly (32bit) - Windows, Linux
-
-  Content of registers on enter:
-
-    EAX   Self
-    EDX   pointer to Buffer
-    ECX   Size
-
-  Used registers:
-    EAX, EBX (value preserved), ECX, EDX
--------------------------------------------------------------------------------}
-
-                PUSH  EBX                     // preserve EBX on stack
-
-                LEA   EBX, Self.fCRC32Value   // load address of CRC
-
-                TEST  ECX, ECX                // check the size
-                JZ    @RoutineEnd             // end calculation when it is zero
-
-//-- Main calculation ----------------------------------------------------------
-
-                MOV   EAX, dword ptr [EBX]    // load old crc value
-
-                PUSH  ECX
-                SHR   ECX, 2
-                JZ    @ByteProc
-
-  @LongLoop:  {$IFDEF ASM_MachineCode}
-                DB $F2, $0F, $38, $F1, $02
-              {$ELSE}
-                CRC32 EAX, dword ptr [EDX]
-              {$ENDIF}
-                ADD   EDX, 4
-
-                DEC   ECX
-                JNZ   @LongLoop
-
-  @ByteProc:    POP   ECX
-                AND   ECX, 3
-                JZ    @ProcDone
-
-  @ByteLoop:  {$IFDEF ASM_MachineCode}
-                DB $F2, $0F, $38, $F0, $02
-              {$ELSE}
-                CRC32 EAX, byte ptr [EDX]
-              {$ENDIF}
-                INC   EDX
-
-                DEC   ECX
-                JNZ   @ByteLoop
-
-  @ProcDone:    MOV   dword ptr [EBX], EAX    // store resulting crc
-
-//-- Routine end ---------------------------------------------------------------
-
-  @RoutineEnd:  POP   EBX                     // restore EBX register
-
-{$ENDIF x64}
-end;
-{$IFEND}
-
-//------------------------------------------------------------------------------
-
 procedure TCRC32CHash.ProcessBuffer(const Buffer; Size: TMemSize);
 begin
 fCRC32Value := not fCRC32Value;
@@ -1547,11 +1495,14 @@ fCRC32Value := CRC32ToSys(InitialCRC32);
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                 TCRC32CustomHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
+const
+  CRC32_CUSTOM_DEFNAME = 'CRC-32(custom)';
+
 {===============================================================================
     TCRC32CustomHash - class implementation
 ===============================================================================}
@@ -1577,6 +1528,7 @@ procedure TCRC32CustomHash.SetCRC32PolyRef(Value: TCRC32Sys);
 begin
 If fCRC32Poly <> Value then
   begin
+    fName := CRC32_CUSTOM_DEFNAME;
     fCRC32Poly := Value;
     BuildTable;
     // invalidate running computations
@@ -1591,6 +1543,7 @@ procedure TCRC32CustomHash.SetInitialValue(Value: TCRC32);
 begin
 If CRC32ToSys(Value) <> CRC32ToSys(fInitialValue) then
   begin
+    fName := CRC32_CUSTOM_DEFNAME;
     fInitialValue := Value;
     If fInitialized and not fFinalized then
       fInitialized := False;    
@@ -1603,10 +1556,33 @@ procedure TCRC32CustomHash.SetReflectIn(Value: Boolean);
 begin
 If Value <> fReflectIn then
   begin
+    fName := CRC32_CUSTOM_DEFNAME;
     fReflectIn := Value;
     BuildTable;
     If fInitialized and not fFinalized then
       fInitialized := False;    
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TCRC32CustomHash.SetReflectOut(Value: Boolean);
+begin
+If Value <> fReflectOut then
+  begin
+    fName := CRC32_CUSTOM_DEFNAME;
+    fReflectOut := Value;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TCRC32CustomHash.SetXOROutValue(Value: TCRC32);
+begin
+If CRC32ToSys(Value) <> CRC32ToSys(fXOROutValue) then
+  begin
+    fName := CRC32_CUSTOM_DEFNAME;
+    fXOROutValue := Value;
   end;
 end;
 
@@ -1656,6 +1632,7 @@ end;
 
 procedure TCRC32CustomHash.Initialize;
 begin
+fName := CRC32_KNOWN_PRESETS[CRC32_DEFAULT_PRESET_IDX].Name;
 fCRC32Poly := CRC32_KNOWN_PRESETS[CRC32_DEFAULT_PRESET_IDX].RefPolynomial;
 fInitialValue := CRC32_KNOWN_PRESETS[CRC32_DEFAULT_PRESET_IDX].InitialValue;
 fReflectIn := CRC32_KNOWN_PRESETS[CRC32_DEFAULT_PRESET_IDX].ReflectIn;
@@ -1664,20 +1641,13 @@ fXOROutValue := CRC32_KNOWN_PRESETS[CRC32_DEFAULT_PRESET_IDX].XOROutValue;
 inherited;  // calls InitializeTable
 end;
 
-//------------------------------------------------------------------------------
-
-procedure TCRC32CustomHash.Finalize;
-begin
-inherited;
-end;
-
 {-------------------------------------------------------------------------------
     TCRC32CustomHash - public methods
 -------------------------------------------------------------------------------}
 
-class Function TCRC32CustomHash.HashName: String;
+Function TCRC32CustomHash.HashName: String;
 begin
-Result := 'CRC-32(custom)';
+Result := fName;
 end;
 
 //------------------------------------------------------------------------------
@@ -1687,6 +1657,7 @@ begin
 inherited CreateAndInitFrom(Hash);
 If Hash is TCRC32CustomHash then
   begin
+    fName := TCRC32CustomHash(Hash).fName;
     fCRC32Poly := TCRC32CustomHash(Hash).CRC32PolyRef;
     fInitialValue := TCRC32CustomHash(Hash).InitialValue;
     fReflectIn := TCRC32CustomHash(Hash).ReflectIn;
@@ -1725,6 +1696,7 @@ end;
 
 procedure TCRC32CustomHash.LoadPreset(Preset: TCRC32CustomPreset);
 begin
+fName := Preset.Name;
 fCRC32Poly := Preset.RefPolynomial;
 fInitialValue := Preset.InitialValue;
 fReflectIn := Preset.ReflectIn;
@@ -1879,185 +1851,98 @@ end;
 
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - declaratio
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - utility functions
+    Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function CRC32ToStr(CRC32: TCRC32): String;
-var
-  Hash: TCRC32Hash;
+Function CRC32ToStr(const CRC32: TCRC32): String;
 begin
-Hash := TCRC32Hash.CreateAndInitFrom(CRC32);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := CRC32AsString(TCRC32Hash.CRC32ToSys(CRC32));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC32(const Str: String): TCRC32;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+Result := TCRC32Hash.CRC32FromSys(CRC32FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToCRC32(const Str: String; out CRC32: TCRC32): Boolean;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    CRC32 := Hash.CRC32;
-finally
-  Hash.Free;
+  CRC32 := TCRC32Hash.CRC32FromSys(CRC32FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC32Def(const Str: String; Default: TCRC32): TCRC32;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+If not TryStrToCRC32(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareCRC32(A,B: TCRC32): Integer;
-var
-  HashA:  TCRC32Hash;
-  HashB:  TCRC32Hash;
+Function CompareCRC32(const A,B: TCRC32): Integer;
 begin
-HashA := TCRC32Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC32Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC32Compare(TCRC32Hash.CRC32ToSys(A),TCRC32Hash.CRC32ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameCRC32(A,B: TCRC32): Boolean;
-var
-  HashA:  TCRC32Hash;
-  HashB:  TCRC32Hash;
+Function SameCRC32(const A,B: TCRC32): Boolean;
 begin
-HashA := TCRC32Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC32Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC32Same(TCRC32Hash.CRC32ToSys(A),TCRC32Hash.CRC32ToSys(B));
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - processing functions
+    Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferCRC32(CRC32: TCRC32; const Buffer; Size: TMemSize): TCRC32;
-var
-  Hash: TCRC32Hash;
+Function BufferCRC32(const CRC32: TCRC32; const Buffer; Size: TMemSize): TCRC32;
 begin
-Hash := TCRC32Hash.CreateAndInitFrom(CRC32);
-try
-  Hash.Final(Buffer,Size);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+Result := TCRC32Hash.CRC32FromSys(CRC32Process(TCRC32Hash.CRC32ToSys(CRC32),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function BufferCRC32(const Buffer; Size: TMemSize): TCRC32;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+Result := TCRC32Hash.CRC32FromSys(CRC32Process(TCRC32Hash.CRC32ToSys(InitialCRC32),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringCRC32(const Str: AnsiString): TCRC32;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
-try
-  Hash.HashAnsiString(Str);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC32(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringCRC32(const Str: WideString): TCRC32;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
-try
-  Hash.HashWideString(Str);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC32(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StringCRC32(const Str: String): TCRC32;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
-try
-  Hash.HashString(Str);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC32(PChar(Str)^,Length(Str) * SizeOf(Char));
 end;
 
 //------------------------------------------------------------------------------
@@ -2091,22 +1976,19 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - context functions
+    Standalone functions - context functions
 -------------------------------------------------------------------------------}
 
 Function CRC32_Init: TCRC32Context;
-var
-  Temp: TCRC32Hash;
 begin
-Temp := TCRC32Hash.CreateAndInit;
-Result := TCRC32Context(Temp);
+Result := TCRC32Context(TCRC32Hash.CRC32ToSys(InitialCRC32));
 end;
 
 //------------------------------------------------------------------------------
 
-procedure CRC32_Update(Context: TCRC32Context; const Buffer; Size: TMemSize);
+procedure CRC32_Update(var Context: TCRC32Context; const Buffer; Size: TMemSize);
 begin
-TCRC32Hash(Context).Update(Buffer,Size);
+TCRC32Sys(Context) := CRC32Process(TCRC32Sys(Context),Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
@@ -2121,32 +2003,23 @@ end;
 
 Function CRC32_Final(var Context: TCRC32Context): TCRC32;
 begin
-TCRC32Hash(Context).Final;
-Result := TCRC32Hash(Context).CRC32;
-FreeAndNil(TCRC32Hash(Context));
+Result := TCRC32Hash.CRC32FromSys(TCRC32Sys(Context));
+Context := TCRC32Context(TCRC32Hash.CRC32ToSys(ZeroCRC32));
 end;
 
 //------------------------------------------------------------------------------
 
 Function CRC32_Hash(const Buffer; Size: TMemSize): TCRC32;
-var
-  Hash: TCRC32Hash;
 begin
-Hash := TCRC32Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC32;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC32(Buffer,Size);
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                          Unit implementation management
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 
 procedure UnitInitialiaze;
 
@@ -2165,28 +2038,28 @@ procedure UnitInitialiaze;
 begin
 ImplManager := TImplementationManager.Create;
 // TCRC32BaseHash...
-AddRoutingSelect(ImplManager,TUIMIdentifier(0),ProcessBufferDummy,[
-  ImplInfo(TUIMIdentifier(hiPascal),@TCRC32BaseHash.ProcessBuffer_PAS),
+AddRoutingSelect(ImplManager,TUIMIdentifier(0),CRC32ProcessDummy,[
+  ImplInfo(TUIMIdentifier(hiPascal),@CRC32Process_PAS),
 {$IFDEF PurePascal}
-  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32BaseHash.ProcessBuffer_PAS,False,False),
-  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32BaseHash.ProcessBuffer_PAS,False,False)
+  ImplInfo(TUIMIdentifier(hiAssembly),@CRC32Process_PAS,False,False),
+  ImplInfo(TUIMIdentifier(hiAccelerated),@CRC32Process_PAS,False,False)
 {$ELSE}
-  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32BaseHash.ProcessBuffer_ASM),
-  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32BaseHash.ProcessBuffer_ASM,False,False)
+  ImplInfo(TUIMIdentifier(hiAssembly),@CRC32Process_ASM),
+  ImplInfo(TUIMIdentifier(hiAccelerated),@CRC32Process_ASM,False,False)
 {$ENDIF}
 ],TUIMIdentifier(hiPascal));
 // TCRC32CHash...
-AddRoutingSelect(ImplManager,TUIMIdentifier(1),ProcessBufferDummy,[
-  ImplInfo(TUIMIdentifier(hiPascal),@TCRC32CHash.ProcessBuffer_PAS),
+AddRoutingSelect(ImplManager,TUIMIdentifier(1),CRC32ProcessDummy,[
+  ImplInfo(TUIMIdentifier(hiPascal),@CRC32Process_PAS),
 {$IFDEF PurePascal}
-  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32CHash.ProcessBuffer_PAS,False,False),
-  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_PAS,False,False)
+  ImplInfo(TUIMIdentifier(hiAssembly),@CRC32Process_PAS,False,False),
+  ImplInfo(TUIMIdentifier(hiAccelerated),@CRC32PRocess_PAS,False,False)
 {$ELSE}
-  ImplInfo(TUIMIdentifier(hiAssembly),@TCRC32CHash.ProcessBuffer_ASM),
+  ImplInfo(TUIMIdentifier(hiAssembly),@CRC32Process_ASM),
 {$IFDEF CRC32C_Accelerated}
-  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_ACC,CRC32CAccelerationSupported)
+  ImplInfo(TUIMIdentifier(hiAccelerated),@CRC32Process_ACC,CRC32CAccelerationSupported)
 {$ELSE}
-  ImplInfo(TUIMIdentifier(hiAccelerated),@TCRC32CHash.ProcessBuffer_ASM,False,False)
+  ImplInfo(TUIMIdentifier(hiAccelerated),@CRC32Process_ASM,False,False)
 {$ENDIF}
 {$ENDIF}
 ],TUIMIdentifier(hiPascal));

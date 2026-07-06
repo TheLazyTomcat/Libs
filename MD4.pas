@@ -12,9 +12,9 @@
     Please note that implementation of MD4 is more-or-less just a direct copy
     of MD5 codebase, only with changed block processing.
 
-  Version 1.4.1 (2020-07-13)
+  Version 1.4.2 (2026-07-04)
 
-  Last change 2026-02-26
+  Last change 2026-07-04
 
   ©2015-2026 František Milt
 
@@ -53,8 +53,6 @@ unit MD4;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -69,6 +67,15 @@ uses
   AuxTypes, HashBase;
 
 {===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  EMD4Exception = class(EHashException);
+
+  EMD4IncompatibleClass = class(EMD4Exception);
+  EMD4ProcessingError   = class(EMD4Exception);
+
+{===============================================================================
     Common types and constants
 ===============================================================================}
 {
@@ -77,10 +84,6 @@ uses
 
   Type TMD4Sys has no such guarantee and its internal structure depends on
   current implementation.
-
-  MD4 does not differ in little and big endian form, as it is not a single
-  quantity, therefore methods like MD4ToLE or MD4ToBE do nothing and are
-  present only for the sake of completeness.
 }
 type
   TMD4 = packed array[0..15] of UInt8;
@@ -98,17 +101,11 @@ const
   InitialMD4: TMD4 = ($01,$23,$45,$67,$89,$AB,$CD,$EF,$FE,$DC,$BA,$98,$76,$54,$32,$10);
   ZeroMD4:    TMD4 = ($00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00);
 
-type
-  EMD4Exception = class(EHashException);
-
-  EMD4IncompatibleClass = class(EMD4Exception);
-  EMD4ProcessingError   = class(EMD4Exception);
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TMD4Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TMD4Hash - class declaration
 ===============================================================================}
@@ -136,6 +133,7 @@ type
     constructor CreateAndInitFrom(Hash: TMD4); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TMD4); reintroduce;
@@ -146,22 +144,29 @@ type
   end;
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - declaration
 ===============================================================================}
 
-Function MD4toStr(MD4: TMD4): String;
-Function StrToMD4(Str: String): TMD4;
+Function MD4toStr(const MD4: TMD4): String;
+Function StrToMD4(const Str: String): TMD4;
 Function TryStrToMD4(const Str: String; out MD4: TMD4): Boolean;
 Function StrToMD4Def(const Str: String; Default: TMD4): TMD4;
 
-Function CompareMD4(A,B: TMD4): Integer;
-Function SameMD4(A,B: TMD4): Boolean;
+Function CompareMD4(const A,B: TMD4): Integer;
+Function SameMD4(const A,B: TMD4): Boolean;
 
-Function BinaryCorrectMD4(MD4: TMD4): TMD4;
+Function BinaryCorrectMD4(const MD4: TMD4): TMD4; deprecated;
+
+//------------------------------------------------------------------------------
 
 procedure BufferMD4(var MD4: TMD4; const Buffer; Size: TMemSize); overload;
-Function LastBufferMD4(MD4: TMD4; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD4; overload;
-Function LastBufferMD4(MD4: TMD4; const Buffer; Size: TMemSize): TMD4; overload;
+Function LastBufferMD4(const MD4: TMD4; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD4; overload;
+Function LastBufferMD4(const MD4: TMD4; const Buffer; Size: TMemSize): TMD4; overload;
 
 Function BufferMD4(const Buffer; Size: TMemSize): TMD4; overload;
 
@@ -173,7 +178,6 @@ Function StreamMD4(Stream: TStream; Count: Int64 = -1): TMD4;
 Function FileMD4(const FileName: String): TMD4;
 
 //------------------------------------------------------------------------------
-
 type
   TMD4Context = type Pointer;
 
@@ -190,18 +194,11 @@ uses
   SysUtils,
   BitOps;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable  
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
-{$ENDIF}
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TMD4Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TMD4Hash - calculation constants
 ===============================================================================}
@@ -217,6 +214,74 @@ const
     3,  7, 11, 19,  3,  7, 11, 19,  3,  7, 11, 19,  3,  7, 11, 19,
     3,  5,  9, 13,  3,  5,  9, 13,  3,  5,  9, 13,  3,  5,  9, 13,
     3,  9, 11, 15,  3,  9, 11, 15,  3,  9, 11, 15,  3,  9, 11, 15);
+
+{===============================================================================
+    TMD4Hash - auxiliary functions
+===============================================================================}
+
+Function MD4Compare(const A,B: TMD4): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+For i := Low(A) to High(A) do
+  If A[i] > B[i] then
+    begin
+      Result := +1;
+      Break;
+    end
+  else If A[i] < B[i] then
+    begin
+      Result := -1;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD4Same(const A,B: TMD4): Boolean;
+var
+  i:  Integer;
+begin
+Result := True;
+For i := Low(A) to High(A) do
+  If A[i] <> B[i] then
+    begin
+      Result := False;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD4AsString(const MD4: TMD4): String;
+var
+  i:  Integer;
+begin
+Result := StringOfChar('0',SizeOf(TMD4) * 2);
+For i := Low(MD4) to High(MD4) do
+  begin
+    Result[(i * 2) + 2] := IntToHex(MD4[i] and $0F,1)[1];
+    Result[(i * 2) + 1] := IntToHex(MD4[i] shr 4,1)[1];
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD4FromString(const Str: String): TMD4;
+var
+  TempStr:  String;
+  i:        Integer;
+begin
+If Length(Str) < (SizeOf(TMD4) * 2) then
+  TempStr := StringOfChar('0',(SizeOf(TMD4) * 2) - Length(Str)) + Str
+else If Length(Str) > (SizeOf(TMD4) * 2) then
+  TempStr := Copy(Str,Length(Str) - Pred(SizeOf(TMD4) * 2),SizeOf(TMD4) * 2)
+else
+  TempStr := Str;
+For i := Low(Result) to High(Result) do
+  Result[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
+end;
 
 {===============================================================================
     TMD4Hash - class implementation
@@ -287,12 +352,10 @@ begin
 If (fBlockSize - fTransCount) >= (SizeOf(UInt64) + 1) then
   begin
     // padding and length can fit
-  {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-    FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
-    PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := $80;
-    PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
-      {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
+    FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,0);
+    PUInt8(PtrAdvance(fTransBlock,TMemOff(fTransCount)))^ := $80;
+    PUInt64(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - SizeOf(UInt64)))^ :=
+      {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);  
     ProcessBlock(fTransBlock^);
   end
 else
@@ -300,16 +363,12 @@ else
     // padding and length cannot fit  
     If fBlockSize > fTransCount then
       begin
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
-        PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := $80;
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,0);
+        PUInt8(PtrAdvance(fTransBlock,TMemOff(fTransCount)))^ := $80;
         ProcessBlock(fTransBlock^);
         FillChar(fTransBlock^,fBlockSize,0);
-      {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-        PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
+        PUInt64(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - SizeOf(UInt64)))^ :=
           {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
         ProcessBlock(fTransBlock^);        
       end
     else raise EMD4ProcessingError.CreateFmt('TMD4Hash.ProcessLast: Invalid data transfer (%d).',[fTransCount]);
@@ -362,6 +421,7 @@ end;
 class Function TMD4Hash.MD4ToLE(MD4: TMD4): TMD4;
 begin
 Result := MD4;
+SwapEndian(Result,SizeOf(TMD4));
 end;
 
 //------------------------------------------------------------------------------
@@ -376,6 +436,7 @@ end;
 class Function TMD4Hash.MD4FromLE(MD4: TMD4): TMD4;
 begin
 Result := MD4;
+SwapEndian(Result,SizeOf(TMD4));
 end;
 
 //------------------------------------------------------------------------------
@@ -444,63 +505,35 @@ end;
 //------------------------------------------------------------------------------
 
 Function TMD4Hash.Compare(Hash: THashBase): Integer;
-var
-  A,B:  TMD4;
-  i:    Integer;
 begin
 If Hash is TMD4Hash then
-  begin
-    Result := 0;
-    A := MD4FromSys(fMD4);
-    B := TMD4Hash(Hash).MD4;
-    For i := Low(A) to High(A) do
-      If A[i] > B[i] then
-        begin
-          Result := +1;
-          Break;
-        end
-      else If A[i] < B[i] then
-        begin
-          Result := -1;
-          Break;
-        end;
-  end
-else raise EMD4IncompatibleClass.CreateFmt('TMD4Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := MD4Compare(MD4FromSys(fMD4),TMD4Hash(Hash).MD4)
+else
+  raise EMD4IncompatibleClass.CreateFmt('TMD4Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD4Hash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TMD4Hash then
+  Result := MD4Same(MD4FromSys(fMD4),TMD4Hash(Hash).MD4)
+else
+  raise EMD4IncompatibleClass.CreateFmt('TMD4Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TMD4Hash.AsString: String;
-var
-  Temp: TMD4;
-  i:    Integer;
 begin
-Result := StringOfChar('0',HashSize * 2);
-Temp := MD4FromSys(fMD4);
-For i := Low(Temp) to High(Temp) do
-  begin
-    Result[(i * 2) + 2] := IntToHex(Temp[i] and $0F,1)[1];
-    Result[(i * 2) + 1] := IntToHex(Temp[i] shr 4,1)[1];
-  end;
+Result := MD4AsString(MD4FromSys(fMD4));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TMD4Hash.FromString(const Str: String);
-var
-  TempStr:  String;
-  i:        Integer;
-  TempMD4:  TMD4;
 begin
-If Length(Str) < Integer(HashSize * 2) then
-  TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
-else If Length(Str) > Integer(HashSize * 2) then
-  TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
-else
-  TempStr := Str;
-For i := Low(TempMD4) to High(TempMD4) do
-  TempMD4[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
-fMD4 := MD4ToSys(TempMD4);
+fMD4 := MD4ToSys(MD4FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
@@ -531,12 +564,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TMD4Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TMD4;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TMD4));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TMD4));
 case Endianness of
   heSystem: fMD4 := MD4ToSys({$IFDEF ENDIAN_BIG}MD4FromBE{$ELSE}MD4FromLE{$ENDIF}(Temp));
   heLittle: fMD4 := MD4ToSys(MD4FromLE(Temp));
@@ -546,123 +578,75 @@ else
   fMD4 := MD4ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - utility functions
+    Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function MD4toStr(MD4: TMD4): String;
-var
-  Hash: TMD4Hash;
+Function MD4toStr(const MD4: TMD4): String;
 begin
-Hash := TMD4Hash.CreateAndInitFrom(MD4);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := MD4AsString(MD4);
 end;
 
 //------------------------------------------------------------------------------
 
-Function StrToMD4(Str: String): TMD4;
-var
-  Hash: TMD4Hash;
+Function StrToMD4(const Str: String): TMD4;
 begin
-Hash := TMD4Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.MD4;
-finally
-  Hash.Free;
-end;
+Result := MD4FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToMD4(const Str: String; out MD4: TMD4): Boolean;
-var
-  Hash: TMD4Hash;
 begin
-Hash := TMD4Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    MD4 := Hash.MD4;
-finally
-  Hash.Free;
+  MD4 := MD4FromString(Str);
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToMD4Def(const Str: String; Default: TMD4): TMD4;
-var
-  Hash: TMD4Hash;
 begin
-Hash := TMD4Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.MD4;
-finally
-  Hash.Free;
-end;
+If not TryStrToMD4(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareMD4(A,B: TMD4): Integer;
-var
-  HashA:  TMD4Hash;
-  HashB:  TMD4Hash;
+Function CompareMD4(const A,B: TMD4): Integer;
 begin
-HashA := TMD4Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD4Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD4Compare(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameMD4(A,B: TMD4): Boolean;
-var
-  HashA:  TMD4Hash;
-  HashB:  TMD4Hash;
+Function SameMD4(const A,B: TMD4): Boolean;
 begin
-HashA := TMD4Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD4Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD4Same(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function BinaryCorrectMD4(MD4: TMD4): TMD4;
+Function BinaryCorrectMD4(const MD4: TMD4): TMD4;
 begin
 Result := MD4;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - processing functions
+    Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
 procedure BufferMD4(var MD4: TMD4; const Buffer; Size: TMemSize);
@@ -687,7 +671,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferMD4(MD4: TMD4; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD4;
+Function LastBufferMD4(const MD4: TMD4; const Buffer; Size: TMemSize; MessageLength: UInt64): TMD4;
 var
   Hash: TMD4Hash;
 begin
@@ -703,7 +687,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferMD4(MD4: TMD4; const Buffer; Size: TMemSize): TMD4;
+Function LastBufferMD4(const MD4: TMD4; const Buffer; Size: TMemSize): TMD4;
 var
   Hash: TMD4Hash;
 begin
@@ -807,7 +791,7 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - context functions
+    Standalone functions - context functions
 -------------------------------------------------------------------------------}
 
 Function MD4_Init: TMD4Context;

@@ -23,9 +23,9 @@
     This all means that some things might be wrong or missing. If you find any
     problem, please let me know.
 
-  Version 1.0 (2026-03-04)
+  Version 1.1 (2026-07-04)
 
-  Last change 2026-03-04
+  Last change 2026-07-04
 
   ©2026 František Milt
 
@@ -225,22 +225,11 @@ type
     procedure ProcessBuffer_FNV_0(const Buffer; Size: TMemSize); virtual; abstract;
   {
     Algorithm 1 is the same as 0, only the initial value differs - this is
-    managed by derived classes in method Init.
+    managed in derived classes by method Init.
   }
     procedure ProcessBuffer_FNV_1a(const Buffer; Size: TMemSize); virtual; abstract;
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure Initialize; override;
-  {
-    Utilities
-
-    All these functions expect the hashes to be in their interchangeable form
-    (ie. not "sys" form). Size of the hash is obtained by calling class method
-    HashSize.
-  }
-    class procedure HashSwapEndian(var Hash); virtual;
-    class Function HashCompare(const A,B): Integer; virtual;
-    class Function HashAsString(const Hash): String; virtual;
-    class procedure HashFromString(const Str: String; out Hash); virtual;
   public
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -282,11 +271,12 @@ type
     processing from given Hash, but with non-default algorithm - HashAlgorithm
     property cannot be changed (would raise an EFNVInvalidState exception)
     after Init, which is implicitly called by this constructor. So to allow
-    for non-def algorithm, it must be selected here.
+    for non-default algorithm, it must be selected here.
   }
     constructor CreateAndInitFrom(Hash: TFNV32; HashAlgorithm: TFNVHashAlgorithm = algFNV1a); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TFNV32); reintroduce;
@@ -325,6 +315,7 @@ type
     constructor CreateAndInitFrom(Hash: TFNV64; HashAlgorithm: TFNVHashAlgorithm = algFNV1a); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TFNV64); reintroduce;
@@ -363,6 +354,7 @@ type
     constructor CreateAndInitFrom(Hash: TFNV128; HashAlgorithm: TFNVHashAlgorithm = algFNV1a); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TFNV128); reintroduce;
@@ -401,6 +393,7 @@ type
     constructor CreateAndInitFrom(Hash: TFNV256; HashAlgorithm: TFNVHashAlgorithm = algFNV1a); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TFNV256); reintroduce;
@@ -439,6 +432,7 @@ type
     constructor CreateAndInitFrom(Hash: TFNV512; HashAlgorithm: TFNVHashAlgorithm = algFNV1a); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TFNV512); reintroduce;
@@ -477,6 +471,7 @@ type
     constructor CreateAndInitFrom(Hash: TFNV1024; HashAlgorithm: TFNVHashAlgorithm = algFNV1a); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TFNV1024); reintroduce;
@@ -492,8 +487,11 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  All implemented functions in procedural interface are only wrappers around
-  TFNVbHash objects.
+  Most of the following functions are, for the sake of performance, calling
+  direct implementation, but some (context functions and stream and file
+  processing) are using TFNV[b]Hash objects and their methods to perform more
+  complex tasks.
+
   Only functions for 32bit and 64bit FNV variants are provided - simply because
   I do not expect anyone to use larger variants (or this unit at all, when we
   are at it :/). But if any demand arises, I can easily add them.
@@ -502,22 +500,22 @@ type
     Procedural interface - 32bit hash declaration
 ===============================================================================}
 
-Function FNV32ToStr(Hash: TFNV32): String;
+Function FNV32ToStr(const Hash: TFNV32): String;
 Function StrToFNV32(const Str: String): TFNV32;
 Function TryStrToFNV32(const Str: String; out Hash: TFNV32): Boolean;
 Function StrToFNV32Def(const Str: String; Default: TFNV32): TFNV32;
 
-Function CompareFNV32(A,B: TFNV32): Integer;
-Function SameFNV32(A,B: TFNV32): Boolean;
+Function CompareFNV32(const A,B: TFNV32): Integer;
+Function SameFNV32(const A,B: TFNV32): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferFNV32(Hash: TFNV32; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32; overload;
+Function BufferFNV32(const Hash: TFNV32; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32; overload;
 Function BufferFNV32(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32; overload;
 
 Function AnsiStringFNV32(const Str: AnsiString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
 Function WideStringFNV32(const Str: WideString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
-Function StringFNV32(const Str: String; Algorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
+Function StringFNV32(const Str: String; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
 
 Function StreamFNV32(Stream: TStream; Count: Int32 = -1; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
 Function FileFNV32(const FileName: String; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
@@ -527,7 +525,7 @@ type
   TFNV32Context = type Pointer;
 
 Function FNV32_Init(HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32Context;
-procedure FNV32_Update(var Context: TFNV32Context; const Buffer; Size: TMemSize);
+procedure FNV32_Update(Context: TFNV32Context; const Buffer; Size: TMemSize);
 Function FNV32_Final(var Context: TFNV32Context; const Buffer; Size: TMemSize): TFNV32; overload;
 Function FNV32_Final(var Context: TFNV32Context): TFNV32; overload;
 Function FNV32_Hash(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
@@ -536,22 +534,22 @@ Function FNV32_Hash(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorit
     Procedural interface - 64bit hash declaration
 ===============================================================================}
 
-Function FNV64ToStr(Hash: TFNV64): String;
+Function FNV64ToStr(const Hash: TFNV64): String;
 Function StrToFNV64(const Str: String): TFNV64;
 Function TryStrToFNV64(const Str: String; out Hash: TFNV64): Boolean;
 Function StrToFNV64Def(const Str: String; Default: TFNV64): TFNV64;
 
-Function CompareFNV64(A,B: TFNV64): Integer;
-Function SameFNV64(A,B: TFNV64): Boolean;
+Function CompareFNV64(const A,B: TFNV64): Integer;
+Function SameFNV64(const A,B: TFNV64): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferFNV64(Hash: TFNV64; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64; overload;
+Function BufferFNV64(const Hash: TFNV64; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64; overload;
 Function BufferFNV64(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64; overload;
 
 Function AnsiStringFNV64(const Str: AnsiString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
 Function WideStringFNV64(const Str: WideString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
-Function StringFNV64(const Str: String; Algorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
+Function StringFNV64(const Str: String; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
 
 Function StreamFNV64(Stream: TStream; Count: Int64 = -1; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
 Function FileFNV64(const FileName: String; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
@@ -561,7 +559,7 @@ type
   TFNV64Context = type Pointer;
 
 Function FNV64_Init(HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64Context;
-procedure FNV64_Update(var Context: TFNV64Context; const Buffer; Size: TMemSize);
+procedure FNV64_Update(Context: TFNV64Context; const Buffer; Size: TMemSize);
 Function FNV64_Final(var Context: TFNV64Context; const Buffer; Size: TMemSize): TFNV64; overload;
 Function FNV64_Final(var Context: TFNV64Context): TFNV64; overload;
 Function FNV64_Hash(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
@@ -576,10 +574,20 @@ uses
 {$ELSE}
   {$UNDEF OveflowChecks}
 {$ENDIF}
+{$IFOPT R+}
+  {$DEFINE RangeChecks}
+{$ELSE}
+  {$UNDEF RangeChecks}
+{$ENDIF}
 
 {===============================================================================
-    Arbitrary-length truncated multiplication
+--------------------------------------------------------------------------------
+                                    Internals
+--------------------------------------------------------------------------------
 ===============================================================================}
+{===============================================================================
+    Arbitrary-length truncated multiplication
+===============================================================================}  
 {
   Following function takes two untyped arguments (A and B) and treats them as
   unsigned integers of given size (must be multiple of two for 32bit code and
@@ -588,7 +596,7 @@ uses
   overflow into high-order places.
 }
 
-procedure TruncatedMul(const A,B; out R; Size: TMemSize);
+procedure FNVTruncatedMul(const A,B; out R; Size: TMemSize);
 type
   TCompWord = {$IFDEF CPU64bit}UInt32{$ELSE}UInt16{$ENDIF};
   TCompLong = {$IFDEF CPU64bit}UInt64{$ELSE}UInt32{$ENDIF};
@@ -626,7 +634,7 @@ var
   i:      Integer;
 begin
 If (Size < SizeOf(TCompWord)) or (Size > SizeOf(TCWArrayOverlay)) or ((Size and Pred(SizeOf(TCompWord))) <> 0) then
-  raise EFNVInvalidValue.CreateFmt('TruncatedMul: Invalid size (%d)',[Size]);
+  raise EFNVInvalidValue.CreateFmt('FNVTruncatedMul: Invalid size (%d)',[Size]);
 HighIndex := Pred(Integer(Size div SizeOf(TCompWord)));
 FillChar(Addr(R)^,Size,0);
 {$IFDEF ENDIAN_BIG}
@@ -641,13 +649,122 @@ For Index := 0 to HighIndex do
 end;
 
 {===============================================================================
+    Auxiliary functions
+===============================================================================}
+{
+  All following functions expect the hash(es) to be in an interchangeable
+  form (ie. not "sys" form).
+}
+type
+  TFNVHashOverlay = packed array[0..Pred(SizeOf(TFNV1024))] of UInt8;
+
+//------------------------------------------------------------------------------
+
+procedure FNVSwapEndian(var Hash; HashSize: TMemSize);
+var
+  HashOverlay:  TFNVHashOverlay absolute Hash;
+  LashLength:   Integer;
+  i:            Integer;
+  Temp:         UInt8;
+begin
+LashLength := Integer(HashSize);
+For i := 0 to Pred(LashLength div 2) do
+  begin
+    Temp := HashOverlay[i];
+    HashOverlay[i] := HashOverlay[Pred(LashLength) - i];
+    HashOverlay[Pred(LashLength) - i] := Temp;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FNVCompare(const A,B; HashSize: TMemSize): Integer;
+var
+  AOverlay:   TFNVHashOverlay absolute A;
+  BOverlay:   TFNVHashOverlay absolute B;
+  LashLength: Integer;
+  i:          Integer;
+begin
+LashLength := Integer(HashSize);
+Result := 0;
+{
+  FNV hashes are stored with little endianness, meaning first byte in memory
+  is the least significant. But when comparing, we must compare the most
+  significant bytes first, therefore going backwards.
+}
+For i := Pred(LashLength) downto 0 do
+  If AOverlay[i] <> BOverlay[i] then
+    begin
+      If AOverlay[i] > BOverlay[i] then
+        Result := +1
+      else
+        Result := -1;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FNVSame(const A,B; HashSize: TMemSize): Boolean;
+var
+  AOverlay:   TFNVHashOverlay absolute A;
+  BOverlay:   TFNVHashOverlay absolute B;
+  LashLength: Integer;
+  i:          Integer;
+begin
+LashLength := Integer(HashSize);
+Result := True;
+// order of processed bytes does not matter here
+For i := 0 to Pred(LashLength) do
+  If AOverlay[i] <> BOverlay[i] then
+    begin
+      Result := False;
+      Break{For i};
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FNVAsString(const Hash; HashSize: TMemSize): String;
+var
+  HashOverlay:  TFNVHashOverlay absolute Hash;
+  LashLength:   Integer;
+  i:            Integer;
+begin
+LashLength := Integer(HashSize);
+Result := StringOfChar('0',LashLength * 2);
+For i := 0 to Pred(LashLength) do
+  begin
+    Result[(i * 2) + 2] := IntToHex(HashOverlay[Pred(LashLength) - i] and $0F,1)[1];
+    Result[(i * 2) + 1] := IntToHex(HashOverlay[Pred(LashLength) - i] shr 4,1)[1];
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure FNVFromString(const Str: String; out Hash; HashSize: TMemSize);
+var
+  HashOverlay:  TFNVHashOverlay absolute Hash;
+  LashLength:   Integer;
+  WorkStr:      String;
+  i:            Integer;
+begin
+LashLength := Integer(HashSize);
+If Length(Str) < (LashLength * 2) then
+  WorkStr := StringOfChar('0',(LashLength * 2) - Length(Str)) + Str
+else If Length(Str) > (LashLength * 2) then
+  WorkStr := Copy(Str,Length(Str) - Pred(LashLength * 2),LashLength * 2)
+else
+  WorkStr := Str;
+For i := 0 to Pred(LashLength) do
+  HashOverlay[Pred(LashLength) - i] := UInt8(StrToInt('$' + Copy(WorkStr,(i * 2) + 1,2)));
+end;
+
+{===============================================================================
 --------------------------------------------------------------------------------
                                   TFNVBaseHash
 --------------------------------------------------------------------------------
 ===============================================================================}
-type
-  TFNVHashOverlay = packed array[0..Pred(SizeOf(TFNV1024))] of UInt8;
-
 {===============================================================================
     TFNVBaseHash - class implementation
 ===============================================================================}
@@ -688,87 +805,6 @@ begin
 inherited;
 fHashAlgorithm := algFNV1a;
 fProcessBuffer := ProcessBuffer_FNV_1a
-end;
-
-//------------------------------------------------------------------------------
-
-class procedure TFNVBaseHash.HashSwapEndian(var Hash);
-var
-  HashOverlay:  TFNVHashOverlay absolute Hash;
-  HashLength:   Integer;
-  i:            Integer;
-  Temp:         UInt8;
-begin
-// buffer length/size of the hash to reduce number of calls to HashSize
-HashLength := HashSize;
-For i := 0 to Pred(HashLength div 2) do
-  begin
-    Temp := HashOverlay[i];
-    HashOverlay[i] := HashOverlay[Pred(HashLength) - i];
-    HashOverlay[Pred(HashLength) - i] := Temp;
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-class Function TFNVBaseHash.HashCompare(const A,B): Integer;
-var
-  AOverlay: TFNVHashOverlay absolute A;
-  BOverlay: TFNVHashOverlay absolute B;
-  i:        Integer;
-begin
-Result := 0;
-{
-  FNV hashes are stored with little endianness, meaning first byte in memory
-  is the least significant. But when comparing, we must compare the most
-  significant bytes first, therefore going backwards.
-}
-For i := Pred(HashSize) downto 0 do
-  If AOverlay[i] <> BOverlay[i] then
-    begin
-      If AOverlay[i] > BOverlay[i] then
-        Result := +1
-      else
-        Result := -1;
-      Break{For i};
-    end;
-end;
-
-//------------------------------------------------------------------------------
-
-class Function TFNVBaseHash.HashAsString(const Hash): String;
-var
-  HashOverlay:  TFNVHashOverlay absolute Hash;
-  HashLength:   Integer;
-  i:            Integer;
-begin
-HashLength := HashSize;
-Result := StringOfChar('0',HashLength * 2);
-For i := 0 to Pred(HashSize) do
-  begin
-    Result[(i * 2) + 2] := IntToHex(HashOverlay[Pred(HashLength) - i] and $0F,1)[1];
-    Result[(i * 2) + 1] := IntToHex(HashOverlay[Pred(HashLength) - i] shr 4,1)[1];
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-class procedure TFNVBaseHash.HashFromString(const Str: String; out Hash);
-var
-  HashOverlay:  TFNVHashOverlay absolute Hash;
-  HashLength:   Integer;
-  WorkStr:      String;
-  i:            Integer;
-begin
-HashLength := Integer(HashSize);
-If Length(Str) < (HashLength * 2) then
-  WorkStr := StringOfChar('0',(HashLength * 2) - Length(Str)) + Str
-else If Length(Str) > (HashLength * 2) then
-  WorkStr := Copy(Str,Length(Str) - Pred(HashLength * 2),HashLength * 2)
-else
-  WorkStr := Str;
-For i := 0 to Pred(HashLength) do
-  HashOverlay[Pred(HashLength) - i] := UInt8(StrToInt('$' + Copy(WorkStr,(i * 2) + 1,2)));
 end;
 
 {-------------------------------------------------------------------------------
@@ -819,7 +855,51 @@ end;
 ===============================================================================}
 const
   FNV32Prime = TFNV32Sys($01000193);
-  
+
+//------------------------------------------------------------------------------
+{$IFDEF OveflowChecks}{$Q-}{$ENDIF}
+{$IFDEF RangeChecks}{$R-}{$ENDIF}
+
+// overflows and range checks are disabled because of the multiplication
+Function FNV32Process_0(FNV32: TFNV32Sys; const Buffer; Size: TMemSize): TFNV32Sys;
+var
+  Buff: PByte;
+  i:    Integer;
+begin
+Result := FNV32;
+If Size > 0 then
+  begin
+    Buff := @Buffer;
+    For i := 0 to Pred(Size) do
+      begin
+        Result := TFNV32Sys(Result * FNV32Prime) xor TFNV32Sys(Buff^);
+        Inc(Buff);
+      end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FNV32Process_1a(FNV32: TFNV32Sys; const Buffer; Size: TMemSize): TFNV32Sys;
+var
+  Buff: PByte;
+  i:    Integer;
+begin
+Result := FNV32;
+If Size > 0 then
+  begin
+    Buff := @Buffer;
+    For i := 0 to Pred(Size) do
+      begin
+        Result := TFNV32Sys((Result xor TFNV32Sys(Buff^)) * FNV32Prime);
+        Inc(Buff);
+      end;
+  end;
+end;
+
+{$IFDEF RangeChecks}{$R+}{$ENDIF}
+{$IFDEF OveflowChecks}{$Q+}{$ENDIF}
+
 {===============================================================================
     TFNV32Hash - class declaration
 ===============================================================================}
@@ -833,44 +913,19 @@ Result := FNV32FromSys(fFNV32Value);
 end;
 
 //------------------------------------------------------------------------------
-{$IFDEF OveflowChecks}{$Q-}{$ENDIF}
 
-// overflows are disabled because of the multiplication
 procedure TFNV32Hash.ProcessBuffer_FNV_0(const Buffer; Size: TMemSize);
-var
-  Buff: PByte;
-  i:    Integer;
 begin
-If Size > 0 then
-  begin
-    Buff := @Buffer;
-    For i := 0 to Pred(Size) do
-      begin
-        fFNV32Value := TFNV32Sys(fFNV32Value * FNV32Prime) xor TFNV32Sys(Buff^);
-        Inc(Buff);
-      end;
-  end;
+fFNV32Value := FNV32Process_0(fFNV32Value,Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TFNV32Hash.ProcessBuffer_FNV_1a(const Buffer; Size: TMemSize);
-var
-  Buff: PByte;
-  i:    Integer;
 begin
-If Size > 0 then
-  begin
-    Buff := @Buffer;
-    For i := 0 to Pred(Size) do
-      begin
-        fFNV32Value := TFNV32Sys((fFNV32Value xor TFNV32Sys(Buff^)) * FNV32Prime);
-        Inc(Buff);
-      end;
-  end;
+fFNV32Value := FNV32Process_1a(fFNV32Value,Buffer,Size);
 end;
 
-{$IFDEF OveflowChecks}{$Q+}{$ENDIF}
 //------------------------------------------------------------------------------
 
 procedure TFNV32Hash.Initialize;
@@ -886,7 +941,7 @@ end;
 class Function TFNV32Hash.FNV32ToSys(Hash: TFNV32): TFNV32Sys;
 begin
 Result := TFNV32Sys(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -894,7 +949,7 @@ end;
 class Function TFNV32Hash.FNV32FromSys(Hash: TFNV32Sys): TFNV32;
 begin
 Result := TFNV32(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -909,7 +964,7 @@ end;
 class Function TFNV32Hash.FNV32ToBE(Hash: TFNV32): TFNV32;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -924,7 +979,7 @@ end;
 class Function TFNV32Hash.FNV32FromBE(Hash: TFNV32): TFNV32;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -983,9 +1038,25 @@ If Hash is TFNV32Hash then
   begin
     Local := FNV32FromSys(fFNV32Value);
     Remote := TFNV32Hash(Hash).FNV32;
-    Result := HashCompare(Local,Remote);    
+    Result := FNVCompare(Local,Remote,HashSize);
   end
 else raise EFNVIncompatibleClass.CreateFmt('TFNV32Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TFNV32Hash.Same(Hash: THashBase): Boolean;
+var
+  Local:  TFNV32;
+  Remote: TFNV32;
+begin
+If Hash is TFNV32Hash then
+  begin
+    Local := FNV32FromSys(fFNV32Value);
+    Remote := TFNV32Hash(Hash).FNV32;
+    Result := FNVSame(Local,Remote,HashSize);
+  end
+else raise EFNVIncompatibleClass.CreateFmt('TFNV32Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
@@ -995,7 +1066,7 @@ var
   Temp: TFNV32;
 begin
 Temp := FNV32FromSys(fFNV32Value);
-Result := HashAsString(Temp);
+Result := FNVAsString(Temp,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1004,7 +1075,7 @@ procedure TFNV32Hash.FromString(const Str: String);
 var
   Temp: TFNV32;
 begin
-HashFromString(Str,Temp);
+FNVFromString(Str,Temp,HashSize);
 fFNV32Value := FNV32ToSys(Temp);
 end;
 
@@ -1060,6 +1131,74 @@ end;
 ===============================================================================}
 const
   FNV64Prime = TFNV64Sys($00000100000001B3);
+
+//------------------------------------------------------------------------------
+{$IFDEF OveflowChecks}{$Q-}{$ENDIF}
+{$IFDEF RangeChecks}{$R-}{$ENDIF}
+
+// overflows and range checks are disabled because of the multiplication
+Function FNV64Process_0(FNV64: TFNV64Sys; const Buffer; Size: TMemSize): TFNV64Sys;
+var
+  Buff:   PByte;
+  i:      Integer;
+{$IF not Declared(NativeUInt64E)}
+  Prime:  TFNV64Sys;
+  Temp:   TFNV64Sys;
+begin
+Prime := FNV64Prime;
+{$ELSE}
+begin
+{$IFEND}
+Result := FNV64;
+If Size > 0 then
+  begin
+    Buff := @Buffer;
+    For i := 0 to Pred(Size) do
+      begin
+      {$IF Declared(NativeUInt64E)}
+        Result := TFNV64Sys(Result * FNV64Prime) xor TFNV64Sys(Buff^);
+      {$ELSE}
+        FNVTruncatedMul(Result,Prime,Temp,SizeOf(TFNV64Sys));
+        Result := Temp xor TFNV64Sys(Buff^);
+      {$IFEND}
+        Inc(Buff);
+      end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FNV64Process_1a(FNV64: TFNV64Sys; const Buffer; Size: TMemSize): TFNV64Sys;
+var
+  Buff:   PByte;
+  i:      Integer;
+{$IF not Declared(NativeUInt64E)}
+  Prime:  TFNV64Sys;
+  Temp:   TFNV64Sys;
+begin
+Prime := FNV64Prime;
+{$ELSE}
+begin
+{$IFEND}
+Result := FNV64;
+If Size > 0 then
+  begin
+    Buff := @Buffer;
+    For i := 0 to Pred(Size) do
+      begin
+      {$IF Declared(NativeUInt64E)}
+        Result := TFNV64Sys((Result xor TFNV64Sys(Buff^)) * FNV64Prime);
+      {$ELSE}
+        Temp := Result xor TFNV64Sys(Buff^);
+        FNVTruncatedMul(Temp,Prime,Result,SizeOf(TFNV64Sys));
+      {$IFEND}
+        Inc(Buff);
+      end;
+  end;
+end;
+
+{$IFDEF RangeChecks}{$R+}{$ENDIF}
+{$IFDEF OveflowChecks}{$Q+}{$ENDIF}
   
 {===============================================================================
     TFNV64Hash - class declaration
@@ -1074,67 +1213,19 @@ Result := FNV64FromSys(fFNV64Value);
 end;
 
 //------------------------------------------------------------------------------
-{$IFDEF OveflowChecks}{$Q-}{$ENDIF}
 
 procedure TFNV64Hash.ProcessBuffer_FNV_0(const Buffer; Size: TMemSize);
-var
-  Buff:   PByte;
-  i:      Integer;
-{$IF not Declared(NativeUInt64E)}
-  Prime:  TFNV64Sys;
-  Temp:   TFNV64Sys;
 begin
-Prime := FNV64Prime;
-{$ELSE}
-begin
-{$IFEND}
-If Size > 0 then
-  begin
-    Buff := @Buffer;
-    For i := 0 to Pred(Size) do
-      begin
-      {$IF Declared(NativeUInt64E)}
-        fFNV64Value := TFNV64Sys(fFNV64Value * FNV64Prime) xor TFNV64Sys(Buff^);
-      {$ELSE}
-        TruncatedMul(fFNV64Value,Prime,Temp,HashSize);
-        fFNV64Value := Temp xor TFNV64Sys(Buff^);
-      {$IFEND}
-        Inc(Buff);
-      end;
-  end;
+fFNV64Value := FNV64Process_0(fFNV64Value,Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TFNV64Hash.ProcessBuffer_FNV_1a(const Buffer; Size: TMemSize);
-var
-  Buff:   PByte;
-  i:      Integer;
-{$IF not Declared(NativeUInt64E)}
-  Prime:  TFNV64Sys;
-  Temp:   TFNV64Sys;
 begin
-Prime := FNV64Prime;
-{$ELSE}
-begin
-{$IFEND}
-If Size > 0 then
-  begin
-    Buff := @Buffer;
-    For i := 0 to Pred(Size) do
-      begin
-      {$IF Declared(NativeUInt64E)}
-        fFNV64Value := TFNV64Sys((fFNV64Value xor TFNV64Sys(Buff^)) * FNV64Prime);
-      {$ELSE}
-        Temp := fFNV64Value xor TFNV64Sys(Buff^);
-        TruncatedMul(Temp,Prime,fFNV64Value,HashSize);
-      {$IFEND}
-        Inc(Buff);
-      end;
-  end;
+fFNV64Value := FNV64Process_1a(fFNV64Value,Buffer,Size);
 end;
 
-{$IFDEF OveflowChecks}{$Q+}{$ENDIF}
 //------------------------------------------------------------------------------
 
 procedure TFNV64Hash.Initialize;
@@ -1150,7 +1241,7 @@ end;
 class Function TFNV64Hash.FNV64ToSys(Hash: TFNV64): TFNV64Sys;
 begin
 Result := TFNV64Sys(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1158,7 +1249,7 @@ end;
 class Function TFNV64Hash.FNV64FromSys(Hash: TFNV64Sys): TFNV64;
 begin
 Result := TFNV64(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1173,7 +1264,7 @@ end;
 class Function TFNV64Hash.FNV64ToBE(Hash: TFNV64): TFNV64;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1188,7 +1279,7 @@ end;
 class Function TFNV64Hash.FNV64FromBE(Hash: TFNV64): TFNV64;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1247,9 +1338,25 @@ If Hash is TFNV64Hash then
   begin
     Local := FNV64FromSys(fFNV64Value);
     Remote := TFNV64Hash(Hash).FNV64;
-    Result := HashCompare(Local,Remote);
+    Result := FNVCompare(Local,Remote,HashSize);
   end
 else raise EFNVIncompatibleClass.CreateFmt('TFNV64Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TFNV64Hash.Same(Hash: THashBase): Boolean;
+var
+  Local:  TFNV64;
+  Remote: TFNV64;
+begin
+If Hash is TFNV64Hash then
+  begin
+    Local := FNV64FromSys(fFNV64Value);
+    Remote := TFNV64Hash(Hash).FNV64;
+    Result := FNVSame(Local,Remote,HashSize);
+  end
+else raise EFNVIncompatibleClass.CreateFmt('TFNV64Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1259,7 +1366,7 @@ var
   Temp: TFNV64;
 begin
 Temp := FNV64FromSys(fFNV64Value);
-Result := HashAsString(Temp);
+Result := FNVAsString(Temp,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1268,7 +1375,7 @@ procedure TFNV64Hash.FromString(const Str: String);
 var
   Temp: TFNV64;
 begin
-HashFromString(Str,Temp);
+FNVFromString(Str,Temp,HashSize);
 fFNV64Value := FNV64ToSys(Temp);
 end;
 
@@ -1323,8 +1430,13 @@ end;
 --------------------------------------------------------------------------------
 ===============================================================================}
 const
-  FNV128Prime: TFNV128Sys = ($3B,$01,0,0,0,0,0,0,0,0,0,$01,0,0,0,0);
-  
+  FNV128Prime: TFNV128Sys = (
+  {$IFDEF ENDIAN_BIG}
+    0,0,0,0,$01,0,0,0,0,0,0,0,0,0,$01,$3B
+  {$ELSE}
+    $3B,$01,0,0,0,0,0,0,0,0,0,$01,0,0,0,0
+  {$ENDIF});
+
 {===============================================================================
     TFNV128Hash - class declaration
 ===============================================================================}
@@ -1352,7 +1464,7 @@ If Size > 0 then
     Buff := @Buffer;
     For i := 0 to Pred(Size) do
       begin
-        TruncatedMul(fFNV128Value,Prime,Temp,HashSize);
+        FNVTruncatedMul(fFNV128Value,Prime,Temp,HashSize);
         fFNV128Value := Temp;
         fFNV128Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV128Sys)] :=
           fFNV128Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV128Sys)] xor Buff^;
@@ -1379,7 +1491,7 @@ If Size > 0 then
         Temp := fFNV128Value;
         Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV128Sys)] :=
           Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV128Sys)] xor Buff^;
-        TruncatedMul(Temp,Prime,fFNV128Value,HashSize);
+        FNVTruncatedMul(Temp,Prime,fFNV128Value,HashSize);
         Inc(Buff);
       end;
   end;
@@ -1400,7 +1512,7 @@ end;
 class Function TFNV128Hash.FNV128ToSys(Hash: TFNV128): TFNV128Sys;
 begin
 Result := TFNV128Sys(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1408,7 +1520,7 @@ end;
 class Function TFNV128Hash.FNV128FromSys(Hash: TFNV128Sys): TFNV128;
 begin
 Result := TFNV128(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1423,7 +1535,7 @@ end;
 class Function TFNV128Hash.FNV128ToBE(Hash: TFNV128): TFNV128;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1438,7 +1550,7 @@ end;
 class Function TFNV128Hash.FNV128FromBE(Hash: TFNV128): TFNV128;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1497,9 +1609,25 @@ If Hash is TFNV128Hash then
   begin
     Local := FNV128FromSys(fFNV128Value);
     Remote := TFNV128Hash(Hash).FNV128;
-    Result := HashCompare(Local,Remote);
+    Result := FNVCompare(Local,Remote,HashSize);
   end
 else raise EFNVIncompatibleClass.CreateFmt('TFNV128Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TFNV128Hash.Same(Hash: THashBase): Boolean;
+var
+  Local:  TFNV128;
+  Remote: TFNV128;
+begin
+If Hash is TFNV128Hash then
+  begin
+    Local := FNV128FromSys(fFNV128Value);
+    Remote := TFNV128Hash(Hash).FNV128;
+    Result := FNVSame(Local,Remote,HashSize);
+  end
+else raise EFNVIncompatibleClass.CreateFmt('TFNV128Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1509,7 +1637,7 @@ var
   Temp: TFNV128;
 begin
 Temp := FNV128FromSys(fFNV128Value);
-Result := HashAsString(Temp);
+Result := FNVAsString(Temp,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1518,7 +1646,7 @@ procedure TFNV128Hash.FromString(const Str: String);
 var
   Temp: TFNV128;
 begin
-HashFromString(Str,Temp);
+FNVFromString(Str,Temp,HashSize);
 fFNV128Value := FNV128ToSys(Temp);
 end;
 
@@ -1574,7 +1702,11 @@ end;
 ===============================================================================}
 const
   FNV256Prime: TFNV256Sys = (
-    $63,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0);
+  {$IFDEF ENDIAN_BIG}
+    0,0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,$01,$63
+  {$ELSE}
+    $63,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0
+  {$ENDIF});
 
 {===============================================================================
     TFNV256Hash - class declaration
@@ -1603,7 +1735,7 @@ If Size > 0 then
     Buff := @Buffer;
     For i := 0 to Pred(Size) do
       begin
-        TruncatedMul(fFNV256Value,Prime,Temp,HashSize);
+        FNVTruncatedMul(fFNV256Value,Prime,Temp,HashSize);
         fFNV256Value := Temp;
         fFNV256Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV256Sys)] :=
           fFNV256Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV256Sys)] xor Buff^;
@@ -1630,7 +1762,7 @@ If Size > 0 then
         Temp := fFNV256Value;
         Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV256Sys)] :=
           Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV256Sys)] xor Buff^;
-        TruncatedMul(Temp,Prime,fFNV256Value,HashSize);
+        FNVTruncatedMul(Temp,Prime,fFNV256Value,HashSize);
         Inc(Buff);
       end;
   end;
@@ -1651,7 +1783,7 @@ end;
 class Function TFNV256Hash.FNV256ToSys(Hash: TFNV256): TFNV256Sys;
 begin
 Result := TFNV256Sys(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1659,7 +1791,7 @@ end;
 class Function TFNV256Hash.FNV256FromSys(Hash: TFNV256Sys): TFNV256;
 begin
 Result := TFNV256(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1674,7 +1806,7 @@ end;
 class Function TFNV256Hash.FNV256ToBE(Hash: TFNV256): TFNV256;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1689,7 +1821,7 @@ end;
 class Function TFNV256Hash.FNV256FromBE(Hash: TFNV256): TFNV256;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1748,9 +1880,25 @@ If Hash is TFNV256Hash then
   begin
     Local := FNV256FromSys(fFNV256Value);
     Remote := TFNV256Hash(Hash).FNV256;
-    Result := HashCompare(Local,Remote);
+    Result := FNVCompare(Local,Remote,HashSize);
   end
 else raise EFNVIncompatibleClass.CreateFmt('TFNV256Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TFNV256Hash.Same(Hash: THashBase): Boolean;
+var
+  Local:  TFNV256;
+  Remote: TFNV256;
+begin
+If Hash is TFNV256Hash then
+  begin
+    Local := FNV256FromSys(fFNV256Value);
+    Remote := TFNV256Hash(Hash).FNV256;
+    Result := FNVSame(Local,Remote,HashSize);
+  end
+else raise EFNVIncompatibleClass.CreateFmt('TFNV256Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1760,7 +1908,7 @@ var
   Temp: TFNV256;
 begin
 Temp := FNV256FromSys(fFNV256Value);
-Result := HashAsString(Temp);
+Result := FNVAsString(Temp,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1769,7 +1917,7 @@ procedure TFNV256Hash.FromString(const Str: String);
 var
   Temp: TFNV256;
 begin
-HashFromString(Str,Temp);
+FNVFromString(Str,Temp,HashSize);
 fFNV256Value := FNV256ToSys(Temp);
 end;
 
@@ -1825,8 +1973,13 @@ end;
 ===============================================================================}
 const
   FNV512Prime: TFNV512Sys = (
+  {$IFDEF ENDIAN_BIG}
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,$01,$57
+  {$ELSE}
     $57,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+    0,0,0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  {$ENDIF});
 
 {===============================================================================
     TFNV512Hash - class declaration
@@ -1855,7 +2008,7 @@ If Size > 0 then
     Buff := @Buffer;
     For i := 0 to Pred(Size) do
       begin
-        TruncatedMul(fFNV512Value,Prime,Temp,HashSize);
+        FNVTruncatedMul(fFNV512Value,Prime,Temp,HashSize);
         fFNV512Value := Temp;
         fFNV512Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV512Sys)] :=
           fFNV512Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV512Sys)] xor Buff^;
@@ -1882,7 +2035,7 @@ If Size > 0 then
         Temp := fFNV512Value;
         Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV512Sys)] :=
           Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV512Sys)] xor Buff^;
-        TruncatedMul(Temp,Prime,fFNV512Value,HashSize);
+        FNVTruncatedMul(Temp,Prime,fFNV512Value,HashSize);
         Inc(Buff);
       end;
   end;
@@ -1903,7 +2056,7 @@ end;
 class Function TFNV512Hash.FNV512ToSys(Hash: TFNV512): TFNV512Sys;
 begin
 Result := TFNV512Sys(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1911,7 +2064,7 @@ end;
 class Function TFNV512Hash.FNV512FromSys(Hash: TFNV512Sys): TFNV512;
 begin
 Result := TFNV512(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1926,7 +2079,7 @@ end;
 class Function TFNV512Hash.FNV512ToBE(Hash: TFNV512): TFNV512;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -1941,7 +2094,7 @@ end;
 class Function TFNV512Hash.FNV512FromBE(Hash: TFNV512): TFNV512;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -2000,9 +2153,25 @@ If Hash is TFNV512Hash then
   begin
     Local := FNV512FromSys(fFNV512Value);
     Remote := TFNV512Hash(Hash).FNV512;
-    Result := HashCompare(Local,Remote);
+    Result := FNVCompare(Local,Remote,HashSize);
   end
 else raise EFNVIncompatibleClass.CreateFmt('TFNV512Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TFNV512Hash.Same(Hash: THashBase): Boolean;
+var
+  Local:  TFNV512;
+  Remote: TFNV512;
+begin
+If Hash is TFNV512Hash then
+  begin
+    Local := FNV512FromSys(fFNV512Value);
+    Remote := TFNV512Hash(Hash).FNV512;
+    Result := FNVSame(Local,Remote,HashSize);
+  end
+else raise EFNVIncompatibleClass.CreateFmt('TFNV512Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
@@ -2012,7 +2181,7 @@ var
   Temp: TFNV512;
 begin
 Temp := FNV512FromSys(fFNV512Value);
-Result := HashAsString(Temp);
+Result := FNVAsString(Temp,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -2021,7 +2190,7 @@ procedure TFNV512Hash.FromString(const Str: String);
 var
   Temp: TFNV512;
 begin
-HashFromString(Str,Temp);
+FNVFromString(Str,Temp,HashSize);
 fFNV512Value := FNV512ToSys(Temp);
 end;
 
@@ -2077,10 +2246,17 @@ end;
 ===============================================================================}
 const
   FNV1024Prime: TFNV1024Sys = (
-    $8D,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  {$IFDEF ENDIAN_BIG}
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,$01,$8D,
+  {$ELSE}
+    $8D,$01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,$01,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  {$ENDIF});
 
 {===============================================================================
     TFNV1024Hash - class declaration
@@ -2109,7 +2285,7 @@ If Size > 0 then
     Buff := @Buffer;
     For i := 0 to Pred(Size) do
       begin
-        TruncatedMul(fFNV1024Value,Prime,Temp,HashSize);
+        FNVTruncatedMul(fFNV1024Value,Prime,Temp,HashSize);
         fFNV1024Value := Temp;
         fFNV1024Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV1024Sys)] :=
           fFNV1024Value[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV1024Sys)] xor Buff^;
@@ -2136,7 +2312,7 @@ If Size > 0 then
         Temp := fFNV1024Value;
         Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV1024Sys)] :=
           Temp[{$IFDEF ENDIAN_BIG}High{$ELSE}Low{$ENDIF}(TFNV1024Sys)] xor Buff^;
-        TruncatedMul(Temp,Prime,fFNV1024Value,HashSize);
+        FNVTruncatedMul(Temp,Prime,fFNV1024Value,HashSize);
         Inc(Buff);
       end;
   end;
@@ -2157,7 +2333,7 @@ end;
 class Function TFNV1024Hash.FNV1024ToSys(Hash: TFNV1024): TFNV1024Sys;
 begin
 Result := TFNV1024Sys(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -2165,7 +2341,7 @@ end;
 class Function TFNV1024Hash.FNV1024FromSys(Hash: TFNV1024Sys): TFNV1024;
 begin
 Result := TFNV1024(Hash);
-{$IFDEF ENDIAN_BIG}HashSwapEndian(Result);{$ENDIF}
+{$IFDEF ENDIAN_BIG}FNVSwapEndian(Result,HashSize);{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -2180,7 +2356,7 @@ end;
 class Function TFNV1024Hash.FNV1024ToBE(Hash: TFNV1024): TFNV1024;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -2195,7 +2371,7 @@ end;
 class Function TFNV1024Hash.FNV1024FromBE(Hash: TFNV1024): TFNV1024;
 begin
 Result := Hash;
-HashSwapEndian(Result);
+FNVSwapEndian(Result,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -2254,9 +2430,25 @@ If Hash is TFNV1024Hash then
   begin
     Local := FNV1024FromSys(fFNV1024Value);
     Remote := TFNV1024Hash(Hash).FNV1024;
-    Result := HashCompare(Local,Remote);
+    Result := FNVCompare(Local,Remote,HashSize);
   end
 else raise EFNVIncompatibleClass.CreateFmt('TFNV1024Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TFNV1024Hash.Same(Hash: THashBase): Boolean;
+var
+  Local:  TFNV1024;
+  Remote: TFNV1024;
+begin
+If Hash is TFNV1024Hash then
+  begin
+    Local := FNV1024FromSys(fFNV1024Value);
+    Remote := TFNV1024Hash(Hash).FNV1024;
+    Result := FNVSame(Local,Remote,HashSize);
+  end
+else raise EFNVIncompatibleClass.CreateFmt('TFNV1024Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
@@ -2266,7 +2458,7 @@ var
   Temp: TFNV1024;
 begin
 Temp := FNV1024FromSys(fFNV1024Value);
-Result := HashAsString(Temp);
+Result := FNVAsString(Temp,HashSize);
 end;
 
 //------------------------------------------------------------------------------
@@ -2275,7 +2467,7 @@ procedure TFNV1024Hash.FromString(const Str: String);
 var
   Temp: TFNV1024;
 begin
-HashFromString(Str,Temp);
+FNVFromString(Str,Temp,HashSize);
 fFNV1024Value := FNV1024ToSys(Temp);
 end;
 
@@ -2336,183 +2528,96 @@ end;
     Procedural interface - 32bit hash utility functions
 -------------------------------------------------------------------------------}
 
-Function FNV32ToStr(Hash: TFNV32): String;
-var
-  Hasher: TFNV32Hash;
+Function FNV32ToStr(const Hash: TFNV32): String;
 begin
-Hasher := TFNV32Hash.CreateAndInitFrom(Hash);
-try
-  Result := Hasher.AsString;
-finally
-  Hasher.Free;
-end;
+Result := FNVAsString(Hash,SizeOf(TFNV32));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToFNV32(const Str: String): TFNV32;
-var
-  Hasher: TFNV32Hash;
 begin
-Hasher := TFNV32Hash.Create;
-try
-  Hasher.FromString(Str);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
-end;
+FNVFromString(Str,Result,SizeOf(TFNV32));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToFNV32(const Str: String; out Hash: TFNV32): Boolean;
-var
-  Hasher: TFNV32Hash;
 begin
-Hasher := TFNV32Hash.Create;
 try
-  Result := Hasher.TryFromString(Str);
-  If Result then
-    Hash := Hasher.FNV32;
-finally
-  Hasher.Free;
+  FNVFromString(Str,Hash,SizeOf(TFNV32));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToFNV32Def(const Str: String; Default: TFNV32): TFNV32;
-var
-  Hasher: TFNV32Hash;
 begin
-Hasher := TFNV32Hash.Create;
-try
-  Hasher.FromStringDef(Str,Default);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
-end;
+If not TryStrToFNV32(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareFNV32(A,B: TFNV32): Integer;
-var
-  HasherA:  TFNV32Hash;
-  HasherB:  TFNV32Hash;
+Function CompareFNV32(const A,B: TFNV32): Integer;
 begin
-HasherA := TFNV32Hash.CreateAndInitFrom(A);
-try
-  HasherB := TFNV32Hash.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Compare(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := FNVCompare(A,B,SizeOf(TFNV32));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameFNV32(A,B: TFNV32): Boolean;
-var
-  HasherA:  TFNV32Hash;
-  HasherB:  TFNV32Hash;
+Function SameFNV32(const A,B: TFNV32): Boolean;
 begin
-HasherA := TFNV32Hash.CreateAndInitFrom(A);
-try
-  HasherB := TFNV32Hash.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Same(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := FNVSame(A,B,SizeOf(TFNV32));
 end;
 
 {-------------------------------------------------------------------------------
     Procedural interface - 32bit hash processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferFNV32(Hash: TFNV32; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
-var
-  Hasher: TFNV32Hash;
+Function BufferFNV32(const Hash: TFNV32; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
 begin
-Hasher := TFNV32Hash.CreateAndInitFrom(Hash,HashAlgorithm);
-try
-  Hasher.Final(Buffer,Size);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
-end;
+If HashAlgorithm = algFNV1a then
+  Result := TFNV32Hash.FNV32FromSys(FNV32Process_1a(TFNV32Hash.FNV32ToSys(Hash),Buffer,Size))
+else
+  Result := TFNV32Hash.FNV32FromSys(FNV32Process_0(TFNV32Hash.FNV32ToSys(Hash),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function BufferFNV32(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
-var
-  Hasher: TFNV32Hash;
 begin
-Hasher := TFNV32Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashBuffer(Buffer,Size);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
+case HashAlgorithm of
+  algFNV0:  Result := TFNV32Hash.FNV32FromSys(FNV32Process_0(TFNV32Hash.FNV32ToSys(ZeroFNV32),Buffer,Size));
+  algFNV1:  Result := TFNV32Hash.FNV32FromSys(FNV32Process_0(TFNV32Hash.FNV32ToSys(InitialFNV32),Buffer,Size));
+  algFNV1a: Result := TFNV32Hash.FNV32FromSys(FNV32Process_1a(TFNV32Hash.FNV32ToSys(InitialFNV32),Buffer,Size));
+else
+  raise EFNVInvalidValue.CreateFmt('BufferFNV32: Unknown hash algorithm (%d).',[Ord(HashAlgorithm)]);
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringFNV32(const Str: AnsiString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
-var
-  Hasher: TFNV32Hash;
 begin
-Hasher := TFNV32Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashAnsiString(Str);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV32(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar),HashAlgorithm);
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringFNV32(const Str: WideString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
-var
-  Hasher: TFNV32Hash;
 begin
-Hasher := TFNV32Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashWideString(Str);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV32(PWideChar(Str)^,Length(Str) * SizeOf(WideChar),HashAlgorithm);
 end;
 
 //------------------------------------------------------------------------------
 
-Function StringFNV32(const Str: String; Algorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
-var
-  Hasher: TFNV32Hash;
+Function StringFNV32(const Str: String; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
 begin
-Hasher := TFNV32Hash.Create;
-try
-  Hasher.HashAlgorithm := Algorithm;
-  Hasher.HashString(Str);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV32(PChar(Str)^,Length(Str) * SizeOf(Char),HashAlgorithm);
 end;
 
 //------------------------------------------------------------------------------
@@ -2563,7 +2668,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure FNV32_Update(var Context: TFNV32Context; const Buffer; Size: TMemSize);
+procedure FNV32_Update(Context: TFNV32Context; const Buffer; Size: TMemSize);
 begin
 TFNV32Hash(Context).Update(Buffer,Size);
 end;
@@ -2588,17 +2693,8 @@ end;
 //------------------------------------------------------------------------------
 
 Function FNV32_Hash(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV32;
-var
-  Hasher: TFNV32Hash;
 begin
-Hasher := TFNV32Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashBuffer(Buffer,Size);
-  Result := Hasher.FNV32;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV32(Buffer,Size,HashAlgorithm);
 end;
 
 {===============================================================================
@@ -2608,183 +2704,96 @@ end;
     Procedural interface - 64bit hash utility functions
 -------------------------------------------------------------------------------}
 
-Function FNV64ToStr(Hash: TFNV64): String;
-var
-  Hasher: TFNV64Hash;
+Function FNV64ToStr(const Hash: TFNV64): String;
 begin
-Hasher := TFNV64Hash.CreateAndInitFrom(Hash);
-try
-  Result := Hasher.AsString;
-finally
-  Hasher.Free;
-end;
+Result := FNVAsString(Hash,SizeOf(TFNV64));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToFNV64(const Str: String): TFNV64;
-var
-  Hasher: TFNV64Hash;
 begin
-Hasher := TFNV64Hash.Create;
-try
-  Hasher.FromString(Str);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
-end;
+FNVFromString(Str,Result,SizeOf(TFNV64));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToFNV64(const Str: String; out Hash: TFNV64): Boolean;
-var
-  Hasher: TFNV64Hash;
 begin
-Hasher := TFNV64Hash.Create;
 try
-  Result := Hasher.TryFromString(Str);
-  If Result then
-    Hash := Hasher.FNV64;
-finally
-  Hasher.Free;
+  FNVFromString(Str,Hash,SizeOf(TFNV64));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToFNV64Def(const Str: String; Default: TFNV64): TFNV64;
-var
-  Hasher: TFNV64Hash;
 begin
-Hasher := TFNV64Hash.Create;
-try
-  Hasher.FromStringDef(Str,Default);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
-end;
+If not TryStrToFNV64(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareFNV64(A,B: TFNV64): Integer;
-var
-  HasherA:  TFNV64Hash;
-  HasherB:  TFNV64Hash;
+Function CompareFNV64(const A,B: TFNV64): Integer;
 begin
-HasherA := TFNV64Hash.CreateAndInitFrom(A);
-try
-  HasherB := TFNV64Hash.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Compare(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := FNVCompare(A,B,SizeOf(TFNV64));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameFNV64(A,B: TFNV64): Boolean;
-var
-  HasherA:  TFNV64Hash;
-  HasherB:  TFNV64Hash;
+Function SameFNV64(const A,B: TFNV64): Boolean;
 begin
-HasherA := TFNV64Hash.CreateAndInitFrom(A);
-try
-  HasherB := TFNV64Hash.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Same(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := FNVSame(A,B,SizeOf(TFNV64));
 end;
 
 {-------------------------------------------------------------------------------
     Procedural interface - 64bit hash processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferFNV64(Hash: TFNV64; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
-var
-  Hasher: TFNV64Hash;
+Function BufferFNV64(const Hash: TFNV64; const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
 begin
-Hasher := TFNV64Hash.CreateAndInitFrom(Hash,HashAlgorithm);
-try
-  Hasher.Final(Buffer,Size);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
-end;
+If HashAlgorithm = algFNV1a then
+  Result := TFNV64Hash.FNV64FromSys(FNV64Process_1a(TFNV64Hash.FNV64ToSys(Hash),Buffer,Size))
+else
+  Result := TFNV64Hash.FNV64FromSys(FNV64Process_0(TFNV64Hash.FNV64ToSys(Hash),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function BufferFNV64(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
-var
-  Hasher: TFNV64Hash;
 begin
-Hasher := TFNV64Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashBuffer(Buffer,Size);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
+case HashAlgorithm of
+  algFNV0:  Result := TFNV64Hash.FNV64FromSys(FNV64Process_0(TFNV64Hash.FNV64ToSys(ZeroFNV64),Buffer,Size));
+  algFNV1:  Result := TFNV64Hash.FNV64FromSys(FNV64Process_0(TFNV64Hash.FNV64ToSys(InitialFNV64),Buffer,Size));
+  algFNV1a: Result := TFNV64Hash.FNV64FromSys(FNV64Process_1a(TFNV64Hash.FNV64ToSys(InitialFNV64),Buffer,Size));
+else
+  raise EFNVInvalidValue.CreateFmt('BufferFNV64: Unknown hash algorithm (%d).',[Ord(HashAlgorithm)]);
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringFNV64(const Str: AnsiString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
-var
-  Hasher: TFNV64Hash;
 begin
-Hasher := TFNV64Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashAnsiString(Str);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV64(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar),HashAlgorithm);
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringFNV64(const Str: WideString; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
-var
-  Hasher: TFNV64Hash;
 begin
-Hasher := TFNV64Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashWideString(Str);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV64(PWideChar(Str)^,Length(Str) * SizeOf(WideChar),HashAlgorithm);
 end;
 
 //------------------------------------------------------------------------------
 
-Function StringFNV64(const Str: String; Algorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
-var
-  Hasher: TFNV64Hash;
+Function StringFNV64(const Str: String; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
 begin
-Hasher := TFNV64Hash.Create;
-try
-  Hasher.HashAlgorithm := Algorithm;
-  Hasher.HashString(Str);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV64(PChar(Str)^,Length(Str) * SizeOf(Char),HashAlgorithm);
 end;
 
 //------------------------------------------------------------------------------
@@ -2835,7 +2844,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure FNV64_Update(var Context: TFNV64Context; const Buffer; Size: TMemSize);
+procedure FNV64_Update(Context: TFNV64Context; const Buffer; Size: TMemSize);
 begin
 TFNV64Hash(Context).Update(Buffer,Size);
 end;
@@ -2860,17 +2869,8 @@ end;
 //------------------------------------------------------------------------------
 
 Function FNV64_Hash(const Buffer; Size: TMemSize; HashAlgorithm: TFNVHashAlgorithm = algFNV1a): TFNV64;
-var
-  Hasher: TFNV64Hash;
 begin
-Hasher := TFNV64Hash.Create;
-try
-  Hasher.HashAlgorithm := HashAlgorithm;
-  Hasher.HashBuffer(Buffer,Size);
-  Result := Hasher.FNV64;
-finally
-  Hasher.Free;
-end;
+Result := BufferFNV64(Buffer,Size,HashAlgorithm);
 end;
 
 end.

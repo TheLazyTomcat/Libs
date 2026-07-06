@@ -13,7 +13,7 @@
     (CRC-8) for almost any data (buffers, strings, streams, files, ...).
 
     It can be used either in form of objects (eg. class TCRC8Hash) or in pure
-    procedural form (but note that this is merely a wrapper around objects).
+    procedural form.
 
     If the imlemented CRC does not suit your needs, you can create an instance
     of class TCRC8CustomHash, provide it with your own parameters (polynomial,
@@ -22,9 +22,9 @@
     These can be used to initialize the custom hash object with respective
     settings.
 
-  Version 1.0.1 (2026-06-21)
+  Version 1.1 (2026-07-03)
 
-  Last change 2026-06-21
+  Last change 2026-07-03
 
   ©2026 František Milt
 
@@ -129,6 +129,7 @@ type
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
     constructor CreateAndInitFrom(Hash: TCRC8); overload; virtual;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TCRC8); reintroduce;
@@ -575,24 +576,25 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  All following functions are implemented as wrappers around TCRC8Hash class
-  and its methods.
+  Most of the following functions are calling direct implementation, only
+  functions StreamCRC8 and FileCRC8 are using instance of TCRC8Hash class
+  to do the work.
 }
 {===============================================================================
     Standalone functions - declaration
 ===============================================================================}
 
-Function CRC8ToStr(CRC8: TCRC8): String;
+Function CRC8ToStr(const CRC8: TCRC8): String;
 Function StrToCRC8(const Str: String): TCRC8;
 Function TryStrToCRC8(const Str: String; out CRC8: TCRC8): Boolean;
 Function StrToCRC8Def(const Str: String; Default: TCRC8): TCRC8;
 
-Function CompareCRC8(A,B: TCRC8): Integer;
-Function SameCRC8(A,B: TCRC8): Boolean;
+Function CompareCRC8(const A,B: TCRC8): Integer;
+Function SameCRC8(const A,B: TCRC8): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferCRC8(CRC8: TCRC8; const Buffer; Size: TMemSize): TCRC8; overload;
+Function BufferCRC8(const CRC8: TCRC8; const Buffer; Size: TMemSize): TCRC8; overload;
 
 Function BufferCRC8(const Buffer; Size: TMemSize): TCRC8; overload;
 
@@ -606,10 +608,10 @@ Function FileCRC8(const FileName: String): TCRC8;
 //------------------------------------------------------------------------------
 
 type
-  TCRC8Context = type Pointer;
+  TCRC8Context = type TCRC8;
 
 Function CRC8_Init: TCRC8Context;
-procedure CRC8_Update(Context: TCRC8Context; const Buffer; Size: TMemSize);
+procedure CRC8_Update(var Context: TCRC8Context; const Buffer; Size: TMemSize);
 Function CRC8_Final(var Context: TCRC8Context; const Buffer; Size: TMemSize): TCRC8; overload;
 Function CRC8_Final(var Context: TCRC8Context): TCRC8; overload;
 Function CRC8_Hash(const Buffer; Size: TMemSize): TCRC8;
@@ -680,6 +682,65 @@ If Length(Str) > 0 then
 end;
 
 {===============================================================================
+    Main implementation
+===============================================================================}
+
+Function CRC8Process(const CRC8: TCRC8; const Buffer; Size: TMemSize; CRC8TablePtr: PCRC8Table): TCRC8;
+var
+  CurrentData:  PUInt8;
+  i:            TMemSize;
+begin
+Result := CRC8;
+CurrentData := @Buffer;
+For i := 1 to Size do
+  begin
+    Result := CRC8TablePtr^[Result xor CurrentData^];
+    Inc(CurrentData);
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC8Compare(const A,B: TCRC8): Integer;
+begin
+If A > B then
+  Result := +1
+else If A < B then
+  Result := -1
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC8Same(const A,B: TCRC8): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC8AsString(const CRC8: TCRC8): String;
+begin
+Result := IntToHex(CRC8,2);
+end;
+
+//------------------------------------------------------------------------------
+
+Function CRC8FromString(const Str: String): TCRC8;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TCRC8(StrToInt(Str))
+    else
+      Result := TCRC8(StrToInt('$' + Str));
+  end
+else Result := ZeroCRC8;
+end;
+
+
+{===============================================================================
 --------------------------------------------------------------------------------
                                   TCRC8BaseHash
 --------------------------------------------------------------------------------
@@ -699,20 +760,8 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TCRC8BaseHash.ProcessBuffer(const Buffer; Size: TMemSize);
-var
-  CurrentData:  PUInt8;
-  WorkCRC:      TCRC8;
-  i:            TMemSize;
 begin
-// work on local copy
-WorkCRC := fCRC8Value;
-CurrentData := @Buffer;
-For i := 1 to Size do
-  begin
-    WorkCRC := fCRC8Table^[WorkCRC xor CurrentData^];
-    Inc(CurrentData);
-  end;
-fCRC8Value := WorkCRC;
+fCRC8Value := CRC8Process(fCRC8Value,Buffer,Size,fCRC8Table);
 end;
 
 //------------------------------------------------------------------------------
@@ -783,36 +832,33 @@ end;
 Function TCRC8BaseHash.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TCRC8BaseHash then
-  begin
-    If fCRC8Value > TCRC8BaseHash(Hash).CRC8 then
-      Result := +1
-    else If fCRC8Value < TCRC8BaseHash(Hash).CRC8 then
-      Result := -1
-    else
-      Result := 0;
-  end
-else raise ECRC8IncompatibleClass.CreateFmt('TCRC8BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := CRC8Compare(fCRC8Value,TCRC8BaseHash(Hash).CRC8)
+else
+  raise ECRC8IncompatibleClass.CreateFmt('TCRC8BaseHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TCRC8BaseHash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TCRC8BaseHash then
+  Result := CRC8Same(fCRC8Value,TCRC8BaseHash(Hash).CRC8)
+else
+  raise ECRC8IncompatibleClass.CreateFmt('TCRC8BaseHash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TCRC8BaseHash.AsString: String;
 begin
-Result := IntToHex(fCRC8Value,2);
+Result := CRC8AsString(fCRC8Value);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TCRC8BaseHash.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fCRC8Value := TCRC8(StrToInt(Str))
-    else
-      fCRC8Value := TCRC8(StrToInt('$' + Str));
-  end
-else fCRC8Value := ZeroCRC8;
+fCRC8Value := CRC8FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -1283,179 +1329,87 @@ end;
     Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function CRC8ToStr(CRC8: TCRC8): String;
-var
-  Hash: TCRC8Hash;
+Function CRC8ToStr(const CRC8: TCRC8): String;
 begin
-Hash := TCRC8Hash.CreateAndInitFrom(CRC8);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := CRC8AsString(CRC8);
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC8(const Str: String): TCRC8;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+Result := CRC8FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToCRC8(const Str: String; out CRC8: TCRC8): Boolean;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    CRC8 := Hash.CRC8;
-finally
-  Hash.Free;
+  CRC8 := CRC8FromString(Str);
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToCRC8Def(const Str: String; Default: TCRC8): TCRC8;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+If not TryStrToCRC8(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareCRC8(A,B: TCRC8): Integer;
-var
-  HashA:  TCRC8Hash;
-  HashB:  TCRC8Hash;
+Function CompareCRC8(const A,B: TCRC8): Integer;
 begin
-HashA := TCRC8Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC8Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC8Compare(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameCRC8(A,B: TCRC8): Boolean;
-var
-  HashA:  TCRC8Hash;
-  HashB:  TCRC8Hash;
+Function SameCRC8(const A,B: TCRC8): Boolean;
 begin
-HashA := TCRC8Hash.CreateAndInitFrom(A);
-try
-  HashB := TCRC8Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := CRC8Same(A,B);
 end;
 
 {-------------------------------------------------------------------------------
     Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferCRC8(CRC8: TCRC8; const Buffer; Size: TMemSize): TCRC8;
-var
-  Hash: TCRC8Hash;
+Function BufferCRC8(const CRC8: TCRC8; const Buffer; Size: TMemSize): TCRC8;
 begin
-Hash := TCRC8Hash.CreateAndInitFrom(CRC8);
-try
-  Hash.Final(Buffer,Size);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+Result := CRC8Process(CRC8,Buffer,Size,@CRC8_TABLE);
 end;
 
 //------------------------------------------------------------------------------
 
 Function BufferCRC8(const Buffer; Size: TMemSize): TCRC8;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+Result := CRC8Process(InitialCRC8,Buffer,Size,@CRC8_TABLE);
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringCRC8(const Str: AnsiString): TCRC8;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
-try
-  Hash.HashAnsiString(Str);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC8(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringCRC8(const Str: WideString): TCRC8;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
-try
-  Hash.HashWideString(Str);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC8(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StringCRC8(const Str: String): TCRC8;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
-try
-  Hash.HashString(Str);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC8(PChar(Str)^,Length(Str) * SizeOf(Char));
 end;
 
 //------------------------------------------------------------------------------
@@ -1493,18 +1447,15 @@ end;
 -------------------------------------------------------------------------------}
 
 Function CRC8_Init: TCRC8Context;
-var
-  Temp: TCRC8Hash;
 begin
-Temp := TCRC8Hash.CreateAndInit;
-Result := TCRC8Context(Temp);
+Result := TCRC8Context(InitialCRC8);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure CRC8_Update(Context: TCRC8Context; const Buffer; Size: TMemSize);
+procedure CRC8_Update(var Context: TCRC8Context; const Buffer; Size: TMemSize);
 begin
-TCRC8Hash(Context).Update(Buffer,Size);
+TCRC8(Context) := CRC8Process(TCRC8(Context),Buffer,Size,@CRC8_TABLE);
 end;
 
 //------------------------------------------------------------------------------
@@ -1519,24 +1470,15 @@ end;
 
 Function CRC8_Final(var Context: TCRC8Context): TCRC8;
 begin
-TCRC8Hash(Context).Final;
-Result := TCRC8Hash(Context).CRC8;
-FreeAndNil(TCRC8Hash(Context));
+Result := TCRC8(Context);
+Context := TCRC8Context(ZeroCRC8)
 end;
 
 //------------------------------------------------------------------------------
 
 Function CRC8_Hash(const Buffer; Size: TMemSize): TCRC8;
-var
-  Hash: TCRC8Hash;
 begin
-Hash := TCRC8Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.CRC8;
-finally
-  Hash.Free;
-end;
+Result := BufferCRC8(Buffer,Size);
 end;
 
 end.

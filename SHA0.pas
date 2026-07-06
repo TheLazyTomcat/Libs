@@ -13,9 +13,9 @@
     altered block calculation (SHA-1 differs from SHA-0 only in this small
     detail).
 
-  Version 1.2.1 (2020-07-13)
+  Version 1.2.2 (2026-07-05)
 
-  Last change 2026-02-26
+  Last change 2026-07-05
 
   ©2015-2026 František Milt
 
@@ -54,8 +54,6 @@ unit SHA0;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -70,18 +68,23 @@ uses
   AuxTypes, HashBase;
 
 {===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  ESHA0Exception = class(EHashException);
+
+  ESHA0IncompatibleClass = class(ESHA0Exception);
+  ESHA0ProcessingError   = class(ESHA0Exception);
+
+{===============================================================================
     Common types and constants
 ===============================================================================}
 {
   Bytes in type TSHA0 are always ordered from most significant byte to least
   significant byte (big endian).
-  
+
   Type TSHA0Sys has no such guarantee and its internal structure depends on
   current implementation.
-
-  SHA-0 does not differ in little and big endian form, as it is not a single
-  quantity, therefore methods like SHA0ToLE or SHA0ToBE do nothing and are
-  present only for the sake of completeness.
 }
 type
   TSHA0 = packed array[0..19] of UInt8;
@@ -98,21 +101,15 @@ type
 
 const
   InitialSHA0: TSHA0 = ($67,$45,$23,$01,$EF,$CD,$AB,$89,$98,$BA,
-                        $DC,$FE,$10,$32,$54,$76,$C3,$D2,$E1,$F0); 
+                        $DC,$FE,$10,$32,$54,$76,$C3,$D2,$E1,$F0);
   ZeroSHA0:    TSHA0 = ($00,$00,$00,$00,$00,$00,$00,$00,$00,$00,
                         $00,$00,$00,$00,$00,$00,$00,$00,$00,$00);
 
-type
-  ESHA0Exception = class(EHashException);
-
-  ESHA0IncompatibleClass = class(ESHA0Exception);
-  ESHA0ProcessingError   = class(ESHA0Exception);
-
-{-------------------------------------------------------------------------------
-================================================================================
-                                    TSHA0Hash                                    
-================================================================================
--------------------------------------------------------------------------------}
+{===============================================================================
+--------------------------------------------------------------------------------
+                                    TSHA0Hash
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA0Hash - class declaration
 ===============================================================================}
@@ -140,6 +137,7 @@ type
     constructor CreateAndInitFrom(Hash: TSHA0); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TSHA0); reintroduce;
@@ -150,25 +148,29 @@ type
   end;
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - declaration
 ===============================================================================}
 
-
-Function SHA0toStr(SHA0: TSHA0): String;
-Function StrToSHA0(Str: String): TSHA0;
+Function SHA0toStr(const SHA0: TSHA0): String;
+Function StrToSHA0(const Str: String): TSHA0;
 Function TryStrToSHA0(const Str: String; out SHA0: TSHA0): Boolean;
 Function StrToSHA0Def(const Str: String; Default: TSHA0): TSHA0;
 
-Function CompareSHA0(A,B: TSHA0): Integer;
-Function SameSHA0(A,B: TSHA0): Boolean;
+Function CompareSHA0(const A,B: TSHA0): Integer;
+Function SameSHA0(const A,B: TSHA0): Boolean;
 
-Function BinaryCorrectSHA0(SHA0: TSHA0): TSHA0;
+Function BinaryCorrectSHA0(const SHA0: TSHA0): TSHA0; deprecated;
 
 //------------------------------------------------------------------------------
 
 procedure BufferSHA0(var SHA0: TSHA0; const Buffer; Size: TMemSize); overload;
-Function LastBufferSHA0(SHA0: TSHA0; const Buffer; Size: TMemSize; MessageLength: UInt64): TSHA0; overload;
-Function LastBufferSHA0(SHA0: TSHA0; const Buffer; Size: TMemSize): TSHA0; overload;
+Function LastBufferSHA0(const SHA0: TSHA0; const Buffer; Size: TMemSize; MessageLength: UInt64): TSHA0; overload;
+Function LastBufferSHA0(const SHA0: TSHA0; const Buffer; Size: TMemSize): TSHA0; overload;
 
 Function BufferSHA0(const Buffer; Size: TMemSize): TSHA0; overload;
 
@@ -196,23 +198,84 @@ uses
   SysUtils,
   BitOps;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable  
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
-{$ENDIF}
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TSHA0Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA0Hash - calculation constants
 ===============================================================================}
 const
   SHA0_ROUND_CONSTS: array[0..3] of UInt32 = ($5A827999, $6ED9EBA1, $8F1BBCDC, $CA62C1D6);
+
+{===============================================================================
+    TSHA0Hash - auxiliary functions
+===============================================================================}
+
+Function SHA0Compare(const A,B: TSHA0): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+For i := Low(A) to High(A) do
+  If A[i] > B[i] then
+    begin
+      Result := +1;
+      Break;
+    end
+  else If A[i] < B[i] then
+    begin
+      Result := -1;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA0Same(const A,B: TSHA0): Boolean;
+var
+  i:  Integer;
+begin
+Result := True;
+For i := Low(A) to High(A) do
+  If A[i] <> B[i] then
+    begin
+      Result := False;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA0AsString(const SHA0: TSHA0): String;
+var
+  i:    Integer;
+begin
+Result := StringOfChar('0',SizeOf(TSHA0) * 2);
+For i := Low(SHA0) to High(SHA0) do
+  begin
+    Result[(i * 2) + 2] := IntToHex(SHA0[i] and $0F,1)[1];
+    Result[(i * 2) + 1] := IntToHex(SHA0[i] shr 4,1)[1];
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA0FromString(const Str: String): TSHA0;
+var
+  TempStr:  String;
+  i:        Integer;
+begin
+If Length(Str) < (SizeOf(TSHA0) * 2) then
+  TempStr := StringOfChar('0',(SizeOf(TSHA0) * 2) - Length(Str)) + Str
+else If Length(Str) > (SizeOf(TSHA0) * 2) then
+  TempStr := Copy(Str,Length(Str) - Pred(SizeOf(TSHA0) * 2),SizeOf(TSHA0) * 2)
+else
+  TempStr := Str;
+For i := Low(Result) to High(Result) do
+  Result[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
+end;
 
 {===============================================================================
     TSHA0Hash - class implementation
@@ -296,12 +359,10 @@ begin
 If (fBlockSize - fTransCount) >= (SizeOf(UInt64) + 1) then
   begin
     // padding and length can fit
-  {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-    FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
-    PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := $80;
-    PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
+    FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,0);
+    PUInt8(PtrAdvance(fTransBlock,TMemOff(fTransCount)))^ := $80;
+    PUInt64(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - SizeOf(UInt64)))^ :=
       {$IFNDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
     ProcessBlock(fTransBlock^);
   end
 else
@@ -309,16 +370,12 @@ else
     // padding and length cannot fit  
     If fBlockSize > fTransCount then
       begin
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
-        PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := $80;
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,0);
+        PUInt8(PtrAdvance(fTransBlock,TMemOff(fTransCount)))^ := $80;
         ProcessBlock(fTransBlock^);
         FillChar(fTransBlock^,fBlockSize,0);
-      {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-        PUInt64(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - SizeOf(UInt64)))^ :=
+        PUInt64(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - SizeOf(UInt64)))^ :=
           {$IFNDEF ENDIAN_BIG}EndianSwap{$ENDIF}(UInt64(fProcessedBytes) * 8);
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
         ProcessBlock(fTransBlock^);        
       end
     else raise ESHA0ProcessingError.CreateFmt('TSHA0Hash.ProcessLast: Invalid data transfer (%d).',[fTransCount]);
@@ -373,6 +430,7 @@ end;
 class Function TSHA0Hash.SHA0ToLE(SHA0: TSHA0): TSHA0;
 begin
 Result := SHA0;
+SwapEndian(Result,SizeOf(TSHA0));
 end;
 
 //------------------------------------------------------------------------------
@@ -387,6 +445,7 @@ end;
 class Function TSHA0Hash.SHA0FromLE(SHA0: TSHA0): TSHA0;
 begin
 Result := SHA0;
+SwapEndian(Result,SizeOf(TSHA0));
 end;
 
 //------------------------------------------------------------------------------
@@ -455,63 +514,35 @@ end;
 //------------------------------------------------------------------------------
 
 Function TSHA0Hash.Compare(Hash: THashBase): Integer;
-var
-  A,B:  TSHA0;
-  i:    Integer;
 begin
 If Hash is TSHA0Hash then
-  begin
-    Result := 0;
-    A := SHA0FromSys(fSHA0);
-    B := TSHA0Hash(Hash).SHA0;
-    For i := Low(A) to High(A) do
-      If A[i] > B[i] then
-        begin
-          Result := +1;
-          Break;
-        end
-      else If A[i] < B[i] then
-        begin
-          Result := -1;
-          Break;
-        end;
-  end
-else raise ESHA0IncompatibleClass.CreateFmt('TSHA0Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := SHA0Compare(SHA0FromSys(fSHA0),TSHA0Hash(Hash).SHA0)
+else
+  raise ESHA0IncompatibleClass.CreateFmt('TSHA0Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSHA0Hash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TSHA0Hash then
+  Result := SHA0Same(SHA0FromSys(fSHA0),TSHA0Hash(Hash).SHA0)
+else
+  raise ESHA0IncompatibleClass.CreateFmt('TSHA0Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TSHA0Hash.AsString: String;
-var
-  Temp: TSHA0;
-  i:    Integer;
 begin
-Result := StringOfChar('0',HashSize * 2);
-Temp := SHA0FromSys(fSHA0);
-For i := Low(Temp) to High(Temp) do
-  begin
-    Result[(i * 2) + 2] := IntToHex(Temp[i] and $0F,1)[1];
-    Result[(i * 2) + 1] := IntToHex(Temp[i] shr 4,1)[1];
-  end;
+Result := SHA0AsString(SHA0FromSys(fSHA0));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSHA0Hash.FromString(const Str: String);
-var
-  TempStr:  String;
-  i:        Integer;
-  TempSHA0: TSHA0;
 begin
-If Length(Str) < Integer(HashSize * 2) then
-  TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
-else If Length(Str) > Integer(HashSize * 2) then
-  TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
-else
-  TempStr := Str;
-For i := Low(TempSHA0) to High(TempSHA0) do
-  TempSHA0[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
-fSHA0 := SHA0ToSys(TempSHA0);
+fSHA0 := SHA0ToSys(SHA0FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
@@ -542,12 +573,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TSHA0Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TSHA0;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TSHA0));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TSHA0));
 case Endianness of
   heSystem: fSHA0 := SHA0ToSys({$IFDEF ENDIAN_BIG}SHA0FromBE{$ELSE}SHA0FromLE{$ENDIF}(Temp));
   heLittle: fSHA0 := SHA0ToSys(SHA0FromLE(Temp));
@@ -557,123 +587,75 @@ else
   fSHA0 := SHA0ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - utility functions
+    Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function SHA0toStr(SHA0: TSHA0): String;
-var
-  Hash: TSHA0Hash;
+Function SHA0toStr(const SHA0: TSHA0): String;
 begin
-Hash := TSHA0Hash.CreateAndInitFrom(SHA0);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := SHA0AsString(SHA0);
 end;
 
 //------------------------------------------------------------------------------
 
-Function StrToSHA0(Str: String): TSHA0;
-var
-  Hash: TSHA0Hash;
+Function StrToSHA0(const Str: String): TSHA0;
 begin
-Hash := TSHA0Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.SHA0;
-finally
-  Hash.Free;
-end;
+Result := SHA0FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToSHA0(const Str: String; out SHA0: TSHA0): Boolean;
-var
-  Hash: TSHA0Hash;
 begin
-Hash := TSHA0Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    SHA0 := Hash.SHA0;
-finally
-  Hash.Free;
+  SHA0 := SHA0FromString(Str);
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToSHA0Def(const Str: String; Default: TSHA0): TSHA0;
-var
-  Hash: TSHA0Hash;
 begin
-Hash := TSHA0Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.SHA0;
-finally
-  Hash.Free;
-end;
+If not TryStrToSHA0(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareSHA0(A,B: TSHA0): Integer;
-var
-  HashA:  TSHA0Hash;
-  HashB:  TSHA0Hash;
+Function CompareSHA0(const A,B: TSHA0): Integer;
 begin
-HashA := TSHA0Hash.CreateAndInitFrom(A);
-try
-  HashB := TSHA0Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := SHA0Compare(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameSHA0(A,B: TSHA0): Boolean;
-var
-  HashA:  TSHA0Hash;
-  HashB:  TSHA0Hash;
+Function SameSHA0(const A,B: TSHA0): Boolean;
 begin
-HashA := TSHA0Hash.CreateAndInitFrom(A);
-try
-  HashB := TSHA0Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := SHA0Same(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function BinaryCorrectSHA0(SHA0: TSHA0): TSHA0;
+Function BinaryCorrectSHA0(const SHA0: TSHA0): TSHA0;
 begin
 Result := SHA0;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - processing functions
+    Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
 procedure BufferSHA0(var SHA0: TSHA0; const Buffer; Size: TMemSize);
@@ -698,7 +680,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferSHA0(SHA0: TSHA0; const Buffer; Size: TMemSize; MessageLength: UInt64): TSHA0;
+Function LastBufferSHA0(const SHA0: TSHA0; const Buffer; Size: TMemSize; MessageLength: UInt64): TSHA0;
 var
   Hash: TSHA0Hash;
 begin
@@ -714,7 +696,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferSHA0(SHA0: TSHA0; const Buffer; Size: TMemSize): TSHA0;
+Function LastBufferSHA0(const SHA0: TSHA0; const Buffer; Size: TMemSize): TSHA0;
 var
   Hash: TSHA0Hash;
 begin
@@ -818,7 +800,7 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - context functions
+    Standalone functions - context functions
 -------------------------------------------------------------------------------}
 
 Function SHA0_Init: TSHA0Context;

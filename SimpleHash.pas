@@ -24,9 +24,9 @@
     simply because I do not remember them. So if anyone thinks it is a stealed
     code, it is not, but that does not mean someone cannot recognize it, sorry!
 
-  Version 1.0.2 (2026-06-07)
+  Version 1.1 (2026-07-04)
 
-  Last change 2026-06-07
+  Last change 2026-07-04
 
   ©2026 František Milt
 
@@ -45,9 +45,10 @@
       github.com/TheLazyTomcat/Lib.SimpleHash
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
-    BasicUIM - github.com/TheLazyTomcat/Lib.BasicUIM
-    HashBase - github.com/TheLazyTomcat/Lib.HashBase
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    BasicUIM    - github.com/TheLazyTomcat/Lib.BasicUIM
+    HashBase    - github.com/TheLazyTomcat/Lib.HashBase
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
 
   Indirect dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
@@ -56,7 +57,6 @@
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
     WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
@@ -192,6 +192,7 @@ type
     constructor CreateAndInitFrom(Hash: TSimpleHash32); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TSimpleHash32); reintroduce;
@@ -267,6 +268,7 @@ type
     constructor CreateAndInitFrom(Hash: TSimpleHash64); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TSimpleHash64); reintroduce;
@@ -307,44 +309,26 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-  Some functions provided in procedural interface are only wrappers around
-  TSimpleHash32Init and TSimpleHash64Init classes and their methods - meaning,
-  among other facts, that they calculate the hash using non-zero initial value.
-  Function that are not wrappers around mentioned classes are (more-or-less)
-  directly calling core implementation for the sake of better performance
-  (also using non-zero initial value, where applicable). These non-wrappers
-  are:
-
-    BufferSimpleHash[32/64] (both overloads)
-
-    AnsiStringSimpleHash[32/64]
-    WideStringSimpleHash[32/64]
-    StringSimpleHash[32/64]
-
-    SimpleHash[32/64]_Init
-    SimpleHash[32/64]_Update
-    SimpleHash[32/64]_Final (both overloads)
-    SimpleHash[32/64]_Hash
-
-  Note that these non-wrappers are always calling assembly code whenever it
-  is possible - there is no UIM switching awailable for them (unlike object
-  implementation).
+  Almost all in-here provided functions are calling direct implementation,
+  the exceptions are functions StreamSimpleHash32/64 and FileSimpleHash32/64
+  that are using instances of class TSimpleHash32/64Init and their methods to
+  do the work.
 }
 {===============================================================================
     Procedural interface - 32bit hash declaration
 ===============================================================================}
 
-Function SimpleHash32ToStr(Hash: TSimpleHash32): String;
+Function SimpleHash32ToStr(const Hash: TSimpleHash32): String;
 Function StrToSimpleHash32(const Str: String): TSimpleHash32;
 Function TryStrToSimpleHash32(const Str: String; out Hash: TSimpleHash32): Boolean;
 Function StrToSimpleHash32Def(const Str: String; Default: TSimpleHash32): TSimpleHash32;
 
-Function CompareSimpleHash32(A,B: TSimpleHash32): Integer;
-Function SameSimpleHash32(A,B: TSimpleHash32): Boolean;
+Function CompareSimpleHash32(const A,B: TSimpleHash32): Integer;
+Function SameSimpleHash32(const A,B: TSimpleHash32): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferSimpleHash32(Hash: TSimpleHash32; const Buffer; Size: TMemSize): TSimpleHash32; overload;
+Function BufferSimpleHash32(const Hash: TSimpleHash32; const Buffer; Size: TMemSize): TSimpleHash32; overload;
 Function BufferSimpleHash32(const Buffer; Size: TMemSize): TSimpleHash32; overload;
 
 Function AnsiStringSimpleHash32(const Str: AnsiString): TSimpleHash32;
@@ -356,7 +340,7 @@ Function FileSimpleHash32(const FileName: String): TSimpleHash32;
 
 //------------------------------------------------------------------------------
 type
-  TSimpleHash32Context = type Pointer;
+  TSimpleHash32Context = type TSimpleHash32Sys;
 
 Function SimpleHash32_Init: TSimpleHash32Context;
 procedure SimpleHash32_Update(var Context: TSimpleHash32Context; const Buffer; Size: TMemSize);
@@ -368,17 +352,17 @@ Function SimpleHash32_Hash(const Buffer; Size: TMemSize): TSimpleHash32;
     Procedural interface - 64bit hash declaration
 ===============================================================================}
 
-Function SimpleHash64ToStr(Hash: TSimpleHash64): String;
+Function SimpleHash64ToStr(const Hash: TSimpleHash64): String;
 Function StrToSimpleHash64(const Str: String): TSimpleHash64;
 Function TryStrToSimpleHash64(const Str: String; out Hash: TSimpleHash64): Boolean;
 Function StrToSimpleHash64Def(const Str: String; Default: TSimpleHash64): TSimpleHash64;
 
-Function CompareSimpleHash64(A,B: TSimpleHash64): Integer;
-Function SameSimpleHash64(A,B: TSimpleHash64): Boolean;
+Function CompareSimpleHash64(const A,B: TSimpleHash64): Integer;
+Function SameSimpleHash64(const A,B: TSimpleHash64): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferSimpleHash64(Hash: TSimpleHash64; const Buffer; Size: TMemSize): TSimpleHash64; overload;
+Function BufferSimpleHash64(const Hash: TSimpleHash64; const Buffer; Size: TMemSize): TSimpleHash64; overload;
 Function BufferSimpleHash64(const Buffer; Size: TMemSize): TSimpleHash64; overload;
 
 Function AnsiStringSimpleHash64(const Str: AnsiString): TSimpleHash64;
@@ -390,7 +374,7 @@ Function FileSimpleHash64(const FileName: String): TSimpleHash64;
 
 //------------------------------------------------------------------------------
 type
-  TSimpleHash64Context = type Pointer;
+  TSimpleHash64Context = type TSimpleHash64Sys;
 
 Function SimpleHash64_Init: TSimpleHash64Context;
 procedure SimpleHash64_Update(var Context: TSimpleHash64Context; const Buffer; Size: TMemSize);
@@ -401,7 +385,8 @@ Function SimpleHash64_Hash(const Buffer; Size: TMemSize): TSimpleHash64;
 implementation
 
 uses
-  SysUtils;
+  SysUtils,
+  UInt64Utils;
 
 {===============================================================================
     UIM variables
@@ -609,6 +594,82 @@ asm
 end;
 
 {$ENDIF}
+
+//==============================================================================
+
+Function SimpleHash32Compare(const A,B: TSimpleHash32Sys): Integer;
+begin
+If A > B then
+  Result := +1
+else If A < B then
+  Result := -1
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SimpleHash32Same(const A,B: TSimpleHash32Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SimpleHash32AsString(const SimpleHash32: TSimpleHash32Sys): String;
+begin
+Result := IntToHex(SimpleHash32,8);
+end;
+
+//------------------------------------------------------------------------------
+
+Function SimpleHash32FromString(const Str: String): TSimpleHash32Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TSimpleHash32Sys(StrToInt(Str))
+    else
+      Result := TSimpleHash32Sys(StrToInt('$' + Str));
+  end
+else Result := TSimpleHash32Base.SimpleHash32ToSys(ZeroSimpleHash32);
+end;
+
+//==============================================================================
+
+Function SimpleHash64Compare(const A,B: TSimpleHash64Sys): Integer;
+begin
+Result := CompareUInt64(A,B);
+end;
+
+//------------------------------------------------------------------------------
+
+Function SimpleHash64Same(const A,B: TSimpleHash64Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SimpleHash64AsString(const SimpleHash64: TSimpleHash64Sys): String;
+begin
+Result := IntToHex(SimpleHash64,16);
+end;
+
+//------------------------------------------------------------------------------
+
+Function SimpleHash64FromString(const Str: String): TSimpleHash64Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TSimpleHash64Sys(StrToInt64(Str))
+    else
+      Result := TSimpleHash64Sys(StrToInt64('$' + Str));
+  end
+else Result := TSimpleHash64Base.SimpleHash64ToSys(ZeroSimpleHash64);
+end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -829,36 +890,33 @@ end;
 Function TSimpleHash32Base.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TSimpleHash32Base then
-  begin
-    If fSimpleHash32 > TSimpleHash32Base(Hash).SimpleHash32Sys then
-      Result := +1
-    else If fSimpleHash32 < TSimpleHash32Base(Hash).SimpleHash32Sys then
-      Result := -1
-    else
-      Result := 0;
-  end
-else raise ESHIncompatibleClass.CreateFmt('TSimpleHash32Base.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := SimpleHash32Compare(fSimpleHash32,TSimpleHash32Base(Hash).SimpleHash32Sys)
+else
+  raise ESHIncompatibleClass.CreateFmt('TSimpleHash32Base.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleHash32Base.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TSimpleHash32Base then
+  Result := SimpleHash32Same(fSimpleHash32,TSimpleHash32Base(Hash).SimpleHash32Sys)
+else
+  raise ESHIncompatibleClass.CreateFmt('TSimpleHash32Base.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TSimpleHash32Base.AsString: String;
 begin
-Result := IntToHex(fSimpleHash32,8);
+Result := SimpleHash32AsString(fSimpleHash32);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleHash32Base.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fSimpleHash32 := TSimpleHash32Sys(StrToInt(Str))
-    else
-      fSimpleHash32 := TSimpleHash32Sys(StrToInt('$' + Str));
-  end
-else fSimpleHash32 := SimpleHash32ToSys(ZeroSimpleHash32);
+fSimpleHash32 := SimpleHash32FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -1156,50 +1214,33 @@ end;
 Function TSimpleHash64Base.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TSimpleHash64Base then
-  begin
-  {$IF Declared(NativeUInt64E)}
-    If fSimpleHash64 > TSimpleHash64Base(Hash).SimpleHash64Sys then
-      Result := +1
-    else If fSimpleHash64 < TSimpleHash64Base(Hash).SimpleHash64Sys then
-      Result := -1
-    else
-      Result := 0;
-  {$ELSE}
-    If Int64Rec(fSimpleHash64).Hi > Int64Rec(TSimpleHash64Base(Hash).SimpleHash64Sys).Hi then
-      Result := +1
-    else If Int64Rec(fSimpleHash64).Hi < Int64Rec(TSimpleHash64Base(Hash).SimpleHash64Sys).Hi then
-      Result := -1
-    else
-      If Int64Rec(fSimpleHash64).Lo > Int64Rec(TSimpleHash64Base(Hash).SimpleHash64Sys).Lo then
-        Result := +1
-      else If Int64Rec(fSimpleHash64).Lo < Int64Rec(TSimpleHash64Base(Hash).SimpleHash64Sys).Lo then
-        Result := -1
-      else
-        Result := 0;
-  {$IFEND}
-  end
-else raise ESHIncompatibleClass.CreateFmt('TSimpleHash64Base.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := SimpleHash64Compare(fSimpleHash64,TSimpleHash64Base(Hash).SimpleHash64Sys)
+else
+  raise ESHIncompatibleClass.CreateFmt('TSimpleHash64Base.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleHash64Base.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TSimpleHash64Base then
+  Result := SimpleHash64Same(fSimpleHash64,TSimpleHash64Base(Hash).SimpleHash64Sys)
+else
+  raise ESHIncompatibleClass.CreateFmt('TSimpleHash64Base.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TSimpleHash64Base.AsString: String;
 begin
-Result := IntToHex(fSimpleHash64,16);
+Result := SimpleHash64AsString(fSimpleHash64);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleHash64Base.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fSimpleHash64 := TSimpleHash64Sys(StrToInt64(Str))
-    else
-      fSimpleHash64 := TSimpleHash64Sys(StrToInt64('$' + Str));
-  end
-else fSimpleHash64 := SimpleHash64ToSys(ZeroSimpleHash64);
+fSimpleHash64 := SimpleHash64FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -1294,109 +1335,57 @@ end;
     Procedural interface - 32bit hash utility functions
 -------------------------------------------------------------------------------}
 
-Function SimpleHash32ToStr(Hash: TSimpleHash32): String;
-var
-  Hasher: TSimpleHash32Init;
+Function SimpleHash32ToStr(const Hash: TSimpleHash32): String;
 begin
-Hasher := TSimpleHash32Init.CreateAndInitFrom(Hash);
-try
-  Result := Hasher.AsString;
-finally
-  Hasher.Free;
-end;
+Result := SimpleHash32AsString(TSimpleHash32Base.SimpleHash32ToSys(Hash));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToSimpleHash32(const Str: String): TSimpleHash32;
-var
-  Hasher: TSimpleHash32Init;
 begin
-Hasher := TSimpleHash32Init.Create;
-try
-  Hasher.FromString(Str);
-  Result := Hasher.SimpleHash32;
-finally
-  Hasher.Free;
-end;
+Result := TSimpleHash32Base.SimpleHash32FromSys(SimpleHash32FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToSimpleHash32(const Str: String; out Hash: TSimpleHash32): Boolean;
-var
-  Hasher: TSimpleHash32Init;
 begin
-Hasher := TSimpleHash32Init.Create;
 try
-  Result := Hasher.TryFromString(Str);
-  If Result then
-    Hash := Hasher.SimpleHash32;
-finally
-  Hasher.Free;
+  Hash := TSimpleHash32Base.SimpleHash32FromSys(SimpleHash32FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToSimpleHash32Def(const Str: String; Default: TSimpleHash32): TSimpleHash32;
-var
-  Hasher: TSimpleHash32Init;
 begin
-Hasher := TSimpleHash32Init.Create;
-try
-  Hasher.FromStringDef(Str,Default);
-  Result := Hasher.SimpleHash32;
-finally
-  Hasher.Free;
-end;
+If not TryStrToSimpleHash32(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareSimpleHash32(A,B: TSimpleHash32): Integer;
-var
-  HasherA:  TSimpleHash32Init;
-  HasherB:  TSimpleHash32Init;
+Function CompareSimpleHash32(const A,B: TSimpleHash32): Integer;
 begin
-HasherA := TSimpleHash32Init.CreateAndInitFrom(A);
-try
-  HasherB := TSimpleHash32Init.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Compare(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := SimpleHash32Compare(TSimpleHash32Base.SimpleHash32ToSys(A),TSimpleHash32Base.SimpleHash32ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameSimpleHash32(A,B: TSimpleHash32): Boolean;
-var
-  HasherA:  TSimpleHash32Init;
-  HasherB:  TSimpleHash32Init;
+Function SameSimpleHash32(const A,B: TSimpleHash32): Boolean;
 begin
-HasherA := TSimpleHash32Init.CreateAndInitFrom(A);
-try
-  HasherB := TSimpleHash32Init.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Same(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := SimpleHash32Same(TSimpleHash32Base.SimpleHash32ToSys(A),TSimpleHash32Base.SimpleHash32ToSys(B));
 end;
 
 {-------------------------------------------------------------------------------
     Procedural interface - 32bit hash processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferSimpleHash32(Hash: TSimpleHash32; const Buffer; Size: TMemSize): TSimpleHash32;
+Function BufferSimpleHash32(const Hash: TSimpleHash32; const Buffer; Size: TMemSize): TSimpleHash32;
 begin
 with TSimpleHash32Base do
 {$IFDEF PurePascal}
@@ -1496,8 +1485,7 @@ end;
 
 Function SimpleHash32_Init: TSimpleHash32Context;
 begin
-New(PSimpleHash32Sys(Result));
-PSimpleHash32Sys(Result)^ := TSimpleHash32Base.SimpleHash32ToSys(InitialSimpleHash32);
+Result := TSimpleHash32Context(TSimpleHash32Base.SimpleHash32ToSys(InitialSimpleHash32));
 end;
 
 //------------------------------------------------------------------------------
@@ -1505,9 +1493,9 @@ end;
 procedure SimpleHash32_Update(var Context: TSimpleHash32Context; const Buffer; Size: TMemSize);
 begin
 {$IFDEF PurePascal}
-PSimpleHash32Sys(Context)^ := SimpleHash32_PAS(PSimpleHash32Sys(Context)^,Buffer,Size);
+TSimpleHash32Sys(Context) := SimpleHash32_PAS(TSimpleHash32Sys(Context),Buffer,Size);
 {$ELSE}
-PSimpleHash32Sys(Context)^ := SimpleHash32_ASM(PSimpleHash32Sys(Context)^,Buffer,Size);
+TSimpleHash32Sys(Context) := SimpleHash32_ASM(TSimpleHash32Sys(Context),Buffer,Size);
 {$ENDIF}
 end;
 
@@ -1523,8 +1511,8 @@ end;
 
 Function SimpleHash32_Final(var Context: TSimpleHash32Context): TSimpleHash32;
 begin
-Result := TSimpleHash32Base.SimpleHash32FromSys(PSimpleHash32Sys(Context)^);
-Dispose(PSimpleHash32Sys(Context));
+Result := TSimpleHash32Base.SimpleHash32FromSys(TSimpleHash32Sys(Context));
+TSimpleHash32Sys(Context) := TSimpleHash32Base.SimpleHash32ToSys(ZeroSimpleHash32);
 end;
 
 //------------------------------------------------------------------------------
@@ -1546,109 +1534,57 @@ end;
     Procedural interface - 64bit hash utility functions
 -------------------------------------------------------------------------------}
 
-Function SimpleHash64ToStr(Hash: TSimpleHash64): String;
-var
-  Hasher: TSimpleHash64Init;
+Function SimpleHash64ToStr(const Hash: TSimpleHash64): String;
 begin
-Hasher := TSimpleHash64Init.CreateAndInitFrom(Hash);
-try
-  Result := Hasher.AsString;
-finally
-  Hasher.Free;
-end;
+Result := SimpleHash64AsString(TSimpleHash64Base.SimpleHash64ToSys(Hash));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToSimpleHash64(const Str: String): TSimpleHash64;
-var
-  Hasher: TSimpleHash64Init;
 begin
-Hasher := TSimpleHash64Init.Create;
-try
-  Hasher.FromString(Str);
-  Result := Hasher.SimpleHash64;
-finally
-  Hasher.Free;
-end;
+Result := TSimpleHash64Base.SimpleHash64FromSys(SimpleHash64FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToSimpleHash64(const Str: String; out Hash: TSimpleHash64): Boolean;
-var
-  Hasher: TSimpleHash64Init;
 begin
-Hasher := TSimpleHash64Init.Create;
 try
-  Result := Hasher.TryFromString(Str);
-  If Result then
-    Hash := Hasher.SimpleHash64;
-finally
-  Hasher.Free;
+  Hash := TSimpleHash64Base.SimpleHash64FromSys(SimpleHash64FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToSimpleHash64Def(const Str: String; Default: TSimpleHash64): TSimpleHash64;
-var
-  Hasher: TSimpleHash64Init;
 begin
-Hasher := TSimpleHash64Init.Create;
-try
-  Hasher.FromStringDef(Str,Default);
-  Result := Hasher.SimpleHash64;
-finally
-  Hasher.Free;
-end;
+If not TryStrToSimpleHash64(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareSimpleHash64(A,B: TSimpleHash64): Integer;
-var
-  HasherA:  TSimpleHash64Init;
-  HasherB:  TSimpleHash64Init;
+Function CompareSimpleHash64(const A,B: TSimpleHash64): Integer;
 begin
-HasherA := TSimpleHash64Init.CreateAndInitFrom(A);
-try
-  HasherB := TSimpleHash64Init.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Compare(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := SimpleHash64Compare(TSimpleHash64Base.SimpleHash64ToSys(A),TSimpleHash64Base.SimpleHash64ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameSimpleHash64(A,B: TSimpleHash64): Boolean;
-var
-  HasherA:  TSimpleHash64Init;
-  HasherB:  TSimpleHash64Init;
+Function SameSimpleHash64(const A,B: TSimpleHash64): Boolean;
 begin
-HasherA := TSimpleHash64Init.CreateAndInitFrom(A);
-try
-  HasherB := TSimpleHash64Init.CreateAndInitFrom(B);
-  try
-    Result := HasherA.Same(HasherB);
-  finally
-    HasherB.Free;
-  end;
-finally
-  HasherA.Free;
-end;
+Result := SimpleHash64Same(TSimpleHash64Base.SimpleHash64ToSys(A),TSimpleHash64Base.SimpleHash64ToSys(B));
 end;
 
 {-------------------------------------------------------------------------------
     Procedural interface - 64bit hash processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferSimpleHash64(Hash: TSimpleHash64; const Buffer; Size: TMemSize): TSimpleHash64;
+Function BufferSimpleHash64(const Hash: TSimpleHash64; const Buffer; Size: TMemSize): TSimpleHash64;
 begin
 with TSimpleHash64Base do
 {$IFDEF PurePascal}
@@ -1748,8 +1684,7 @@ end;
 
 Function SimpleHash64_Init: TSimpleHash64Context;
 begin
-New(PSimpleHash64Sys(Result));
-PSimpleHash64Sys(Result)^ := TSimpleHash64Base.SimpleHash64ToSys(InitialSimpleHash64);
+Result := TSimpleHash64Context(TSimpleHash64Base.SimpleHash64ToSys(InitialSimpleHash64));
 end;
 
 //------------------------------------------------------------------------------
@@ -1757,9 +1692,9 @@ end;
 procedure SimpleHash64_Update(var Context: TSimpleHash64Context; const Buffer; Size: TMemSize);
 begin
 {$IFDEF PurePascal}
-PSimpleHash64Sys(Context)^ := SimpleHash64_PAS(PSimpleHash64Sys(Context)^,Buffer,Size);
+TSimpleHash64Sys(Context) := SimpleHash64_PAS(TSimpleHash64Sys(Context),Buffer,Size);
 {$ELSE}
-PSimpleHash64Sys(Context)^ := SimpleHash64_ASM(PSimpleHash64Sys(Context)^,Buffer,Size);
+TSimpleHash64Sys(Context) := SimpleHash64_ASM(TSimpleHash64Sys(Context),Buffer,Size);
 {$ENDIF}
 end;
 
@@ -1775,8 +1710,8 @@ end;
 
 Function SimpleHash64_Final(var Context: TSimpleHash64Context): TSimpleHash64;
 begin
-Result := TSimpleHash64Base.SimpleHash64FromSys(PSimpleHash64Sys(Context)^);
-Dispose(PSimpleHash64Sys(Context));
+Result := TSimpleHash64Base.SimpleHash64FromSys(TSimpleHash64Sys(Context));
+TSimpleHash64Sys(Context) := TSimpleHash64Base.SimpleHash64ToSys(ZeroSimpleHash64);
 end;
 
 //------------------------------------------------------------------------------

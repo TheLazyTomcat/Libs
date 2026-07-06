@@ -30,9 +30,9 @@
              Linux build was tested only in virtual machine, so performance and
              stability there is also unknown.
 
-  Version 2.0.1 (2025-04-09)
+  Version 2.0.2 (2026-07-05)
 
-  Last change 2026-02-25
+  Last change 2026-07-05
 
   ©2022-2026 František Milt
 
@@ -112,8 +112,6 @@ unit MD6;
   {$IFNDEF PurePascal}
     {$ASMMODE Intel}
   {$ENDIF}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -136,6 +134,7 @@ uses
 ===============================================================================}
 type
   EMD6Exception = class(EHASHException);
+
   EMD6InvalidValue = class(EMD6Exception);
   EMD6InvalidState = class(EMD6Exception);
 
@@ -155,9 +154,8 @@ type
   Bytes in all MD6 hashes are always ordered from the most significant byte to
   the least significant byte (big endian).
 
-  MD6 does not differ in little and big endian form, as it is not a single
-  quantity, therefore methods like MD6ToLE or MD6ToBE do nothing and are
-  present only for the sake of completeness.
+  You can use class methods MD6[_b]ToLe and MD6[_b]FromLE to convert the hash
+  to and from little-endian form.
 }
 type
   TMD6 = packed array of UInt8;
@@ -266,6 +264,7 @@ type
     procedure HashBuffer(const Buffer; Size: TMemSize); override;
     procedure HashStream(Stream: TStream; Count: Int64 = -1); override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TMD6); reintroduce; overload; virtual;
@@ -396,7 +395,7 @@ type
 
     Multi-thread processing mode works the same as single-thread processing,
     ie. it runs under the standard init-update-final interface. Meaning no
-    matter how you hash the data (uncluding macro functions), it can be used
+    matter how you hash the data (including macro functions), it can be used
     if enabled (including on zero-size data).
 
     Parallel processing mode is different - it can only be run on data that are
@@ -438,7 +437,7 @@ type
 
     Handler of this event will receive two arguments (well, three when counting
     Sender) - ThreadFunction and Param. You must, before the handler returns,
-    pass both these arguments to a thread of your choice, This thread must then
+    pass both these arguments to a thread of your choice. This thread must then
     immediately execute ThreadFunction while passing given Param to it.
 
       While ThreadFunction is executing, do NOT pause or kill the thread - that
@@ -615,33 +614,36 @@ type
   length type TMD6. If you want to pass a fixed type, or convert variant-length
   result to fixed type, use following conversion functions to do so.
 }
+{===============================================================================
+    Standalone functions - declaration
+===============================================================================}
 
-Function MD6ToMD6_224(Hash: TMD6): TMD6_224;
-Function MD6ToMD6_256(Hash: TMD6): TMD6_256;
-Function MD6ToMD6_384(Hash: TMD6): TMD6_384;
-Function MD6ToMD6_512(Hash: TMD6): TMD6_512;
+Function MD6ToMD6_224(const Hash: TMD6): TMD6_224;
+Function MD6ToMD6_256(const Hash: TMD6): TMD6_256;
+Function MD6ToMD6_384(const Hash: TMD6): TMD6_384;
+Function MD6ToMD6_512(const Hash: TMD6): TMD6_512;
 
-Function MD6_224ToMD6(Hash: TMD6_224): TMD6;
-Function MD6_256ToMD6(Hash: TMD6_256): TMD6;
-Function MD6_384ToMD6(Hash: TMD6_384): TMD6;
-Function MD6_512ToMD6(Hash: TMD6_512): TMD6;
+Function MD6_224ToMD6(const Hash: TMD6_224): TMD6;
+Function MD6_256ToMD6(const Hash: TMD6_256): TMD6;
+Function MD6_384ToMD6(const Hash: TMD6_384): TMD6;
+Function MD6_512ToMD6(const Hash: TMD6_512): TMD6;
 
-Function IsCompatibleMD6_224(Hash: TMD6): Boolean;
-Function IsCompatibleMD6_256(Hash: TMD6): Boolean;
-Function IsCompatibleMD6_384(Hash: TMD6): Boolean;
-Function IsCompatibleMD6_512(Hash: TMD6): Boolean;
+Function IsCompatibleMD6_224(const Hash: TMD6): Boolean;
+Function IsCompatibleMD6_256(const Hash: TMD6): Boolean;
+Function IsCompatibleMD6_384(const Hash: TMD6): Boolean;
+Function IsCompatibleMD6_512(const Hash: TMD6): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function MD6ToStr(MD6: TMD6): String;
-Function StrToMD6(Str: String): TMD6;
+Function MD6ToStr(const MD6: TMD6): String;
+Function StrToMD6(const Str: String): TMD6;
 Function TryStrToMD6(const Str: String; out MD6: TMD6): Boolean;
 Function StrToMD6Def(const Str: String; Default: TMD6): TMD6;
 
-Function CompareMD6(A,B: TMD6): Integer;
-Function SameMD6(A,B: TMD6): Boolean;
+Function CompareMD6(const A,B: TMD6): Integer;
+Function SameMD6(const A,B: TMD6): Boolean;
 
-Function BinaryCorrectMD6(Hash: TMD6): TMD6;
+Function BinaryCorrectMD6(const Hash: TMD6): TMD6; deprecated;
 
 //------------------------------------------------------------------------------
 type
@@ -728,11 +730,6 @@ uses
   {$LINKLIB PTHREAD}
 {$ENDIF}
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
-{$ENDIF}
-
 {===============================================================================
     Imported (external/system) functions
 ===============================================================================}
@@ -770,6 +767,12 @@ Function sem_post(sem: psem_t): cint; cdecl; external;
                                 TMD6ProcessorBase
 --------------------------------------------------------------------------------
 ===============================================================================}
+
+Function ConsumeArgs(const Args: array of const): Integer;
+begin
+Result := Length(Args);
+end;
+
 {===============================================================================
     TMD6ProcessorBase - implementation constants and types
 ===============================================================================}
@@ -1582,6 +1585,7 @@ begin
 // nothing to do here
 end;
 
+
 {===============================================================================
 --------------------------------------------------------------------------------
                              TMD6ProcessorMultiBase
@@ -2331,7 +2335,7 @@ end;
 
 //------------------------------------------------------------------------------
 {
-  Argument Sem must be "var" bevause of Linux, where it is directly used by the
+  Argument Sem must be "var" because of Linux, where it is directly used by the
   calls (ie. it is not a simple "handle").
 }
 procedure SemaphoreWait(var Sem: TMD6SemaphoreHandle);
@@ -2989,21 +2993,19 @@ end;
     TMD6ProcessorParallel - public methods
 -------------------------------------------------------------------------------}
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6ProcessorParallel.ProcessUpdate(const Chunk);
 begin
+ConsumeArgs([@Chunk]);
 raise EMD6OperationNotAllowed.Create('TMD6ProcessorParallel.ProcessUpdate: Operation not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6ProcessorParallel.ProcessLast(ChunkPadBytes: TMemSize);
 begin
+ConsumeArgs([ChunkPadBytes]);
 raise EMD6OperationNotAllowed.Create('TMD6ProcessorParallel.ProcessLast: Operation not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -3056,6 +3058,7 @@ except
   raise
 end;
 end;
+
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -3115,6 +3118,84 @@ end;
                                     TMD6Hash
 --------------------------------------------------------------------------------
 ===============================================================================}
+{===============================================================================
+    TMD6Hash - auxiliary functions
+===============================================================================}
+
+Function MD6Compare(const A,B: TMD6): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+If Length(A) = Length(B) then
+  begin
+    For i := Low(A) to High(A) do
+      If A[i] > B[i] then
+        begin
+          Result := +1;
+          Break;
+        end
+      else If A[i] < B[i] then
+        begin
+          Result := -1;
+          Break;
+        end;
+  end
+else raise EMD6SizeMismatch.CreateFmt('MD6Compare: Cannot compare hashes of differing lengths (%d,%d).',[Length(A),Length(B)]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD6Same(const A,B: TMD6): Boolean;
+var
+  i:  Integer;
+begin
+Result := True;
+If Length(A) = Length(B) then
+  begin
+    For i := Low(A) to High(A) do
+      If A[i] <> B[i] then
+        begin
+          Result := False;
+          Break;
+        end;
+  end
+else raise EMD6SizeMismatch.CreateFmt('MD6Same: Cannot compare hashes of differing lengths (%d,%d).',[Length(A),Length(B)]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD6AsString(const MD6: TMD6): String;
+const
+  HEX_TAB: array[0..15] of Char =
+    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
+var
+  i:  Integer;
+begin
+Result := StringOfChar('0',Length(MD6) * 2);
+For i := Low(MD6) to High(MD6) do
+  begin
+    Result[(i * 2) + 1] := HEX_TAB[MD6[i] shr 4];
+    Result[(i * 2) + 2] := HEX_TAB[MD6[i] and 15];
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD6FromString(const Str: String): TMD6;
+var
+  i:  Integer;
+begin
+If (Length(Str) >= 2) and (Length(Str) <= (MD6_BITS_MAX div 4)) then
+  begin
+    Result := nil;
+    SetLength(Result,Length(Str) div 2);
+    For i := Low(Result) to High(Result) do
+      Result[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
+  end
+else raise EMD6InvalidValue.CreateFmt('MD6FromString: Invalid string length (%d).',[Length(Str)]);
+end;
+
 {===============================================================================
     TMD6Hash - class implementation
 ===============================================================================}
@@ -3368,6 +3449,8 @@ end;
 class Function TMD6Hash.MD6ToLE(MD6: TMD6): TMD6;
 begin
 Result := Copy(MD6);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -3382,6 +3465,8 @@ end;
 class Function TMD6Hash.MD6FromLE(MD6: TMD6): TMD6;
 begin
 Result := Copy(MD6);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -3520,66 +3605,35 @@ end;
 //------------------------------------------------------------------------------
 
 Function TMD6Hash.Compare(Hash: THashBase): Integer;
-var
-  Temp: TMD6;
-  i:    Integer;
 begin
 If Hash is Self.ClassType then
-  begin
-    Result := 0;
-    Temp := TMD6Hash(Hash).fMD6;
-    If Length(fMD6) = Length(Temp) then
-      begin
-        For i := Low(fMD6) to High(fMD6) do
-          If fMD6[i] > Temp[i] then
-            begin
-              Result := +1;
-              Break;
-            end
-          else If fMD6[i] < Temp[i] then
-            begin
-              Result := -1;
-              Break;
-            end;
-      end
-    else raise EMD6SizeMismatch.CreateFmt('TMD6Hash.Compare: Cannot compare hashes of differing lengths (%d,%d).',[Length(fMD6),Length(Temp)]);
-  end
-else raise EMD6IncompatibleClass.CreateFmt('TMD6Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := MD6Compare(fMD6,TMD6Hash(Hash).fMD6)
+else
+  raise EMD6IncompatibleClass.CreateFmt('TMD6Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD6Hash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is Self.ClassType then
+  Result := MD6Same(fMD6,TMD6Hash(Hash).fMD6)
+else
+  raise EMD6IncompatibleClass.CreateFmt('TMD6Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TMD6Hash.AsString: String;
-const
-  HEX_TAB: array[0..15] of Char =
-    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
-var
-  i:  Integer;
 begin
-Result := StringOfChar('0',Length(fMD6) * 2);
-For i := Low(fMD6) to High(fMD6) do
-  begin
-    Result[(i * 2) + 1] := HEX_TAB[fMD6[i] shr 4];
-    Result[(i * 2) + 2] := HEX_TAB[fMD6[i] and 15];
-  end;
+Result := MD6AsString(fMD6);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TMD6Hash.FromString(const Str: String);
-var
-  Temp: TMD6;
-  i:    Integer;
 begin
-If (Length(Str) >= 2) and (Length(Str) <= (MD6_BITS_MAX div 4)) then
-  begin
-    Temp := nil;
-    SetLength(Temp,Length(Str) div 2);
-    For i := Low(Temp) to High(Temp) do
-      Temp[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
-    SetMD6(Temp);
-  end
-else raise EMD6InvalidValue.CreateFmt('TMD6Hash.FromString: Invalid string length (%d).',[Length(Str)]);
+SetMD6(MD6FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
@@ -3716,59 +3770,53 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6DefHash.SetHashBits(Value: Integer);
 begin
+ConsumeArgs([Value]);
 raise EMD6OperationNotAllowed.Create('TMD6DefHash.SetHashBits: Changing hash bits is not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6DefHash.SetKey(Value: TMD6Key);
 begin
+ConsumeArgs([@Value]);
 raise EMD6OperationNotAllowed.Create('TMD6DefHash.PutKey: Key is not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6DefHash.SetRounds(Value: Integer);
 begin
+ConsumeArgs([Value]);
 raise EMD6OperationNotAllowed.Create('TMD6DefHash.PuSetRoundstKey: Changing number of rounds is not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6DefHash.SetModeControl(Value: Integer);
 begin
+ConsumeArgs([Value]);
 raise EMD6OperationNotAllowed.Create('TMD6DefHash.PuSetRoundstKey: Changing mode control is not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 {-------------------------------------------------------------------------------
     TMD6DefHash - public methods
 -------------------------------------------------------------------------------}
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6DefHash.SetupHashBits(HashBits: Integer);
 begin
+ConsumeArgs([HashBits]);
 raise EMD6OperationNotAllowed.Create('TMD6DefHash.SetupHashBits: Changing hash bits is not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TMD6DefHash.SetupKey(const Key; Size: TMemSize);
 begin
+ConsumeArgs([@Key,Size]);
 raise EMD6OperationNotAllowed.Create('TMD6DefHash.SetupKey: Key is not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
@@ -3805,6 +3853,7 @@ end;
 class Function TMD6_224Hash.MD6_224ToLE(MD6: TMD6_224): TMD6_224;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -3819,6 +3868,7 @@ end;
 class Function TMD6_224Hash.MD6_224FromLE(MD6: TMD6_224): TMD6_224;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -3907,6 +3957,7 @@ end;
 class Function TMD6_256Hash.MD6_256ToLE(MD6: TMD6_256): TMD6_256;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -3921,6 +3972,7 @@ end;
 class Function TMD6_256Hash.MD6_256FromLE(MD6: TMD6_256): TMD6_256;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -4009,6 +4061,7 @@ end;
 class Function TMD6_384Hash.MD6_384ToLE(MD6: TMD6_384): TMD6_384;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -4023,6 +4076,7 @@ end;
 class Function TMD6_384Hash.MD6_384FromLE(MD6: TMD6_384): TMD6_384;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -4111,6 +4165,7 @@ end;
 class Function TMD6_512Hash.MD6_512ToLE(MD6: TMD6_512): TMD6_512;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -4125,6 +4180,7 @@ end;
 class Function TMD6_512Hash.MD6_512FromLE(MD6: TMD6_512): TMD6_512;
 begin
 Result := MD6;
+SwapEndian(Result,SizeOf(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -4184,8 +4240,14 @@ end;
                               Standalone functions
 --------------------------------------------------------------------------------
 ===============================================================================}
+{===============================================================================
+    Standalone functions - implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Standalone functions - compatibility and conversion functions
+-------------------------------------------------------------------------------}
 
-Function MD6ToMD6_224(Hash: TMD6): TMD6_224;
+Function MD6ToMD6_224(const Hash: TMD6): TMD6_224;
 begin
 If Length(Hash) = SizeOf(Result) then
   Move(Hash[0],Addr(Result)^,SizeOf(Result))
@@ -4195,7 +4257,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function MD6ToMD6_256(Hash: TMD6): TMD6_256;
+Function MD6ToMD6_256(const Hash: TMD6): TMD6_256;
 begin
 If Length(Hash) = SizeOf(Result) then
   Move(Hash[0],Addr(Result)^,SizeOf(Result))
@@ -4205,7 +4267,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function MD6ToMD6_384(Hash: TMD6): TMD6_384;
+Function MD6ToMD6_384(const Hash: TMD6): TMD6_384;
 begin
 If Length(Hash) = SizeOf(Result) then
   Move(Hash[0],Addr(Result)^,SizeOf(Result))
@@ -4215,7 +4277,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function MD6ToMD6_512(Hash: TMD6): TMD6_512;
+Function MD6ToMD6_512(const Hash: TMD6): TMD6_512;
 begin
 If Length(Hash) = SizeOf(Result) then
   Move(Hash[0],Addr(Result)^,SizeOf(Result))
@@ -4225,7 +4287,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function MD6_224ToMD6(Hash: TMD6_224): TMD6;
+Function MD6_224ToMD6(const Hash: TMD6_224): TMD6;
 begin
 Result := nil;
 SetLength(Result,SizeOf(Hash));
@@ -4234,7 +4296,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function MD6_256ToMD6(Hash: TMD6_256): TMD6;
+Function MD6_256ToMD6(const Hash: TMD6_256): TMD6;
 begin
 Result := nil;
 SetLength(Result,SizeOf(Hash));
@@ -4243,7 +4305,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function MD6_384ToMD6(Hash: TMD6_384): TMD6;
+Function MD6_384ToMD6(const Hash: TMD6_384): TMD6;
 begin
 Result := nil;
 SetLength(Result,SizeOf(Hash));
@@ -4252,7 +4314,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function MD6_512ToMD6(Hash: TMD6_512): TMD6;
+Function MD6_512ToMD6(const Hash: TMD6_512): TMD6;
 begin
 Result := nil;
 SetLength(Result,SizeOf(Hash));
@@ -4261,142 +4323,92 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function IsCompatibleMD6_224(Hash: TMD6): Boolean;
+Function IsCompatibleMD6_224(const Hash: TMD6): Boolean;
 begin
 Result := Length(Hash) = SizeOf(TMD6_224);
 end;
 
 //------------------------------------------------------------------------------
 
-Function IsCompatibleMD6_256(Hash: TMD6): Boolean;
+Function IsCompatibleMD6_256(const Hash: TMD6): Boolean;
 begin
 Result := Length(Hash) = SizeOf(TMD6_256);
 end;
 
 //------------------------------------------------------------------------------
 
-Function IsCompatibleMD6_384(Hash: TMD6): Boolean;
+Function IsCompatibleMD6_384(const Hash: TMD6): Boolean;
 begin
 Result := Length(Hash) = SizeOf(TMD6_384);
 end;
 
 //------------------------------------------------------------------------------
 
-Function IsCompatibleMD6_512(Hash: TMD6): Boolean;
+Function IsCompatibleMD6_512(const Hash: TMD6): Boolean;
 begin
 Result := Length(Hash) = SizeOf(TMD6_512);
 end;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    Standalone functions - utility functions
+-------------------------------------------------------------------------------}
 
-Function MD6ToStr(MD6: TMD6): String;
-var
-  Hash: TMD6Hash;
+Function MD6ToStr(const MD6: TMD6): String;
 begin
-Hash := TMD6Hash.CreateAndInitFrom(MD6);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := MD6AsString(MD6);
 end;
 
 //------------------------------------------------------------------------------
 
-Function StrToMD6(Str: String): TMD6;
-var
-  Hash: TMD6Hash;
+Function StrToMD6(const Str: String): TMD6;
 begin
-Hash := TMD6Hash.CreateAndInitFromString(Str);
-try  
-  Result := Hash.MD6; // a copy is made internally
-finally
-  Hash.Free;
-end;
+Result := MD6FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToMD6(const Str: String; out MD6: TMD6): Boolean;
-var
-  Hash: TMD6Hash;
 begin
-Hash := TMD6Hash.Create;
 try
-  If Hash.TryFromString(Str) then
-    begin
-      MD6 := Hash.MD6;
-      Result := True;
-    end
-  else Result := False;
-finally
-  Hash.Free;
+  MD6 := MD6FromString(Str);
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToMD6Def(const Str: String; Default: TMD6): TMD6;
-var
-  Hash: TMD6Hash;
 begin
-Hash := TMD6Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.MD6;
-finally
-  Hash.Free;
-end;
+If not TryStrToMD6(Str,Result) then
+  Result := Copy(Default);
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareMD6(A,B: TMD6): Integer;
-var
-  HashA:  TMD6Hash;
-  HashB:  TMD6Hash;
+Function CompareMD6(const A,B: TMD6): Integer;
 begin
-HashA := TMD6Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD6Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD6Compare(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameMD6(A,B: TMD6): Boolean;
-var
-  HashA:  TMD6Hash;
-  HashB:  TMD6Hash;
+Function SameMD6(const A,B: TMD6): Boolean;
 begin
-HashA := TMD6Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD6Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD6Same(A,B);
 end;
 
 //------------------------------------------------------------------------------
 
-Function BinaryCorrectMD6(Hash: TMD6): TMD6;
+Function BinaryCorrectMD6(const Hash: TMD6): TMD6;
 begin
 Result := Copy(Hash);
 end;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    Standalone functions - hash settings building functions
+-------------------------------------------------------------------------------}
 
 Function MD6Settings(HashBits,Rounds,ModeControl: Integer; Key: TMD6Key): TMD6Settings;
 begin
@@ -4493,7 +4505,9 @@ begin
 Result := MD6Settings(HashBits,MD6_MODE_DEFAULT,Key);
 end;
 
-//------------------------------------------------------------------------------
+{-------------------------------------------------------------------------------
+    Standalone functions - continuous processing functions
+-------------------------------------------------------------------------------}
 
 Function InitialMD6(Settings: TMD6Settings): TMD6State;
 var
@@ -4540,7 +4554,9 @@ If Assigned(State) then
 else raise EMD6InvalidState.Create('LastBufferMD6: MD6 state not initialized.');
 end;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    Standalone functions - one-shot processing functions
+-------------------------------------------------------------------------------}
 
 Function BufferMD6(const Buffer; Size: TMemSize; Settings: TMD6Settings): TMD6;
 var
@@ -4696,7 +4712,9 @@ begin
 Result := FileMD6(FileName,MD6Settings(HashBits));
 end;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    Standalone functions - context functions
+-------------------------------------------------------------------------------}
 
 Function MD6_Init(Settings: TMD6Settings): TMD6Context;
 var

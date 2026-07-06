@@ -9,9 +9,9 @@
 
   Adler-32 calculation
 
-  Version 1.2.3 (2020-07-13)
+  Version 1.3 (2026-07-03)
 
-  Last change 2026-02-25
+  Last change 2026-07-03
 
   ©2018-2026 František Milt
 
@@ -50,8 +50,6 @@ unit Adler32;
   {$MODE ObjFPC}
   {$INLINE ON}
   {$DEFINE CanInline}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ELSE}
   {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
@@ -66,6 +64,14 @@ interface
 uses
   Classes,
   AuxTypes, HashBase;
+
+{===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  EADLER32Exception = class(EHASHException);
+
+  EADLER32IncompatibleClass = class(EADLER32Exception);
 
 {===============================================================================
     Common types and constants
@@ -93,16 +99,11 @@ const
 
   ZeroAdler32: TAdler32 = (0,0,0,0);
 
-type
-  EADLER32Exception = class(EHASHException);
-
-  EADLER32IncompatibleClass = class(EADLER32Exception);
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TAdler32Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TAdler32Hash - class declaration
 ===============================================================================}
@@ -128,6 +129,7 @@ type
     constructor CreateAndInitFrom(Hash: TAdler32); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TAdler32); reintroduce;
@@ -138,19 +140,21 @@ type
   end;
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
 ===============================================================================}
 
-Function Adler32ToStr(Adler32: TAdler32): String;
+Function Adler32ToStr(const Adler32: TAdler32): String;
 Function StrToAdler32(const Str: String): TAdler32;
 Function TryStrToAdler32(const Str: String; out Adler32: TAdler32): Boolean;
 Function StrToAdler32Def(const Str: String; Default: TAdler32): TAdler32;
-Function CompareAdler32(A,B: TAdler32): Integer;
-Function SameAdler32(A,B: TAdler32): Boolean;
+Function CompareAdler32(const A,B: TAdler32): Integer;
+Function SameAdler32(const A,B: TAdler32): Boolean;
 
 //------------------------------------------------------------------------------
 
-Function BufferAdler32(Adler32: TAdler32; const Buffer; Size: TMemSize): TAdler32; overload;
+Function BufferAdler32(const Adler32: TAdler32; const Buffer; Size: TMemSize): TAdler32; overload;
 
 Function BufferAdler32(const Buffer; Size: TMemSize): TAdler32; overload;
 
@@ -164,7 +168,7 @@ Function FileAdler32(const FileName: String): TAdler32;
 //------------------------------------------------------------------------------
 
 type
-  TAdler32Context = type Pointer;
+  TAdler32Context = type TAdler32Sys;
 
 Function Adler32_Init: TAdler32Context;
 procedure Adler32_Update(var Context: TAdler32Context; const Buffer; Size: TMemSize);
@@ -177,18 +181,11 @@ implementation
 uses
   SysUtils;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
-{$ENDIF}
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TAdler32Hash
-================================================================================
--------------------------------------------------------------------------------}
-
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TAdler32Hash - utility functions
 ===============================================================================}
@@ -210,12 +207,96 @@ Result := TAdler32(SwapEndian(TAdler32Sys(Value)));
 end;
 
 {===============================================================================
-    TAdler32Hash - calculation constants
+    TAdler32Hash - main implementation
 ===============================================================================}
-
 const
-  Adler32Modulo   = 65521;
-  Adler32NMRounds = 5552; // number of rounds that can be done without calculating modulo
+  Adler32Modulo      = 65521;
+  Adler32NoModRounds = 5552; // number of rounds that can be done without calculating modulo
+
+//------------------------------------------------------------------------------  
+
+Function Adler32Process(const Adler32: TAdler32Sys; const Buffer; Size: TMemSize): TAdler32Sys;
+var
+  CurrentData:  PByte;
+  SumA,SumB:    UInt32;
+  i:            TMemSize;
+begin
+If Size > 0 then
+  begin
+    SumA := Adler32 and $FFFF;
+    SumB := (Adler32 shr 16) and $FFFF;
+    CurrentData := PByte(@Buffer);
+    // rounds with deferred modulo operation
+    while Size >= Adler32NoModRounds do
+      begin
+        For i := 0 to Pred(Adler32NoModRounds) do
+          begin
+            SumA := SumA + CurrentData^;
+            SumB := SumB + SumA;
+            Inc(CurrentData);
+          end;
+        SumA := SumA mod Adler32Modulo;
+        SumB := SumB mod Adler32Modulo;
+        Dec(Size,Adler32NoModRounds);
+      end;
+    // remaining bytes
+    If Size > 0 then
+      begin
+        For i := 0 to Pred(Size) do
+          begin
+            SumA := SumA + CurrentData^;
+            SumB := SumB + SumA;
+            Inc(CurrentData);
+          end;
+        SumA := SumA mod Adler32Modulo;
+        SumB := SumB mod Adler32Modulo;
+      end;
+    // construct result
+    Result := (SumB shl 16) or (SumA and $FFFF);         
+  end
+else Result := Adler32;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Adler32Compare(const A,B: TAdler32Sys): Integer;
+begin
+If A > B then
+  Result := +1
+else If A < B then
+  Result := -1
+else
+  Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Adler32Same(const A,B: TAdler32Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Adler32AsString(const Adler32: TAdler32Sys): String;
+begin
+Result := IntToHex(Adler32,8);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Adler32FromString(const Str: String): TAdler32Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TAdler32Sys(StrToInt(Str))
+    else
+      Result := TAdler32Sys(StrToInt('$' + Str));
+  end
+else Result := TAdler32Hash.Adler32ToSys(ZeroAdler32);
+end;
+
 
 {===============================================================================
     TAdler32Hash - class implementation
@@ -232,48 +313,8 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TAdler32Hash.ProcessBuffer(const Buffer; Size: TMemSize);
-var
-  SumA: UInt32;
-  SumB: UInt32;
-  Buff: PByte;
-  i:    TMemSize;
 begin
-If Size > 0 then
-  begin
-    SumA := fAdler32 and $FFFF;
-    SumB := (fAdler32 shr 16) and $FFFF;
-    Buff := PByte(@Buffer);
-    // rounds with deferred modulo
-    while Size >= Adler32NMRounds do
-      begin
-        For i := 0 to Pred(Adler32NMRounds) do
-          begin
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            SumA := SumA + PByte(PtrUInt(Buff) + PtrUInt(i))^;
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
-            SumB := SumB + SumA;
-          end;
-        SumA := SumA mod Adler32Modulo;
-        SumB := SumB mod Adler32Modulo;
-        Inc(Buff,Adler32NMRounds);
-        Dec(Size,Adler32NMRounds);
-      end;
-    // remaining bytes
-    If Size > 0 then
-      begin
-        For i := 0 to Pred(Size) do
-          begin
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            SumA := (SumA + PByte(PtrUInt(Buff) + PtrUInt(i))^);
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
-            SumB := (SumB + SumA);
-          end;
-        SumA := SumA mod Adler32Modulo;
-        SumB := SumB mod Adler32Modulo;
-      end;
-    // construct result
-    fAdler32 := (SumB shl 16) or (SumA and $FFFF);
-  end;
+fAdler32 := Adler32Process(fAdler32,Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
@@ -388,36 +429,33 @@ end;
 Function TAdler32Hash.Compare(Hash: THashBase): Integer;
 begin
 If Hash is TAdler32Hash then
-  begin
-    If fAdler32 > TAdler32Hash(Hash).Adler32Sys then
-      Result := +1
-    else If fAdler32 < TAdler32Hash(Hash).Adler32Sys then
-      Result := -1
-    else
-      Result := 0;
-  end
-else raise EADLER32IncompatibleClass.CreateFmt('TAdler32Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := Adler32Compare(fAdler32,TAdler32Hash(Hash).Adler32Sys)
+else
+  raise EADLER32IncompatibleClass.CreateFmt('TAdler32Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TAdler32Hash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TAdler32Hash then
+  Result := Adler32Same(fAdler32,TAdler32Hash(Hash).Adler32Sys)
+else
+  raise EADLER32IncompatibleClass.CreateFmt('TAdler32Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TAdler32Hash.AsString: String;
 begin
-Result := IntToHex(fAdler32,8);
+Result := Adler32AsString(fAdler32);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TAdler32Hash.FromString(const Str: String);
 begin
-If Length(Str) > 0 then
-  begin
-    If Str[1] = '$' then
-      fAdler32 := TAdler32Sys(StrToInt(Str))
-    else
-      fAdler32 := TAdler32Sys(StrToInt('$' + Str));
-  end
-else fAdler32 := Adler32ToSys(InitialAdler32);
+fAdler32 := Adler32FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -448,12 +486,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TAdler32Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TAdler32;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TAdler32));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TAdler32));
 case Endianness of
   heSystem: fAdler32 := Adler32ToSys({$IFDEF ENDIAN_BIG}Adler32FromBE{$ELSE}Adler32FromLE{$ENDIF}(Temp));
   heLittle: fAdler32 := Adler32ToSys(Adler32FromLE(Temp));
@@ -463,188 +500,101 @@ else
   fAdler32 := Adler32ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - utility functions
+    Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function Adler32ToStr(Adler32: TAdler32): String;
-var
-  Hash: TAdler32Hash;
+Function Adler32ToStr(const Adler32: TAdler32): String;
 begin
-Hash := TAdler32Hash.CreateAndInitFrom(Adler32);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := Adler32AsString(TAdler32Hash.Adler32ToSys(Adler32));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToAdler32(const Str: String): TAdler32;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+Result := TAdler32Hash.Adler32FromSys(Adler32FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToAdler32(const Str: String; out Adler32: TAdler32): Boolean;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    Adler32 := Hash.Adler32;
-finally
-  Hash.Free;
+  Adler32 := TAdler32Hash.Adler32FromSys(Adler32FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToAdler32Def(const Str: String; Default: TAdler32): TAdler32;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+If not TryStrToAdler32(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareAdler32(A,B: TAdler32): Integer;
-var
-  HashA:  TAdler32Hash;
-  HashB:  TAdler32Hash;
+Function CompareAdler32(const A,B: TAdler32): Integer;
 begin
-HashA := TAdler32Hash.CreateAndInitFrom(A);
-try
-  HashB := TAdler32Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := Adler32Compare(TAdler32Hash.Adler32ToSys(A),TAdler32Hash.Adler32ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameAdler32(A,B: TAdler32): Boolean;
-var
-  HashA:  TAdler32Hash;
-  HashB:  TAdler32Hash;
+Function SameAdler32(const A,B: TAdler32): Boolean;
 begin
-HashA := TAdler32Hash.CreateAndInitFrom(A);
-try
-  HashB := TAdler32Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := Adler32Same(TAdler32Hash.Adler32ToSys(A),TAdler32Hash.Adler32ToSys(B));
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - processing functions
+    Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferAdler32(Adler32: TAdler32; const Buffer; Size: TMemSize): TAdler32;
-var
-  Hash: TAdler32Hash;
+Function BufferAdler32(const Adler32: TAdler32; const Buffer; Size: TMemSize): TAdler32;
 begin
-Hash := TAdler32Hash.CreateAndInitFrom(Adler32);
-try
-  Hash.Final(Buffer,Size);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+Result := TAdler32Hash.Adler32FromSys(Adler32Process(TAdler32Hash.Adler32ToSys(Adler32),Buffer,Size));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function BufferAdler32(const Buffer; Size: TMemSize): TAdler32;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+Result := TAdler32Hash.Adler32FromSys(Adler32Process(TAdler32Hash.Adler32ToSys(InitialAdler32),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
 Function AnsiStringAdler32(const Str: AnsiString): TAdler32;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
-try
-  Hash.HashAnsiString(Str);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+Result := BufferAdler32(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function WideStringAdler32(const Str: WideString): TAdler32;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
-try
-  Hash.HashWideString(Str);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+Result := BufferAdler32(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
 end;
 
 //------------------------------------------------------------------------------
 
 Function StringAdler32(const Str: String): TAdler32;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
-try
-  Hash.HashString(Str);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+Result := BufferAdler32(PChar(Str)^,Length(Str) * SizeOf(Char));
 end;
 
 //------------------------------------------------------------------------------
@@ -678,23 +628,19 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - context functions
+    Standalone functions - context functions
 -------------------------------------------------------------------------------}
 
 Function Adler32_Init: TAdler32Context;
-var
-  Temp: TAdler32Hash;
 begin
-Temp := TAdler32Hash.Create;
-Temp.Init;
-Result := TAdler32Context(Temp);
+Result := TAdler32Context(TAdler32Hash.Adler32ToSys(InitialAdler32));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure Adler32_Update(var Context: TAdler32Context; const Buffer; Size: TMemSize);
 begin
-TAdler32Hash(Context).Update(Buffer,Size);
+TAdler32Sys(Context) := Adler32Process(TAdler32Sys(Context),Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
@@ -709,24 +655,15 @@ end;
 
 Function Adler32_Final(var Context: TAdler32Context): TAdler32;
 begin
-TAdler32Hash(Context).Final;
-Result := TAdler32Hash(Context).Adler32;
-FreeAndNil(TAdler32Hash(Context));
+Result := TAdler32Hash.Adler32FromSys(TAdler32Sys(Context));
+Context := TAdler32Context(TAdler32Hash.Adler32ToSys(ZeroAdler32));
 end;
 
 //------------------------------------------------------------------------------
 
 Function Adler32_Hash(const Buffer; Size: TMemSize): TAdler32;
-var
-  Hash: TAdler32Hash;
 begin
-Hash := TAdler32Hash.Create;
-try
-  Hash.HashBuffer(Buffer,Size);
-  Result := Hash.Adler32;
-finally
-  Hash.Free;
-end;
+Result := BufferAdler32(Buffer,Size);
 end;
 
 end.

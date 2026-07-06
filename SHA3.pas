@@ -118,12 +118,12 @@
     variable length hash, of which length can be selected before hashing.
     They can be defined:
 
-        SHAKE128(M,d) = KECCAK[256](M||1111,d)
-        SHAKE256(M,d) = KECCAK[512](M||1111,d)
+        SHAKE128(M,d) = Keccak[256](M||1111,d)
+        SHAKE256(M,d) = Keccak[512](M||1111,d)
 
-  Version 1.2.1 (2020-07-13)
+  Version 1.2.2 (2026-07-06)
 
-  Last change 2026-02-26
+  Last change 2026-07-06
 
   ©2015-2026 František Milt
 
@@ -173,8 +173,6 @@ unit SHA3;
   {$MODESWITCH DuplicateLocals+}
   {$INLINE ON}
   {$DEFINE CanInline}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ELSE}
   {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
@@ -191,15 +189,33 @@ uses
   AuxTypes, HashBase;
 
 {===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  ESHA3Exception = class(EHashException);
+
+  ESHA3IncompatibleClass    = class(ESHA3Exception);
+  ESHA3IncompatibleFunction = class(ESHA3Exception);
+  ESHA3IncompatibleHashBits = class(ESHA3Exception);
+  ESHA3IncompatibleSize     = class(ESHA3Exception);
+  ESHA3ProcessingError      = class(ESHA3Exception);
+  ESHA3InvalidHashFunction  = class(ESHA3Exception);
+  ESHA3InvalidHashBits      = class(ESHA3Exception);
+  ESHA3InvalidSize          = class(ESHA3Exception);
+  ESHA3InvalidCapacity      = class(ESHA3Exception);
+
+{===============================================================================
     Common types and constants
 ===============================================================================}
 {
-  Bytes in all Keccak, SHA-3 and SHAKE hashes are always ordered from the most
-  significant byte to the least significant byte (big endian).
+  Bytes in all Keccak, SHA-3 and SHAKE hashes, as presented and accepted by
+  this library, are always ordered from the most significant byte to the least
+  significant byte (big endian).
 
-  Keccak/SHA-3/SHAKE does not differ in little and big endian forms, as it is
-  not a single quantity, therefore methods like SHA3_*ToLE or SHA3_*ToBE do
-  nothing and are present only for the sake of completeness.
+  Implemented objects also provide class methods for byte order swapping if
+  there is a need for that. They can be used to convert default ordering to
+  a specific one (methods *ToLE and *ToBe, eg. Keccak256ToLE) or a specific
+  to default (methods *FromLE, *FromBE).
 }
 type
   // fixed length hashes
@@ -260,26 +276,11 @@ type
   TKeccakSpongeWordOverlay = packed array[0..24] of TKeccakWord;
   TKeccakSpongeByteOverlay = packed array[0..Pred(25 * SizeOf(TKeccakWord))] of UInt8;  
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-type
-  ESHA3Exception = class(EHashException);
-
-  ESHA3IncompatibleClass    = class(ESHA3Exception);
-  ESHA3IncompatibleFunction = class(ESHA3Exception);
-  ESHA3IncompatibleHashBits = class(ESHA3Exception);
-  ESHA3IncompatibleSize     = class(ESHA3Exception);
-  ESHA3ProcessingError      = class(ESHA3Exception);
-  ESHA3InvalidHashFunction  = class(ESHA3Exception);
-  ESHA3InvalidHashBits      = class(ESHA3Exception);
-  ESHA3InvalidSize          = class(ESHA3Exception);
-  ESHA3InvalidCapacity      = class(ESHA3Exception);
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                    TKeccakHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakHash - class declaration
 ===============================================================================}
@@ -322,6 +323,7 @@ type
     constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual; abstract;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TKeccak); reintroduce; overload; virtual;
@@ -335,11 +337,11 @@ type
 
   TKeccakHashClass = class of TKeccakHash;  
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TKeccak0Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak0Hash - class declaration
 ===============================================================================}
@@ -355,11 +357,11 @@ type
     procedure Squeeze(var Buffer; Size: TMemSize); overload; virtual;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccakDefHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakDefHash - class declaration
 ===============================================================================}
@@ -371,11 +373,11 @@ type
     property Keccak: TKeccak read GetKeccak;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccakFixHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakFixHash - class declaration
 ===============================================================================}
@@ -384,15 +386,14 @@ type
   protected
     class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
   public
-    procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TKeccak); overload; override;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak224Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak224Hash - class declaration
 ===============================================================================}
@@ -418,11 +419,11 @@ type
     property Keccak224: TKeccak224 read fKeccak224;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak256Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak256Hash - class declaration
 ===============================================================================}
@@ -448,11 +449,11 @@ type
     property Keccak256: TKeccak256 read fKeccak256;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak384Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak384Hash - class declaration
 ===============================================================================}
@@ -478,11 +479,11 @@ type
     property Keccak384: TKeccak384 read fKeccak384;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak512Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak512Hash - class declaration
 ===============================================================================}
@@ -508,11 +509,11 @@ type
     property Keccak512: TKeccak512 read fKeccak512;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TSHA3Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3Hash - class declaration
 ===============================================================================}
@@ -525,11 +526,11 @@ type
     property SHA3: TSHA3 read GetKeccak;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_224Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_224Hash - class declaration
 ===============================================================================}
@@ -555,11 +556,11 @@ type
     property SHA3_224: TSHA3_224 read fSHA3_224;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_256Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_256Hash - class declaration
 ===============================================================================}
@@ -585,11 +586,11 @@ type
     property SHA3_256: TSHA3_256 read fSHA3_256;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_384Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_384Hash - class declaration
 ===============================================================================}
@@ -615,11 +616,11 @@ type
     property SHA3_384: TSHA3_384 read fSHA3_384;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_512Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_512Hash - class declaration
 ===============================================================================}
@@ -645,11 +646,11 @@ type
     property SHA3_512: TSHA3_512 read fSHA3_512;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccakVarHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakVarHash - class declaration
 ===============================================================================}
@@ -663,11 +664,11 @@ type
     property HashBits: UInt32 read fHashBits write SetHashBits;    
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TKeccakCHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakCHash - class declaration
 ===============================================================================}
@@ -698,11 +699,11 @@ type
     property KeccakC: TKeccakC read GetKeccakC;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
-                                   TSHAKEHash                                   
-================================================================================
--------------------------------------------------------------------------------}
+{===============================================================================
+--------------------------------------------------------------------------------
+                                   TSHAKEHash
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHAKEHash - class declaration
 ===============================================================================}
@@ -712,11 +713,11 @@ type
     class Function PaddingByte: UInt8; override;    
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
-                                  TSHAKE128Hash                                 
-================================================================================
--------------------------------------------------------------------------------}
+{===============================================================================
+--------------------------------------------------------------------------------
+                                  TSHAKE128Hash
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHAKE128Hash - class declaration
 ===============================================================================}
@@ -746,11 +747,11 @@ type
     property SHAKE128: TSHAKE128 read GetSHAKE128;
   end;
 
-{-------------------------------------------------------------------------------
-================================================================================
-                                  TSHAKE256Hash                                 
-================================================================================
--------------------------------------------------------------------------------}
+{===============================================================================
+--------------------------------------------------------------------------------
+                                  TSHAKE256Hash
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHAKE256Hash - class declaration
 ===============================================================================}
@@ -793,12 +794,37 @@ Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccak): TKe
 Function CreateFromByFunction(Keccak: TKeccak): TKeccakHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
 ===============================================================================}
+{===============================================================================
+    Standalone functions - declaration
+===============================================================================}
+
+Function SHA3ToStr(const SHA3: TSHA3): String;
+Function StrToSHA3(HashFunction: TSHA3Function; const Str: String): TSHA3;
+Function TryStrToSHA3(HashFunction: TSHA3Function; const Str: String; out SHA3: TSHA3): Boolean;
+Function StrToSHA3Def(HashFunction: TSHA3Function; const Str: String; Default: TSHA3): TSHA3;
+
+Function CompareSHA3(const A,B: TSHA3): Integer;
+Function SameSHA3(const A,B: TSHA3): Boolean;
+
+Function BinaryCorrectSHA3(const Hash: TSHA3): TSHA3;{$IFDEF CanInline} inline;{$ENDIF} deprecated;
+
+//------------------------------------------------------------------------------
 {
   For Keccak/SHA3/SHAKE, it is not enough to pass hash from previous step when
   doing continuous hashing (BufferSHA3 > LastBufferSHA3). TKecakState type is
   introduced for this purpose.
+
+  This mechanism should not be used for normal streamed hashing, use contexts
+  or appropriate object for that. It is meant for situations where continous
+  data are to be hashed in parts, but single computing state cannot be used
+  on more than one part at a time, eg. because the parts are spatially or
+  temporally distant.
+
+    NOTE - all values in the state are stored with system endianness.
 }
 type
   TKeccakState = record
@@ -810,26 +836,14 @@ type
 
   TSHA3State = TKeccakState;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
 Function GetBlockSize(HashFunction: TSHA3Function): UInt32;
 
 Function InitialSHA3State(HashFunction: TSHA3Function; HashBits: UInt32 = 0): TSHA3State;
 
-Function SHA3ToStr(SHA3: TSHA3): String;
-Function StrToSHA3(HashFunction: TSHA3Function; Str: String): TSHA3;
-Function TryStrToSHA3(HashFunction: TSHA3Function; const Str: String; out SHA3: TSHA3): Boolean;
-Function StrToSHA3Def(HashFunction: TSHA3Function; const Str: String; Default: TSHA3): TSHA3;
-
-Function CompareSHA3(A,B: TSHA3): Integer;
-Function SameSHA3(A,B: TSHA3): Boolean;
-
-Function BinaryCorrectSHA3(Hash: TSHA3): TSHA3;{$IFDEF CanInline} inline; {$ENDIF}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
 procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize); overload;
-Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3;
+Function LastBufferSHA3(const State: TSHA3State; const Buffer; Size: TMemSize): TSHA3;
 
 Function BufferSHA3(HashFunction: TSHA3Function; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3; overload;
 
@@ -840,8 +854,7 @@ Function StringSHA3(HashFunction: TSHA3Function; const Str: String; HashBits: UI
 Function StreamSHA3(HashFunction: TSHA3Function; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3;
 Function FileSHA3(HashFunction: TSHA3Function; const FileName: String; HashBits: UInt32 = 0): TSHA3;
 
-//------------------------------------------------------------------------------
-
+//------------------------------------------------------------------------------  
 type
   TSHA3Context = type Pointer;
 
@@ -857,20 +870,19 @@ uses
   SysUtils,
   BitOps;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
-  {$DEFINE W6018:={$WARN 6018 OFF}} // unreachable code
-{$ENDIF}
-
 {===============================================================================
     Auxiliary functions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
     Auxiliary functions - private functions
 -------------------------------------------------------------------------------}
+
+Function ConsumeArgs(const Args: array of const): Integer;
+begin
+Result := Length(Args);
+end;
+
+//------------------------------------------------------------------------------
 
 Function EndianSwap(Sponge: TKeccakSponge): TKeccakSponge; overload;
 var
@@ -907,6 +919,90 @@ end;
 Function BCF_CreateFromByFunction(Keccak: TKeccak): TKeccakDefHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
 begin
 Result := BCF_CreateFromByFunction(Keccak.HashFunction,Keccak);
+end;
+
+//==============================================================================
+
+Function SHA3Compare(const A,B: TKeccakVar): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+If Length(A) = Length(B) then
+  begin
+    For i := 0 to Pred(Length(A)) do
+      If A[i] > B[i] then
+        begin
+          Result := +1;
+          Break;
+        end
+      else If A[i] < B[i] then
+        begin
+          Result := -1;
+          Break;
+        end;
+  end
+else raise ESHA3IncompatibleSize.CreateFmt('SHA3Compare: Incompatible sizes (%d,%d).',[Length(A),Length(B)]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA3Same(const A,B: TKeccakVar): Boolean;
+var
+  i:  Integer;
+begin
+Result := True;
+If Length(A) = Length(B) then
+  begin
+    For i := 0 to Pred(Length(A)) do
+      If A[i] <> B[i] then
+        begin
+          Result := False;
+          Break;
+        end;
+  end
+else raise ESHA3IncompatibleSize.CreateFmt('SHA3Same: Incompatible sizes (%d,%d).',[Length(A),Length(B)]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA3AsString(const Hash: TKeccakVar): String;
+var
+  i:  Integer;
+begin
+If Length(Hash) > 0 then
+  begin
+    Result := StringOfChar('0',Length(Hash) * 2);
+    For i := Low(Hash) to High(Hash) do
+      begin
+        Result[(i * 2) + 2] := IntToHex(Hash[i] and $0F,1)[1];
+        Result[(i * 2) + 1] := IntToHex(Hash[i] shr 4,1)[1];
+      end;
+  end
+else Result := '';
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA3FromString(const Str: String; HashSize: TMemSize): TKeccakVar;
+var
+  TempStr:  String;
+  i:        Integer; 
+begin
+If HashSize > 0 then
+  begin
+    If Length(Str) < Integer(HashSize * 2) then
+      TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
+    else If Length(Str) > Integer(HashSize * 2) then
+      TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
+    else
+      TempStr := Str;
+  end
+else TempStr := Str;
+Result := nil;
+SetLength(Result,Length(TempStr) div 2);
+For i := Low(Result) to High(Result) do
+  Result[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
 end;
 
 {-------------------------------------------------------------------------------
@@ -961,11 +1057,11 @@ begin
 Result := CreateFromByFunction(Keccak.HashFunction,Keccak);
 end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                    TKeccakHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakHash - calculation constants
 ===============================================================================}
@@ -1007,7 +1103,6 @@ end;
 Function TKeccakHash.GetHashBuffer: TKeccakVar;
 begin
 Result := nil;
-SetLength(Result,0);
 end;
 
 //------------------------------------------------------------------------------
@@ -1022,7 +1117,9 @@ end;
 
 class Function TKeccakHash.HashBufferToLE(HashBuffer: TKeccakVar): TKeccakVar;
 begin
-Result := HashBuffer;
+Result := Copy(HashBuffer);
+If Length(Result) > 0 then
+  SwapEndian(Result[0],Length(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -1031,12 +1128,14 @@ class Function TKeccakHash.HashBufferToBE(HashBuffer: TKeccakVar): TKeccakVar;
 begin
 Result := HashBuffer;
 end;
- 
+
 //------------------------------------------------------------------------------
 
 class Function TKeccakHash.HashBufferFromLE(HashBuffer: TKeccakVar): TKeccakVar;
 begin
-Result := HashBuffer;
+Result := Copy(HashBuffer);
+If Length(Result) > 0 then
+  SwapEndian(Result[0],Length(Result));
 end;
  
 //------------------------------------------------------------------------------
@@ -1048,12 +1147,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 class Function TKeccakHash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
+ConsumeArgs([HashBits]);
 Result := KECCAK_DEFAULT_CAPACITY;
 end;
-{$IFDEF FPCDWM}{$POP}W5024{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1203,35 +1301,25 @@ var
   {$ENDIF}
   end;
 
-  {$IFDEF FPCDWM}{$PUSH}W6018{$ENDIF}
   Function Min(A,B: TMemSize): TMemSize;
   begin
-  {$IFDEF CPU64bit}
-    If not AuxTypes.NativeUInt64 then
-      begin
-        If Int64Rec(A).Hi < Int64Rec(B).Hi then
-          Result := A
-        else If Int64Rec(A).Hi > Int64Rec(B).Hi then
-          Result := B
-        else
-          begin
-            If Int64Rec(A).Lo < Int64Rec(B).Lo then
-              Result := A
-            else
-              Result := B;
-          end;
-      end
+  {$IF Defined(CPU64bit) and not Declared(NativeUInt64)}
+    If Int64Rec(A).Hi < Int64Rec(B).Hi then
+      Result := A
+    else If Int64Rec(A).Hi > Int64Rec(B).Hi then
+      Result := B
     else
       begin
-        If A < B then Result := A
-          else Result := B;
-      end
+        If Int64Rec(A).Lo < Int64Rec(B).Lo then
+          Result := A
+        else
+          Result := B;
+      end;
   {$ELSE}
     If A < B then Result := A
       else Result := B;
-  {$ENDIF}
+  {$IFEND}
   end;
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 begin
 If Size > 0 then
@@ -1240,9 +1328,7 @@ If Size > 0 then
     If Size > fBlockSize then
       while Size > 0 do
         begin
-        {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-          SqueezeSponge(Pointer(PtrUInt(@Buffer) + Offset)^,Min(Size,fBlockSize));
-        {$IFDEF FPCDWM}{$POP}{$ENDIF}
+          SqueezeSponge(PtrAdvance(@Buffer,TMemOff(Offset))^,Min(Size,fBlockSize));
           Inc(Offset,Min(Size,fBlockSize));
           Dec(Size,Min(Size,fBlockSize));
           Permute;
@@ -1300,12 +1386,10 @@ begin
 If fTransCount < fBlockSize then
   begin
     // padding can fit
-  {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-    FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
-    PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := PaddingByte;
-    PUInt8(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - 1))^ :=
-      PUInt8(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - 1))^ or $80;
-  {$IFDEF FPCDWM}{$POP}{$ENDIF}
+    FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,0);
+    PUInt8(PtrAdvance(fTransBlock,TMemOff(fTransCount)))^ := PaddingByte;
+    PUInt8(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - 1))^ :=
+      PUInt8(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - 1))^ or $80;
     ProcessBlock(fTransBlock^);
     Squeeze;
   end
@@ -1315,11 +1399,9 @@ else
     If fTransCount = fBlockSize then
       begin
         ProcessBlock(fTransBlock^);
-      {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
         FillChar(fTransBlock^,fBlockSize,0);
         PUInt8(fTransBlock)^ := PaddingByte;
-        PUInt8(PtrUInt(fTransBlock) + (PtrUInt(fBlockSize) - 1))^ := $80;
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        PUInt8(PtrAdvance(fTransBlock,TMemOff(fBlockSize) - 1))^ := $80;
         ProcessBlock(fTransBlock^);
         Squeeze;
       end
@@ -1411,66 +1493,38 @@ end;
 //------------------------------------------------------------------------------
 
 Function TKeccakHash.Compare(Hash: THashBase): Integer;
-var
-  A,B:  TKeccakVar;
-  i:    Integer;
 begin
 If Hash is Self.ClassType then
-  begin
-    Result := 0;
-    A := GetHashBuffer;
-    B := TKeccakHash(Hash).GetHashBuffer; // calling protected method, but meh...
-    If Length(A) = Length(B) then
-      begin
-        For i := Low(A) to High(A) do
-          If A[i] > B[i] then
-            begin
-              Result := +1;
-              Break;
-            end
-          else If A[i] < B[i] then
-            begin
-              Result := -1;
-              Break;
-            end;
-      end
-    else raise ESHA3IncompatibleSize.CreateFmt('TKeccakHash.Compare: Incompatible size (%d,%d).',[Length(A),Length(B)]);
-  end
-else raise ESHA3IncompatibleClass.CreateFmt('TKeccakHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := SHA3Compare(GetHashBuffer,TKeccakHash(Hash).GetHashBuffer)
+else
+  raise ESHA3IncompatibleClass.CreateFmt('TKeccakHash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TKeccakHash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is Self.ClassType then
+  Result := SHA3Same(GetHashBuffer,TKeccakHash(Hash).GetHashBuffer)
+else
+  raise ESHA3IncompatibleClass.CreateFmt('TKeccakHash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TKeccakHash.AsString: String;
-var
-  Temp: TKeccakVar;
-  i:    Integer;
 begin
-Temp := GetHashBuffer;
-If Length(Temp) > 0 then
-  begin
-    Result := StringOfChar('0',Length(Temp) * 2);
-    For i := Low(Temp) to High(Temp) do
-      begin
-        Result[(i * 2) + 2] := IntToHex(Temp[i] and $0F,1)[1];
-        Result[(i * 2) + 1] := IntToHex(Temp[i] shr 4,1)[1];
-      end;
-  end
-else Result := '';
+Result := SHA3AsString(GetHashBuffer);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TKeccakHash.FromString(const Str: String);
-var
-  Temp: TKeccakVar;
-  i:    Integer;  
 begin
-Temp := nil;
-SetLength(Temp,Length(Str) div 2);
-For i := Low(Temp) to High(Temp) do
-  Temp[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
-SetHashBuffer(Temp);
+If Self is TKeccakVarHash then
+  SetHashBuffer(SHA3FromString(Str,0))
+else
+  SetHashBuffer(SHA3FromString(Str,HashSize));
 end;
 
 //------------------------------------------------------------------------------
@@ -1523,11 +1577,11 @@ If Length(Temp) > 0 then
   end;
 end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TKeccak0Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak0Hash - class implementation
 ===============================================================================}
@@ -1559,13 +1613,12 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 constructor TKeccak0Hash.CreateAndInitFrom(Hash: TKeccak);
 begin
+ConsumeArgs([@Hash]);
 CreateAndInit;
-// this clas does not have a true hash, drop the Hash parameter
+// this class does not have a true hash, drop the Hash parameter
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1582,11 +1635,11 @@ SqueezeTo(Buffer,Size);
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccakDefHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakDefHash - class declaration
 ===============================================================================}
@@ -1601,11 +1654,11 @@ else
   SetLength(Result.HashData,0);
 end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccakFixHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakFixHash - class implementation
 ===============================================================================}
@@ -1625,21 +1678,6 @@ end;
     TKeccakFixHash - public methods
 -------------------------------------------------------------------------------}
 
-procedure TKeccakFixHash.FromString(const Str: String);
-var
-  TempStr:  String;
-begin
-If Length(Str) < Integer(HashSize * 2) then
-  TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
-else If Length(Str) > Integer(HashSize * 2) then
-  TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
-else
-  TempStr := Str;
-inherited FromString(TempStr);
-end;
-
-//------------------------------------------------------------------------------
-
 procedure TKeccakFixHash.FromStringDef(const Str: String; const Default: TKeccak);
 begin
 If Default.HashBits = fHashBits then 
@@ -1656,11 +1694,11 @@ else raise ESHA3IncompatibleHashBits.CreateFmt('TKeccakFixHash.FromStringDef: In
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak224Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak224Hash - class implementation
 ===============================================================================}
@@ -1700,6 +1738,7 @@ end;
 class Function TKeccak224Hash.Keccak224ToLE(Keccak224: TKeccak224): TKeccak224;
 begin
 Result := Keccak224;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -1714,6 +1753,7 @@ end;
 class Function TKeccak224Hash.Keccak224FromLE(Keccak224: TKeccak224): TKeccak224;
 begin
 Result := Keccak224;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -1793,11 +1833,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak256Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak256Hash - class implementation
 ===============================================================================}
@@ -1837,6 +1877,7 @@ end;
 class Function TKeccak256Hash.Keccak256ToLE(Keccak256: TKeccak256): TKeccak256;
 begin
 Result := Keccak256;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -1851,6 +1892,7 @@ end;
 class Function TKeccak256Hash.Keccak256FromLE(Keccak256: TKeccak256): TKeccak256;
 begin
 Result := Keccak256;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -1929,11 +1971,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak384Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak384Hash - class implementation
 ===============================================================================}
@@ -1973,6 +2015,7 @@ end;
 class Function TKeccak384Hash.Keccak384ToLE(Keccak384: TKeccak384): TKeccak384;
 begin
 Result := Keccak384;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -1987,6 +2030,7 @@ end;
 class Function TKeccak384Hash.Keccak384FromLE(Keccak384: TKeccak384): TKeccak384;
 begin
 Result := Keccak384;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -2065,11 +2109,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccak512Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccak512Hash - class implementation
 ===============================================================================}
@@ -2109,6 +2153,7 @@ end;
 class Function TKeccak512Hash.Keccak512ToLE(Keccak512: TKeccak512): TKeccak512;
 begin
 Result := Keccak512;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -2123,6 +2168,7 @@ end;
 class Function TKeccak512Hash.Keccak512FromLE(Keccak512: TKeccak512): TKeccak512;
 begin
 Result := Keccak512;
+SwapEndian(Result,Sizeof(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -2201,11 +2247,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TSHA3Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3Hash - class declaration
 ===============================================================================}
@@ -2229,11 +2275,11 @@ Result := $06;  // SHA3 padding (M || 01 || pad10*1)
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_224Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_224Hash - class implementation
 ===============================================================================}
@@ -2273,6 +2319,7 @@ end;
 class Function TSHA3_224Hash.SHA3_224ToLE(SHA3_224: TSHA3_224): TSHA3_224;
 begin
 Result := SHA3_224;
+SwapEndian(Result,Sizeof(Result));
 end;
     
 //------------------------------------------------------------------------------
@@ -2287,6 +2334,7 @@ end;
 class Function TSHA3_224Hash.SHA3_224FromLE(SHA3_224: TSHA3_224): TSHA3_224;
 begin
 Result := SHA3_224;
+SwapEndian(Result,Sizeof(Result));
 end;
       
 //------------------------------------------------------------------------------
@@ -2366,11 +2414,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_256Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_256Hash - class implementation
 ===============================================================================}
@@ -2410,6 +2458,7 @@ end;
 class Function TSHA3_256Hash.SHA3_256ToLE(SHA3_256: TSHA3_256): TSHA3_256;
 begin
 Result := SHA3_256;
+SwapEndian(Result,Sizeof(Result));
 end;
     
 //------------------------------------------------------------------------------
@@ -2424,6 +2473,7 @@ end;
 class Function TSHA3_256Hash.SHA3_256FromLE(SHA3_256: TSHA3_256): TSHA3_256;
 begin
 Result := SHA3_256;
+SwapEndian(Result,Sizeof(Result));
 end;
       
 //------------------------------------------------------------------------------
@@ -2503,11 +2553,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_384Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_384Hash - class implementation
 ===============================================================================}
@@ -2547,6 +2597,7 @@ end;
 class Function TSHA3_384Hash.SHA3_384ToLE(SHA3_384: TSHA3_384): TSHA3_384;
 begin
 Result := SHA3_384;
+SwapEndian(Result,Sizeof(Result));
 end;
     
 //------------------------------------------------------------------------------
@@ -2561,6 +2612,7 @@ end;
 class Function TSHA3_384Hash.SHA3_384FromLE(SHA3_384: TSHA3_384): TSHA3_384;
 begin
 Result := SHA3_384;
+SwapEndian(Result,Sizeof(Result));
 end;
       
 //------------------------------------------------------------------------------
@@ -2640,11 +2692,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TSHA3_512Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHA3_512Hash - class implementation
 ===============================================================================}
@@ -2684,6 +2736,7 @@ end;
 class Function TSHA3_512Hash.SHA3_512ToLE(SHA3_512: TSHA3_512): TSHA3_512;
 begin
 Result := SHA3_512;
+SwapEndian(Result,Sizeof(Result));
 end;
     
 //------------------------------------------------------------------------------
@@ -2698,6 +2751,7 @@ end;
 class Function TSHA3_512Hash.SHA3_512FromLE(SHA3_512: TSHA3_512): TSHA3_512;
 begin
 Result := SHA3_512;
+SwapEndian(Result,Sizeof(Result));
 end;
       
 //------------------------------------------------------------------------------
@@ -2777,11 +2831,11 @@ If not TryFromString(Str) then
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TKeccakVarHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakVarHash - class implementation
 ===============================================================================}
@@ -2812,11 +2866,11 @@ If (Length(Str) div 2) = Length(Default.HashData) then
 else raise ESHA3InvalidSize.CreateFmt('TKeccakVarHash.FromStringDef: Size mismatch (%d, %d).',[Length(Str) div 2,Length(Default.HashData)]);
 end;
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TKeccakCHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TKeccakCHash - class implementation
 ===============================================================================}
@@ -2890,6 +2944,8 @@ end;
 class Function TKeccakCHash.KeccakCToLE(KeccakC: TKeccakC): TKeccakC;
 begin
 Result := Copy(KeccakC);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end;
   
 //------------------------------------------------------------------------------
@@ -2904,6 +2960,8 @@ end;
 class Function TKeccakCHash.KeccakCFromLE(KeccakC: TKeccakC): TKeccakC;
 begin
 Result := Copy(KeccakC);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end;
  
 //------------------------------------------------------------------------------
@@ -2994,11 +3052,11 @@ else raise ESHA3InvalidSize.CreateFmt('TKeccakCHash.FromStringDef: Size mismatch
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                    TSHAKEHash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHAKEHash - class declaration
 ===============================================================================}
@@ -3012,11 +3070,11 @@ Result := $1F;  // RawSHAKE + SHAKE padding (M || 11 || 11 || pad10*1)
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TSHAKE128Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHAKE128Hash - class implementation
 ===============================================================================}
@@ -3033,12 +3091,11 @@ FillChar(fSHAKE128[0],Length(fSHAKE128),0);
 end;
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 class Function TSHAKE128Hash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
+ConsumeArgs([HashBits]);
 Result := 256;  // capacity is static
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -3082,6 +3139,8 @@ end;
 class Function TSHAKE128Hash.SHAKE128ToLE(SHAKE128: TSHAKE128): TSHAKE128;
 begin
 Result := Copy(SHAKE128);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end;
      
 //------------------------------------------------------------------------------
@@ -3096,6 +3155,8 @@ end;
 class Function TSHAKE128Hash.SHAKE128FromLE(SHAKE128: TSHAKE128): TSHAKE128;
 begin
 Result := Copy(SHAKE128);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end; 
      
 //------------------------------------------------------------------------------
@@ -3178,11 +3239,11 @@ else raise ESHA3InvalidSize.CreateFmt('TSHAKE128Hash.FromStringDef: Size mismatc
 end;
 
 
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                   TSHAKE256Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TSHAKE256Hash - class implementation
 ===============================================================================}
@@ -3198,12 +3259,11 @@ FillChar(fSHAKE256[0],Length(fSHAKE256),0);
 end;
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 class Function TSHAKE256Hash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
+ConsumeArgs([HashBits]);
 Result := 512;  // capacity is static
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -3247,6 +3307,8 @@ end;
 class Function TSHAKE256Hash.SHAKE256ToLE(SHAKE256: TSHAKE256): TSHAKE256;
 begin
 Result := Copy(SHAKE256);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end;
      
 //------------------------------------------------------------------------------
@@ -3261,6 +3323,8 @@ end;
 class Function TSHAKE256Hash.SHAKE256FromLE(SHAKE256: TSHAKE256): TSHAKE256;
 begin
 Result := Copy(SHAKE256);
+If Length(Result) > 1 then
+  SwapEndian(Result[0],Length(Result));
 end; 
      
 //------------------------------------------------------------------------------
@@ -3344,10 +3408,107 @@ end;
 
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - auxiliary functions
+    Standalone functions - utility functions
+-------------------------------------------------------------------------------}
+
+Function SHA3ToStr(const SHA3: TSHA3): String;
+begin
+Result := SHA3AsString(SHA3.HashData);
+end;
+
+//------------------------------------------------------------------------------
+
+Function StrToSHA3(HashFunction: TSHA3Function; const Str: String): TSHA3;
+begin
+Result.HashFunction := HashFunction;
+case HashFunction of
+  fnKeccak224,
+  fnSHA3_224:   Result.HashData := SHA3FromString(Str,28);
+  fnKeccak256,
+  fnSHA3_256:   Result.HashData := SHA3FromString(Str,32);
+  fnKeccak384,
+  fnSHA3_384:   Result.HashData := SHA3FromString(Str,48);
+  fnKeccak512,
+  fnSHA3_512:   Result.HashData := SHA3FromString(Str,64);
+  fnKeccakC,
+  fnSHAKE128,
+  fnSHAKE256:   Result.HashData := SHA3FromString(Str,0);
+else
+ {fnKeccak0}
+  Result.HashData := nil;
+end;
+Result.HashBits := UInt32(Length(Result.HashData) * 8)
+end;
+
+//------------------------------------------------------------------------------
+
+Function TryStrToSHA3(HashFunction: TSHA3Function; const Str: String; out SHA3: TSHA3): Boolean;
+begin
+try
+  SHA3 := StrToSHA3(HashFunction,Str);
+  Result := True;
+except
+  Result := False;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StrToSHA3Def(HashFunction: TSHA3Function; const Str: String; Default: TSHA3): TSHA3;
+begin
+If not TryStrToSHA3(HashFunction,Str,Result) then
+  begin
+    Result := Default;
+    // ensure unique copy
+    SetLength(Result.HashData,Length(Result.HashData));
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CompareSHA3(const A,B: TSHA3): Integer;
+begin
+// compatibility checks
+If A.HashFunction <> B.HashFunction then
+  raise ESHA3IncompatibleFunction.CreateFmt('CompareSHA3: Incompatible functions (%d, %d).',
+    [Ord(A.HashFunction),Ord(B.HashFunction)]);
+If A.HashBits <> B.HashBits then
+  raise ESHA3IncompatibleHashBits.CreateFmt('CompareSHA3: Incompatible hash bits (%d, %d).',
+    [Ord(A.HashBits),Ord(B.HashBits)]);
+Result := SHA3Compare(A.HashData,B.HashData)
+end;
+
+//------------------------------------------------------------------------------
+
+Function SameSHA3(const A,B: TSHA3): Boolean;
+begin
+If A.HashFunction <> B.HashFunction then
+  raise ESHA3IncompatibleFunction.CreateFmt('SameSHA3: Incompatible functions (%d, %d).',
+    [Ord(A.HashFunction),Ord(B.HashFunction)]);
+If A.HashBits <> B.HashBits then
+  raise ESHA3IncompatibleHashBits.CreateFmt('SameSHA3: Incompatible hash bits (%d, %d).',
+    [Ord(A.HashBits),Ord(B.HashBits)]);
+Result := SHA3Same(A.HashData,B.HashData);
+end;
+
+//------------------------------------------------------------------------------
+
+Function BinaryCorrectSHA3(const Hash: TSHA3): TSHA3;
+begin
+Result := Hash;
+SetLength(Result.HashData,Length(Result.HashData));
+end;
+
+{-------------------------------------------------------------------------------
+    Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
 Function GetBlockSize(HashFunction: TSHA3Function): UInt32;
@@ -3387,118 +3548,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function SHA3ToStr(SHA3: TSHA3): String;
-var
-  Hash: TKeccakDefHash;
-begin
-Hash := BCF_CreateFromByFunction(SHA3);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function StrToSHA3(HashFunction: TSHA3Function; Str: String): TSHA3;
-var
-  Hash: TKeccakDefHash;
-begin
-Hash := BCF_CreateByFunction(HashFunction);
-try
-  Hash.FromString(Str);
-  Result := Hash.Keccak;
-finally
-  Hash.Free;
-end; 
-end;
-
-//------------------------------------------------------------------------------
-
-Function TryStrToSHA3(HashFunction: TSHA3Function; const Str: String; out SHA3: TSHA3): Boolean;
-var
-  Hash: TKeccakDefHash;
-begin
-Hash := BCF_CreateByFunction(HashFunction);
-try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    SHA3 := Hash.Keccak;
-finally
-  Hash.Free;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function StrToSHA3Def(HashFunction: TSHA3Function; const Str: String; Default: TSHA3): TSHA3;
-var
-  Hash: TKeccakDefHash;
-begin
-Hash := BCF_CreateByFunction(HashFunction);
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.Keccak;
-finally
-  Hash.Free;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function CompareSHA3(A,B: TSHA3): Integer;
-var
-  HashA:  TKeccakDefHash;
-  HashB:  TKeccakDefHash;
-begin
-HashA := BCF_CreateFromByFunction(A);
-try
-  Result := 0;  // don't ask me, ask Delphi...
-  HashB := BCF_CreateFromByFunction(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SameSHA3(A,B: TSHA3): Boolean;
-var
-  HashA:  TKeccakDefHash;
-  HashB:  TKeccakDefHash;
-begin
-HashA := BCF_CreateFromByFunction(A);
-try
-  Result := False;
-  HashB := BCF_CreateFromByFunction(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function BinaryCorrectSHA3(Hash: TSHA3): TSHA3;
-begin
-Result := Hash;
-SetLength(Result.HashData,Length(Result.HashData)); // this will create unique copy
-end;
-
-{-------------------------------------------------------------------------------
-    Backward compatibility functions - processing functions
--------------------------------------------------------------------------------}
-
 procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize);
 var
   Hash: TKeccakDefHash;
@@ -3525,7 +3574,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3;
+Function LastBufferSHA3(const State: TSHA3State; const Buffer; Size: TMemSize): TSHA3;
 var
   Hash: TKeccakDefHash;
 begin
@@ -3645,7 +3694,7 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - context functions
+    Standalone functions - context functions
 -------------------------------------------------------------------------------}
 
 Function SHA3_Init(HashFunction: TSHA3Function; HashBits: UInt32 = 0): TSHA3Context;

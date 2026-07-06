@@ -9,9 +9,9 @@
 
   MD2 calculation
 
-  Version 1.2.1 (2020-07-13)
+  Version 1.2.2 (2026-07-04)
 
-  Last change 2026-02-26
+  Last change 2026-07-04
 
   ©2015-2026 František Milt
 
@@ -31,11 +31,13 @@
 
   Dependencies:
     AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+    BitOps   - github.com/TheLazyTomcat/Lib.BitOps
     HashBase - github.com/TheLazyTomcat/Lib.HashBase
 
   Indirect dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
     AuxExceptions      - github.com/TheLazyTomcat/Lib.AuxExceptions
+    BasicUIM           - github.com/TheLazyTomcat/Lib.BasicUIM
     ListUtils          - github.com/TheLazyTomcat/Lib.ListUtils
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
@@ -48,8 +50,6 @@ unit MD2;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -60,18 +60,23 @@ uses
   AuxTypes, HashBase;
 
 {===============================================================================
+    Library-specific exceptions
+===============================================================================}
+type
+  EMD2Exception = class(EHashException);
+
+  EMD2IncompatibleClass = class(EMD2Exception);
+  EMD2ProcessingError   = class(EMD2Exception);
+
+{===============================================================================
     Common types and constants
 ===============================================================================}
 {
   Bytes in type TMD2 are always ordered from most significant byte to least
   significant byte (big endian).
-  
+
   Type TMD2Sys has no such guarantee and its internal structure depends on
   current implementation.
-
-  MD2 does not differ in little and big endian form, as it is not a single
-  quantity, therefore methods like MD2ToLE or MD2ToBE do nothing and are
-  present only for the sake of completeness.
 }
 type
   TMD2 = packed array[0..15] of UInt8;
@@ -84,17 +89,11 @@ const
   InitialMD2: TMD2 = ($00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00);
   ZeroMD2:    TMD2 = ($00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00);
 
-type
-  EMD2Exception = class(EHashException);
-
-  EMD2IncompatibleClass = class(EMD2Exception);
-  EMD2ProcessingError   = class(EMD2Exception);
-
-{-------------------------------------------------------------------------------
-================================================================================
+{===============================================================================
+--------------------------------------------------------------------------------
                                     TMD2Hash
-================================================================================
--------------------------------------------------------------------------------}
+--------------------------------------------------------------------------------
+===============================================================================}
 {===============================================================================
     TMD2Hash - class declaration
 ===============================================================================}
@@ -125,6 +124,7 @@ type
     constructor CreateAndInitFrom(Hash: TMD2); overload; virtual;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
     procedure FromStringDef(const Str: String; const Default: TMD2); reintroduce;
@@ -136,7 +136,9 @@ type
   end;
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
 ===============================================================================}
 {
   For MD2, it is not enough to pass hash from previous step when doing
@@ -155,18 +157,24 @@ const
     Checksum: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
     Hash:     (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0));
 
-Function MD2toStr(MD2: TMD2): String;
-Function StrToMD2(Str: String): TMD2;
+{===============================================================================
+    Standalone functions - declaration
+===============================================================================}
+
+Function MD2toStr(const MD2: TMD2): String;
+Function StrToMD2(const Str: String): TMD2;
 Function TryStrToMD2(const Str: String; out MD2: TMD2): Boolean;
 Function StrToMD2Def(const Str: String; Default: TMD2): TMD2;
 
-Function CompareMD2(A,B: TMD2): Integer;
-Function SameMD2(A,B: TMD2): Boolean;
+Function CompareMD2(const A,B: TMD2): Integer;
+Function SameMD2(const A,B: TMD2): Boolean;
 
-Function BinaryCorrectMD2(MD2: TMD2): TMD2;
+Function BinaryCorrectMD2(const MD2: TMD2): TMD2; deprecated;
+
+//------------------------------------------------------------------------------
 
 procedure BufferMD2(var MD2State: TMD2State; const Buffer; Size: TMemSize); overload;
-Function LastBufferMD2(MD2State: TMD2State; const Buffer; Size: TMemSize): TMD2;
+Function LastBufferMD2(const MD2State: TMD2State; const Buffer; Size: TMemSize): TMD2;
 
 Function BufferMD2(const Buffer; Size: TMemSize): TMD2; overload;
 
@@ -178,7 +186,6 @@ Function StreamMD2(Stream: TStream; Count: Int64 = -1): TMD2;
 Function FileMD2(const FileName: String): TMD2;
 
 //------------------------------------------------------------------------------
-
 type
   TMD2Context = type Pointer;
 
@@ -191,21 +198,87 @@ Function MD2_Hash(const Buffer; Size: TMemSize): TMD2;
 implementation
 
 uses
-  SysUtils;
+  SysUtils,
+  BitOps;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5057:={$WARN 5057 OFF}} // Local variable "$1" does not seem to be initialized
-{$ENDIF}
-
-{-------------------------------------------------------------------------------
-================================================================================
-                                    TMD2Hash
-================================================================================
--------------------------------------------------------------------------------}
 {===============================================================================
-    TMD2Hash - calculation constants
+    Auxiliary functions
+===============================================================================}
+
+Function MD2Compare(const A,B: TMD2Sys): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+{
+  Both types TMD2 and TMD2Sys are big endian - lowest byte is the most
+  significant, so start from it when comparing.
+}
+For i := Low(A) to High(A) do
+  If A[i] > B[i] then
+    begin
+      Result := +1;
+      Break;
+    end
+  else If A[i] < B[i] then
+    begin
+      Result := -1;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD2Same(const A,B: TMD2Sys): Boolean;
+var
+  i:  Integer;
+begin
+Result := True;
+// processing order does not matter here
+For i := Low(A) to High(A) do
+  If A[i] <> B[i] then
+    begin
+      Result := False;
+      Break;
+    end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD2AsString(const MD2: TMD2Sys): String;
+var
+  i:  Integer;
+begin
+Result := StringOfChar('0',SizeOf(TMD2) * 2);
+For i := Low(MD2) to High(MD2) do
+  begin
+    Result[(i * 2) + 2] := IntToHex(MD2[i] and $0F,1)[1];
+    Result[(i * 2) + 1] := IntToHex(MD2[i] shr 4,1)[1];
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function MD2FromString(const Str: String): TMD2Sys;
+var
+  TempStr:  String;
+  i:        Integer;
+begin
+If Length(Str) < (SizeOf(TMD2) * 2) then
+  TempStr := StringOfChar('0',(SizeOf(TMD2) * 2) - Length(Str)) + Str
+else If Length(Str) > Integer(SizeOf(TMD2) * 2) then
+  TempStr := Copy(Str,Length(Str) - Pred(SizeOf(TMD2) * 2),SizeOf(TMD2) * 2)
+else
+  TempStr := Str;
+For i := Low(Result) to High(Result) do
+  Result[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                    TMD2Hash
+--------------------------------------------------------------------------------
 ===============================================================================}
 const
   MD2_PI_TABLE: array[UInt8] of UInt8 =(
@@ -302,9 +375,7 @@ end;
 
 procedure TMD2Hash.ProcessLast;
 begin
-{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,UInt8(fBlockSize - fTransCount));
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
+FillChar(PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount,UInt8(fBlockSize - fTransCount));
 ProcessBlock(fTransBlock^);
 BlockHash(fChecksum);
 end;
@@ -344,6 +415,7 @@ end;
 class Function TMD2Hash.MD2ToLE(MD2: TMD2): TMD2;
 begin
 Result := MD2;
+SwapEndian(Result,SizeOf(TMD2));
 end;
 
 //------------------------------------------------------------------------------
@@ -358,6 +430,7 @@ end;
 class Function TMD2Hash.MD2FromLE(MD2: TMD2): TMD2;
 begin
 Result := MD2;
+SwapEndian(Result,SizeOf(TMD2));
 end;
 
 //------------------------------------------------------------------------------
@@ -429,63 +502,35 @@ end;
 //------------------------------------------------------------------------------
 
 Function TMD2Hash.Compare(Hash: THashBase): Integer;
-var
-  A,B:  TMD2;
-  i:    Integer;
 begin
 If Hash is TMD2Hash then
-  begin
-    Result := 0;
-    A := MD2FromSys(fMD2);
-    B := TMD2Hash(Hash).MD2;
-    For i := Low(A) to High(A) do
-      If A[i] > B[i] then
-        begin
-          Result := +1;
-          Break;
-        end
-      else If A[i] < B[i] then
-        begin
-          Result := -1;
-          Break;
-        end;
-  end
-else raise EMD2IncompatibleClass.CreateFmt('TMD2Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+  Result := MD2Compare(fMD2,TMD2Hash(Hash).MD2Sys)
+else
+  raise EMD2IncompatibleClass.CreateFmt('TMD2Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TMD2Hash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TMD2Hash then
+  Result := MD2Same(fMD2,TMD2Hash(Hash).MD2Sys)
+else
+  raise EMD2IncompatibleClass.CreateFmt('TMD2Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TMD2Hash.AsString: String;
-var
-  Temp: TMD2;
-  i:    Integer;
 begin
-Result := StringOfChar('0',HashSize * 2);
-Temp := MD2FromSys(fMD2);
-For i := Low(Temp) to High(Temp) do
-  begin
-    Result[(i * 2) + 2] := IntToHex(Temp[i] and $0F,1)[1];
-    Result[(i * 2) + 1] := IntToHex(Temp[i] shr 4,1)[1];
-  end;
+Result := MD2AsString(fMD2);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TMD2Hash.FromString(const Str: String);
-var
-  TempStr:  String;
-  i:        Integer;
-  TempMD2:  TMD2;
 begin
-If Length(Str) < Integer(HashSize * 2) then
-  TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
-else If Length(Str) > Integer(HashSize * 2) then
-  TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
-else
-  TempStr := Str;
-For i := Low(TempMD2) to High(TempMD2) do
-  TempMD2[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
-fMD2 := MD2ToSys(TempMD2);
+fMD2 := MD2FromString(Str);
 end;
 
 //------------------------------------------------------------------------------
@@ -516,12 +561,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5057{$ENDIF}
 procedure TMD2Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
   Temp: TMD2;
 begin
-Stream.ReadBuffer(Temp,SizeOf(TMD2));
+Stream.ReadBuffer(Addr(Temp)^,SizeOf(TMD2));
 case Endianness of
   heSystem: fMD2 := MD2ToSys({$IFDEF ENDIAN_BIG}MD2FromBE{$ELSE}MD2FromLE{$ENDIF}(Temp));
   heLittle: fMD2 := MD2ToSys(MD2FromLE(Temp));
@@ -531,123 +575,75 @@ else
   fMD2 := MD2ToSys(Temp);
 end;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
-    Backward compatibility functions
+--------------------------------------------------------------------------------
+                              Standalone functions
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Standalone functions - implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - utility functions
+    Standalone functions - utility functions
 -------------------------------------------------------------------------------}
 
-Function MD2toStr(MD2: TMD2): String;
-var
-  Hash: TMD2Hash;
+Function MD2toStr(const MD2: TMD2): String;
 begin
-Hash := TMD2Hash.CreateAndInitFrom(MD2);
-try
-  Result := Hash.AsString;
-finally
-  Hash.Free;
-end;
+Result := MD2AsString(TMD2Hash.MD2ToSys(MD2));
 end;
 
 //------------------------------------------------------------------------------
 
-Function StrToMD2(Str: String): TMD2;
-var
-  Hash: TMD2Hash;
+Function StrToMD2(const Str: String): TMD2;
 begin
-Hash := TMD2Hash.Create;
-try
-  Hash.FromString(Str);
-  Result := Hash.MD2;
-finally
-  Hash.Free;
-end;
+Result := TMD2Hash.MD2FromSys(MD2FromString(Str));
 end;
 
 //------------------------------------------------------------------------------
 
 Function TryStrToMD2(const Str: String; out MD2: TMD2): Boolean;
-var
-  Hash: TMD2Hash;
 begin
-Hash := TMD2Hash.Create;
 try
-  Result := Hash.TryFromString(Str);
-  If Result then
-    MD2 := Hash.MD2;
-finally
-  Hash.Free;
+  MD2 := TMD2Hash.MD2FromSys(MD2FromString(Str));
+  Result := True;
+except
+  Result := False;
 end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function StrToMD2Def(const Str: String; Default: TMD2): TMD2;
-var
-  Hash: TMD2Hash;
 begin
-Hash := TMD2Hash.Create;
-try
-  Hash.FromStringDef(Str,Default);
-  Result := Hash.MD2;
-finally
-  Hash.Free;
-end;
+If not TryStrToMD2(Str,Result) then
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
-Function CompareMD2(A,B: TMD2): Integer;
-var
-  HashA:  TMD2Hash;
-  HashB:  TMD2Hash;
+Function CompareMD2(const A,B: TMD2): Integer;
 begin
-HashA := TMD2Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD2Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Compare(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD2Compare(TMD2Hash.MD2ToSys(A),TMD2Hash.MD2ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function SameMD2(A,B: TMD2): Boolean;
-var
-  HashA:  TMD2Hash;
-  HashB:  TMD2Hash;
+Function SameMD2(const A,B: TMD2): Boolean;
 begin
-HashA := TMD2Hash.CreateAndInitFrom(A);
-try
-  HashB := TMD2Hash.CreateAndInitFrom(B);
-  try
-    Result := HashA.Same(HashB);
-  finally
-    HashB.Free;
-  end;
-finally
-  HashA.Free;
-end;
+Result := MD2Same(TMD2Hash.MD2ToSys(A),TMD2Hash.MD2ToSys(B));
 end;
 
 //------------------------------------------------------------------------------
 
-Function BinaryCorrectMD2(MD2: TMD2): TMD2;
+Function BinaryCorrectMD2(const MD2: TMD2): TMD2;
 begin
 Result := MD2;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - processing functions
+    Standalone functions - processing functions
 -------------------------------------------------------------------------------}
 
 procedure BufferMD2(var MD2State: TMD2State; const Buffer; Size: TMemSize);
@@ -674,7 +670,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferMD2(MD2State: TMD2State; const Buffer; Size: TMemSize): TMD2;
+Function LastBufferMD2(const MD2State: TMD2State; const Buffer; Size: TMemSize): TMD2;
 var
   Hash: TMD2Hash;
 begin
@@ -779,7 +775,7 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
-    Backward compatibility functions - context functions
+    Standalone functions - context functions
 -------------------------------------------------------------------------------}
 
 Function MD2_Init: TMD2Context;
