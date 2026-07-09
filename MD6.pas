@@ -32,7 +32,7 @@
 
   Version 2.0.2 (2026-07-05)
 
-  Last change 2026-07-05
+  Last change 2026-07-08
 
   ©2022-2026 František Milt
 
@@ -246,6 +246,7 @@ type
     class Function MD6ToBE(MD6: TMD6): TMD6; virtual;
     class Function MD6FromLE(MD6: TMD6): TMD6; virtual;
     class Function MD6FromBE(MD6: TMD6): TMD6; virtual;
+    class Function HashType: THashType; override;
     Function HashSize: TMemSize; reintroduce;
     class Function HashName: String; override;
     class Function HashEndianness: THashEndianness; override;
@@ -3474,6 +3475,13 @@ end;
 class Function TMD6Hash.MD6FromBE(MD6: TMD6): TMD6;
 begin
 Result := Copy(MD6);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TMD6Hash.HashType: THashType;
+begin
+Result := htCryptoHash;
 end;
 
 //------------------------------------------------------------------------------

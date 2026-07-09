@@ -30,7 +30,7 @@
 
   Version 1.8.1 (2026-07-04)
 
-  Last change 2026-07-04
+  Last change 2026-07-08
 
   ©2011-2026 František Milt
 
@@ -211,6 +211,7 @@ type
     class Function CRC32FromBE(CRC32: TCRC32): TCRC32; virtual;
     class Function HashImplementationsAvailable: THashImplementations; override;
     class Function HashImplementationsSupported: THashImplementations; override;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -1147,6 +1148,13 @@ with ImplManager.RoutingFindObj(RoutingIdentifier) do
   For i := LowIndex to HighIndex do
     If [ifAvailable,ifSupported] <= Implementations[i].ImplementationFlags then
       Include(Result,THashImplementation(Implementations[i].ImplementationID));
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TCRC32BaseHash.HashType: THashType;
+begin
+Result := htCRC;
 end;
 
 //------------------------------------------------------------------------------

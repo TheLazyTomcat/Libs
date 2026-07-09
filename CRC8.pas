@@ -24,7 +24,7 @@
 
   Version 1.1 (2026-07-03)
 
-  Last change 2026-07-03
+  Last change 2026-07-08
 
   ©2026 František Milt
 
@@ -122,6 +122,7 @@ type
     procedure Initialize; override;
     procedure Finalize; override;
   public
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     // endianness is meaningless for CRC-8, nevertheless heLittle is returned
     class Function HashEndianness: THashEndianness; override;
@@ -784,6 +785,13 @@ end;
 {-------------------------------------------------------------------------------
     TCRC8BaseHash - public methods
 -------------------------------------------------------------------------------}
+
+class Function TCRC8BaseHash.HashType: THashType;
+begin
+Result := htCRC;
+end;
+
+//------------------------------------------------------------------------------
 
 class Function TCRC8BaseHash.HashSize: TMemSize;
 begin

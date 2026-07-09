@@ -37,7 +37,7 @@
 
   Version 2.1.1 (2023-04-15)
 
-  Last change 2026-07-03
+  Last change 2026-07-08
 
   ©2016-2026 František Milt
 
@@ -197,6 +197,7 @@ type
     procedure Initialize; override;
     procedure CheckVersionAndVariant; virtual;
   public
+    class Function HashType: THashType; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
     class Function CityVersionsSupported: TCITYVersions; virtual; abstract;
@@ -524,6 +525,13 @@ end;
 {-------------------------------------------------------------------------------
     TCityHash - public methods
 -------------------------------------------------------------------------------}
+
+class Function TCityHash.HashType: THashType;
+begin
+Result := htHash;
+end;
+
+//------------------------------------------------------------------------------
 
 class Function TCityHash.HashEndianness: THashEndianness;
 begin

@@ -27,7 +27,7 @@
 
   Version 1.1 (2026-07-03)
 
-  Last change 2026-07-03
+  Last change 2026-07-08
 
   ©2026 František Milt
 
@@ -146,6 +146,7 @@ type
     class Function CRC24ToBE(CRC24: TCRC24): TCRC24; virtual;
     class Function CRC24FromLE(CRC24: TCRC24): TCRC24; virtual;
     class Function CRC24FromBE(CRC24: TCRC24): TCRC24; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -723,6 +724,13 @@ end;
 class Function TCRC24BaseHash.CRC24FromBE(CRC24: TCRC24): TCRC24;
 begin
 Result := SwapEndian(CRC24);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TCRC24BaseHash.HashType: THashType;
+begin
+Result := htCRC;
 end;
 
 //------------------------------------------------------------------------------

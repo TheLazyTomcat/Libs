@@ -26,7 +26,7 @@
 
   Version 1.1 (2026-07-04)
 
-  Last change 2026-07-04
+  Last change 2026-07-08
 
   ©2026 František Milt
 
@@ -184,6 +184,7 @@ type
     class Function SimpleHash32FromBE(Hash: TSimpleHash32): TSimpleHash32; virtual;
     class Function HashImplementationsAvailable: THashImplementations; override;
     class Function HashImplementationsSupported: THashImplementations; override;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -260,6 +261,7 @@ type
     class Function SimpleHash64FromBE(Hash: TSimpleHash64): TSimpleHash64; virtual;
     class Function HashImplementationsAvailable: THashImplementations; override;
     class Function HashImplementationsSupported: THashImplementations; override;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -830,6 +832,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+class Function TSimpleHash32Base.HashType: THashType;
+begin
+Result := htHash;
+end;
+
+//------------------------------------------------------------------------------
+
 class Function TSimpleHash32Base.HashSize: TMemSize;
 begin
 Result := SizeOf(TSimpleHash32);
@@ -1150,6 +1159,13 @@ with ImplManager.RoutingFindObj(0) do
   For i := LowIndex to HighIndex do
     If [ifAvailable,ifSupported] <= Implementations[i].ImplementationFlags then
       Include(Result,THashImplementation(Implementations[i].ImplementationID));
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TSimpleHash64Base.HashType: THashType;
+begin
+Result := htHash;
 end;
 
 //------------------------------------------------------------------------------

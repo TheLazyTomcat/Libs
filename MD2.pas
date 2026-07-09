@@ -11,7 +11,7 @@
 
   Version 1.2.2 (2026-07-04)
 
-  Last change 2026-07-04
+  Last change 2026-07-08
 
   ©2015-2026 František Milt
 
@@ -116,6 +116,7 @@ type
     class Function MD2ToBE(MD2: TMD2): TMD2; virtual;
     class Function MD2FromLE(MD2: TMD2): TMD2; virtual;
     class Function MD2FromBE(MD2: TMD2): TMD2; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashName: String; override;
     class Function HashEndianness: THashEndianness; override;
@@ -439,7 +440,14 @@ class Function TMD2Hash.MD2FromBE(MD2: TMD2): TMD2;
 begin
 Result := MD2;
 end;
- 
+
+//------------------------------------------------------------------------------
+
+class Function TMD2Hash.HashType: THashType;
+begin
+Result := htCryptoHash;
+end;
+
 //------------------------------------------------------------------------------
 
 class Function TMD2Hash.HashSize: TMemSize;

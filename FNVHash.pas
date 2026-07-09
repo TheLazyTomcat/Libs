@@ -25,7 +25,7 @@
 
   Version 1.1 (2026-07-04)
 
-  Last change 2026-07-04
+  Last change 2026-07-08
 
   ©2026 František Milt
 
@@ -231,6 +231,7 @@ type
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
     procedure Initialize; override;
   public
+    class Function HashType: THashType; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
     Function HashName: String; reintroduce; virtual;  // must not be class method here
@@ -810,6 +811,13 @@ end;
 {-------------------------------------------------------------------------------
     TFNVBaseHash - public methods
 -------------------------------------------------------------------------------}
+
+class Function TFNVBaseHash.HashType: THashType;
+begin
+Result := htHash;
+end;
+
+//------------------------------------------------------------------------------
 
 class Function TFNVBaseHash.HashEndianness: THashEndianness;
 begin

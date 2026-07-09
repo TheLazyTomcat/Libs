@@ -18,7 +18,7 @@
 
   Version 1.1 (2026-07-04)
 
-  Last change 2026-07-04
+  Last change 2026-07-08
 
   ©2026 František Milt
 
@@ -137,6 +137,7 @@ type
     class Function SDBMToBE(Hash: TSDBM): TSDBM; virtual;
     class Function SDBMFromLE(Hash: TSDBM): TSDBM; virtual;
     class Function SDBMFromBE(Hash: TSDBM): TSDBM; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -368,6 +369,13 @@ end;
 class Function TSDBMHash.SDBMFromBE(Hash: TSDBM): TSDBM;
 begin
 Result := SwapEndian(Hash);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TSDBMHash.HashType: THashType;
+begin
+Result := htHash;
 end;
 
 //------------------------------------------------------------------------------

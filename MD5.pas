@@ -11,7 +11,7 @@
 
   Version 1.6.2 (2026-07-05)
 
-  Last change 2026-07-05
+  Last change 2026-07-08
 
   ©2015-2026 František Milt
 
@@ -122,6 +122,7 @@ type
     class Function MD5ToBE(MD5: TMD5): TMD5; virtual;
     class Function MD5FromLE(MD5: TMD5): TMD5; virtual;
     class Function MD5FromBE(MD5: TMD5): TMD5; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashName: String; override;
     class Function HashEndianness: THashEndianness; override;
@@ -445,7 +446,14 @@ class Function TMD5Hash.MD5FromBE(MD5: TMD5): TMD5;
 begin
 Result := MD5;
 end;
- 
+
+//------------------------------------------------------------------------------
+
+class Function TMD5Hash.HashType: THashType;
+begin
+Result := htCryptoHash;
+end;
+
 //------------------------------------------------------------------------------
 
 class Function TMD5Hash.HashSize: TMemSize;

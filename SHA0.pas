@@ -15,7 +15,7 @@
 
   Version 1.2.2 (2026-07-05)
 
-  Last change 2026-07-05
+  Last change 2026-07-08
 
   ©2015-2026 František Milt
 
@@ -129,6 +129,7 @@ type
     class Function SHA0ToBE(SHA0: TSHA0): TSHA0; virtual;
     class Function SHA0FromLE(SHA0: TSHA0): TSHA0; virtual;
     class Function SHA0FromBE(SHA0: TSHA0): TSHA0; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashName: String; override;
     class Function HashEndianness: THashEndianness; override;
@@ -454,7 +455,14 @@ class Function TSHA0Hash.SHA0FromBE(SHA0: TSHA0): TSHA0;
 begin
 Result := SHA0;
 end;
- 
+
+//------------------------------------------------------------------------------
+
+class Function TSHA0Hash.HashType: THashType;
+begin
+Result := htCryptoHash;
+end;
+
 //------------------------------------------------------------------------------
 
 class Function TSHA0Hash.HashSize: TMemSize;

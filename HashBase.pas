@@ -18,9 +18,9 @@
     stored in a memory buffer and then the processing is run as a whole at
     finalization.
 
-  Version 1.0.6 (2025-03-28)
+  Version 1.0.8 (2026-07-09)
 
-  Last change 2026-02-25
+  Last change 2026-07-09
 
   ©2020-2026 František Milt
 
@@ -74,8 +74,6 @@ unit HashBase;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -99,8 +97,16 @@ type
                                    THashBase
 --------------------------------------------------------------------------------
 ===============================================================================}
-
 type
+{
+  THashType
+
+  Used to indicate what kind of algorithm is used to calculate the resulting
+  value - plain checksum (eg. Adler32), cyclic redundancy check (eg. CRC64),
+  simple hash (eg. CityHash), cryptographic hash (eg. SHA3) or something else.
+}
+  THashtype = (htChecksum,htCRC,htHash,htCryptoHash,htOther);
+
   THashEndianness = (heDefault,heSystem,heLittle,heBig);
 
   THashImplementation = (hiPascal,hiAssembly,hiAccelerated);
@@ -156,6 +162,7 @@ type
     existing system does not provide necessary infrastructure.
   }
     class Function HashImplementationsSupported: THashImplementations; virtual;
+    class Function HashType: THashType; virtual; abstract;
     class Function HashSize: TMemSize; virtual; abstract; // in bytes
     class Function HashName: String; virtual; abstract;
   {
@@ -465,11 +472,31 @@ implementation
 uses
   StrRect, StaticMemoryStream;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+{$IFOPT Q+}
+  {$DEFINE OverflowChecks}
 {$ENDIF}
+
+{===============================================================================
+    Internal auxiliary functions
+===============================================================================}
+
+Function ConsumeArgs(const Args: array of const): Integer;
+begin
+Result := Length(Args);
+end;
+
+//------------------------------------------------------------------------------
+{$IFDEF OverflowChecks}{$Q-}{$ENDIF}
+
+Function PtrAdvance(Ptr: Pointer; Offset: TMemOff): Pointer;
+var
+  iPtr:     PtrInt absolute Ptr;
+  iResult:  PtrInt absolute Result;
+begin
+iResult := iPtr + PtrInt(Offset);
+end;
+
+{$IFDEF OverflowChecks}{$Q+}{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -490,12 +517,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure THashBase.SetHashImplementation(Value: THashImplementation);
 begin
+ConsumeArgs([Ord(Value)]);
 // do nothing;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -778,12 +804,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure THashBase.FromStringDef(const Str: String; const Default);
 begin
+ConsumeArgs([Str,@Default]);
 // no implementation here
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -840,12 +865,11 @@ end;
     TBlockHash - protected methods
 -------------------------------------------------------------------------------}
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TBlockHash.ProcessFirst(const Block);
 begin
+ConsumeArgs([@Block]);
 fFirstBlock := False;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}  
 
 //------------------------------------------------------------------------------
 
@@ -872,23 +896,17 @@ If Size > 0 then
         If (fTransCount + Size) >= fBlockSize then
           begin
             // data will fill, and potentially overflow, the transfer block
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            Move(Buffer,Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount);
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
+            Move(Buffer,PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount);
             DispatchBlock(fTransBlock^);
             RemainingSize := Size - (fBlockSize - fTransCount);
             fTransCount := 0;
             If RemainingSize > 0 then
-            {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-              ProcessBuffer(Pointer(PtrUInt(Addr(Buffer)) + PtrUInt(Size - RemainingSize))^,RemainingSize);
-            {$IFDEF FPCDWM}{$POP}{$ENDIF}
+              ProcessBuffer(PtrAdvance(Addr(Buffer),TMemOff(Size - RemainingSize))^,RemainingSize);
           end
         else
           begin
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
             // data will not fill the transfer block, store end return
-            Move(Buffer,Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,Size);
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
+            Move(Buffer,PtrAdvance(fTransBlock,TMemOff(fTransCount))^,Size);
             Inc(fTransCount,Size);
           end;
       end
@@ -900,9 +918,7 @@ If Size > 0 then
         For i := 1 to Integer(Size div fBlockSize) do
           begin
             DispatchBlock(WorkPtr^);
-          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-            WorkPtr := Pointer(PtrUInt(WorkPtr) + PtrUInt(fBlockSize));
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
+            WorkPtr := PtrAdvance(WorkPtr,TMemOff(fBlockSize));
           end;
         // store partial block (if any)
         fTransCount := Size mod fBlockSize;
@@ -976,12 +992,11 @@ end;
     TBufferHash - protected methods
 -------------------------------------------------------------------------------}
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TBufferHash.DoProgress(Value: Double);
 begin
+ConsumeArgs([Value]);
 // do nothing in here, and DO NOT call inherited code!
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1054,9 +1069,7 @@ If Stream is TCustomMemoryStream then
     MemStream := TCustomMemoryStream(Stream);
     If Count >= 0 then
       begin
-      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
-        ActualPtr := Pointer(PtrUInt(MemStream.Memory) + PtrUInt(MemStream.Position));
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        ActualPtr := PtrAdvance(MemStream.Memory,TMemOff(MemStream.Position));
         If (Count > 0) or (Count <= (MemStream.Size - MemStream.Position)) then
           ActualSize := TMemSize(Count)
         else
@@ -1068,6 +1081,11 @@ If Stream is TCustomMemoryStream then
         ActualSize := TMemSize(MemStream.Size);
       end;
     HashMemory(ActualPtr,ActualSize);
+  end
+else If Stream is TFileStream then
+  begin
+    Preallocate(TMemSize(Stream.Size));
+    inherited HashStream(Stream,Count);
   end
 else inherited HashStream(Stream,Count);
 end;

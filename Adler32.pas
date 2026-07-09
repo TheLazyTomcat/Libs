@@ -11,7 +11,7 @@
 
   Version 1.3 (2026-07-03)
 
-  Last change 2026-07-03
+  Last change 2026-07-08
 
   ©2018-2026 František Milt
 
@@ -121,6 +121,7 @@ type
     class Function Adler32ToBE(Adler32: TAdler32): TAdler32; virtual;
     class Function Adler32FromLE(Adler32: TAdler32): TAdler32; virtual;
     class Function Adler32FromBE(Adler32: TAdler32): TAdler32; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashName: String; override;
     class Function HashEndianness: THashEndianness; override;
@@ -367,6 +368,13 @@ end;
 class Function TAdler32Hash.Adler32FromBE(Adler32: TAdler32): TAdler32;
 begin
 Result := SwapEndian(Adler32);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TAdler32Hash.HashType: THashType;
+begin
+Result := htChecksum;
 end;
 
 //------------------------------------------------------------------------------

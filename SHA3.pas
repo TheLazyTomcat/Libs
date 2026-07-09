@@ -123,7 +123,7 @@
 
   Version 1.2.2 (2026-07-06)
 
-  Last change 2026-07-06
+  Last change 2026-07-08
 
   ©2015-2026 František Milt
 
@@ -314,7 +314,8 @@ type
     procedure Initialize; override;
   public
     class Function LaneSize: UInt32; virtual;         // in bits, also width of the keccak word
-    class Function PermutationWidth: UInt32; virtual; // in bits  
+    class Function PermutationWidth: UInt32; virtual; // in bits
+    class Function HashType: THashType; override;
     Function HashSize: TMemSize; reintroduce;         // hides class functions
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -1444,6 +1445,13 @@ end;
 class Function TKeccakHash.PermutationWidth: UInt32;
 begin
 Result := 25 * LaneSize;  // 1600, size of the sponge in bits
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TKeccakHash.HashType: THashType;
+begin
+Result := htCryptoHash;
 end;
 
 //------------------------------------------------------------------------------

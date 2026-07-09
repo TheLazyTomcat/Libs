@@ -19,7 +19,7 @@
 
   Version 1.1.1 (2026-07-04)
 
-  Last change 2026-07-04
+  Last change 2026-07-08
 
   ©2026 František Milt
 
@@ -138,6 +138,7 @@ type
     class Function DJB2ToBE(Hash: TDJB2): TDJB2; virtual;
     class Function DJB2FromLE(Hash: TDJB2): TDJB2; virtual;
     class Function DJB2FromBE(Hash: TDJB2): TDJB2; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -443,6 +444,13 @@ end;
 class Function TDJB2Hash.DJB2FromBE(Hash: TDJB2): TDJB2;
 begin
 Result := SwapEndian(Hash);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TDJB2Hash.HashType: THashType;
+begin
+Result := htHash;
 end;
 
 //------------------------------------------------------------------------------

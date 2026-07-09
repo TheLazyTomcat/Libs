@@ -14,7 +14,7 @@
 
   Version 1.4.2 (2026-07-04)
 
-  Last change 2026-07-04
+  Last change 2026-07-08
 
   ©2015-2026 František Milt
 
@@ -125,6 +125,7 @@ type
     class Function MD4ToBE(MD4: TMD4): TMD4; virtual;
     class Function MD4FromLE(MD4: TMD4): TMD4; virtual;
     class Function MD4FromBE(MD4: TMD4): TMD4; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashName: String; override;
     class Function HashEndianness: THashEndianness; override;
@@ -445,7 +446,14 @@ class Function TMD4Hash.MD4FromBE(MD4: TMD4): TMD4;
 begin
 Result := MD4;
 end;
- 
+
+//------------------------------------------------------------------------------
+
+class Function TMD4Hash.HashType: THashType;
+begin
+Result := htCryptoHash;
+end;
+
 //------------------------------------------------------------------------------
 
 class Function TMD4Hash.HashSize: TMemSize;

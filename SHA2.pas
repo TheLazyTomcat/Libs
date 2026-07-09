@@ -40,7 +40,7 @@
 
   Version 1.1.4 (2026-07-05)
 
-  Last change 2026-07-05
+  Last change 2026-07-08
 
   ©2015-2026 František Milt
 
@@ -308,6 +308,7 @@ type
   public
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
+    class Function HashType: THashType; override;
     class Function HashFunction: TSHA2Function; virtual; abstract;
   {
     Since HashSize returns technical size of the hash, which is not always the
@@ -1088,6 +1089,13 @@ end;
 class Function TSHA2Hash.HashFinalization: Boolean;
 begin
 Result := True;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TSHA2Hash.HashType: THashType;
+begin
+Result := htCryptoHash;
 end;
 
 //------------------------------------------------------------------------------

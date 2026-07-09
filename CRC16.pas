@@ -27,7 +27,7 @@
 
   Version 1.1 (2026-07-03)
 
-  Last change 2026-07-03
+  Last change 2026-07-08
 
   ©2026 František Milt
 
@@ -151,6 +151,7 @@ type
     class Function CRC16ToBE(CRC16: TCRC16): TCRC16; virtual;
     class Function CRC16FromLE(CRC16: TCRC16): TCRC16; virtual;
     class Function CRC16FromBE(CRC16: TCRC16): TCRC16; virtual;
+    class Function HashType: THashType; override;
     class Function HashSize: TMemSize; override;
     class Function HashEndianness: THashEndianness; override;
     class Function HashFinalization: Boolean; override;
@@ -1095,6 +1096,13 @@ end;
 class Function TCRC16BaseHash.CRC16FromBE(CRC16: TCRC16): TCRC16;
 begin
 Result := SwapEndian(CRC16);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TCRC16BaseHash.HashType: THashType;
+begin
+Result := htCRC;
 end;
 
 //------------------------------------------------------------------------------
