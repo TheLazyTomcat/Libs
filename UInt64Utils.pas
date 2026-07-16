@@ -12,11 +12,11 @@
     Utility functions for 64bit unsigned integers. Meant mainly for compilers
     that do not have full native support for this type (eg. Delphi 7).
 
-  Version 1.0.6 (2024-04-28)
+  Version 1.0.7 (2026-07-16)
 
-  Last change 2024-04-28
+  Last change 2026-07-16
 
-  ©2018-2024 František Milt
+  ©2018-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -88,7 +88,11 @@ type
 type
   UInt64Rec = packed record
     case Integer of
+    {$IFDEF ENDIAN_BIG}
+      0: (Hi, Lo: UInt32);
+    {$ELSE}
       0: (Lo, Hi: UInt32);
+    {$ENDIF}
       1: (Cardinals: array [0..1] of UInt32);
       2: (Words: array [0..3] of UInt16);
       3: (Bytes: array [0..7] of UInt8);

@@ -12,10 +12,12 @@
     Both Lookup2 and Lookup3 hashes are implemented, but note that Lookup2 was
     not tested for correctness (ie. whether it calculates correct values for
     any given data).
+    Version of Lookup3 providing 64bit hash ia also implemented, here under
+    the name Lookup64.
 
-  Version 1.0 (2026-07-09)
+  Version 1.1 (2026-07-10)
 
-  Last change 2026-07-09
+  Last change 2026-07-10
 
   ©2026 František Milt
 
@@ -34,8 +36,9 @@
       github.com/TheLazyTomcat/Lib.LookupHash
 
   Dependencies:
-    AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
-    HashBase - github.com/TheLazyTomcat/Lib.HashBase
+    AuxTypes    - github.com/TheLazyTomcat/Lib.AuxTypes
+    HashBase    - github.com/TheLazyTomcat/Lib.HashBase
+    UInt64Utils - github.com/TheLazyTomcat/Lib.UInt64Utils
 
   Indirect dependencies:
     AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
@@ -44,7 +47,6 @@
     SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
     StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
     StrRect            - github.com/TheLazyTomcat/Lib.StrRect
-    UInt64Utils        - github.com/TheLazyTomcat/Lib.UInt64Utils
     WinFileInfo        - github.com/TheLazyTomcat/Lib.WinFileInfo
 
 ===============================================================================}
@@ -73,15 +75,15 @@ type
     Common types and constants
 ===============================================================================}
 {
-  Bytes in TLookup are, in memory, always ordered from least significant byte
-  to most significant byte (little endian).
+  Bytes in TLookup(64) are, in memory, always ordered from least significant
+  byte to most significant byte (little endian).
 
-  Type TLookupSys has no such guarantee and its endianness is system-dependent.
+  Type TLookup(64)Sys has no such guarantee and its endianness is system-
+  dependent.
 
   To convert the hash in default ordering to a required specific ordering,
-  use method LookupToLE for little endian and LookupToBE for big endian. Note
-  that these methods are expecting the input value to be in default ordering,
-  if it is not, the result will be wrong. Be careful when using them.
+  use method Lookup(64)ToLE for little endian and Lookup(64)ToBE for big
+  endian.
 }
 type
   TLookup = packed array[0..3] of UInt8;
@@ -90,10 +92,18 @@ type
   TLookupSys = UInt32;
   PLookupSys = ^TLookupSys;
 
-const
-  InitialLookup: TLookup = ($00,$00,$00,$00);
+  TLookup64 = packed array[0..7] of UInt8;
+  PLookup64 = ^TLookup64;
 
-  ZeroLookup: TLookup = (0,0,0,0);
+  TLookup64Sys = UInt64;
+  PLookup64Sys = ^TLookup64Sys;
+
+const
+  InitialLookup:   TLookup   = ($00,$00,$00,$00);
+  InitialLookup64: TLookup64 = ($00,$00,$00,$00,$00,$00,$00,$00);
+
+  ZeroLookup:   TLookup   = (0,0,0,0);
+  ZeroLookup64: TLookup64 = (0,0,0,0,0,0,0,0);
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -176,6 +186,50 @@ type
     class Function HashName: String; override;
   end;
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                                  TLookup64Hash
+--------------------------------------------------------------------------------
+===============================================================================}
+{
+  Lookup64 is based on Lookup3. In fact, it uses the same code and only
+  extracts larger part of the internal state to build the result.
+}
+{===============================================================================
+    TLookup64Hash - class declaration
+===============================================================================}
+type
+  TLookup64Hash = class(TBufferHash)
+  protected
+    fLookup64Value: TLookup64Sys;
+    Function GetLookup64: TLookup64; virtual;
+    procedure CalculateHash(Memory: Pointer; Count: TMemSize); override;
+    procedure Initialize; override;
+  public
+    class Function Lookup64ToSys(Hash: TLookup64): TLookup64Sys; virtual;
+    class Function Lookup64FromSys(Hash: TLookup64Sys): TLookup64; virtual;
+    class Function Lookup64ToLE(Hash: TLookup64): TLookup64; virtual;
+    class Function Lookup64ToBE(Hash: TLookup64): TLookup64; virtual;
+    class Function Lookup64FromLE(Hash: TLookup64): TLookup64; virtual;
+    class Function Lookup64FromBE(Hash: TLookup64): TLookup64; virtual;
+    class Function HashType: THashType; override;
+    class Function HashSize: TMemSize; override;
+    class Function HashName: String; override;
+    class Function HashEndianness: THashEndianness; override;
+    class Function HashFinalization: Boolean; override;
+    constructor CreateAndInitFrom(Hash: THashBase); overload; override;
+    constructor CreateAndInitFrom(Hash: TLookup64); overload; virtual;
+    procedure Init; override;
+    Function Compare(Hash: THashBase): Integer; override;
+    Function Same(Hash: THashBase): Boolean; override;
+    Function AsString: String; override;
+    procedure FromString(const Str: String); override;
+    procedure FromStringDef(const Str: String; const Default: TLookup64); reintroduce;
+    procedure SaveToStream(Stream: TStream; Endianness: THashEndianness = heDefault); override;
+    procedure LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault); override;
+    property Lookup64: TLookup64 read GetLookup64;
+    property Lookup64Sys: TLookup64Sys read fLookup64Value;
+  end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -183,9 +237,9 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
-    WARNING - functions BufferLookup2 and BufferLookup3 cannot be used for
-              continuous hashing. Overload accepting initial value is here
-              only to allow hashing with seed.
+    WARNING - functions BufferLookup2, BufferLookup3 and BufferLookup64 cannot
+              be used for continuous hashing. Overload accepting initial value
+              is here only to allow hashing with seed.
 }
 {===============================================================================
     Common procedural interface - declaration
@@ -247,10 +301,45 @@ Function Lookup3_Final(var Context: TLookupContext; const Buffer; Size: TMemSize
 Function Lookup3_Final(var Context: TLookupContext): TLookup; overload;
 Function Lookup3_Hash(const Buffer; Size: TMemSize): TLookup;
 
+{===============================================================================
+    Lookup64 procedural interface - declaration
+===============================================================================}
+
+Function Lookup64ToStr(const Hash: TLookup64): String;
+Function StrToLookup64(const Str: String): TLookup64;
+Function TryStrToLookup64(const Str: String; out Hash: TLookup64): Boolean;
+Function StrToLookup64Def(const Str: String; const Default: TLookup64): TLookup64;
+
+Function CompareLookup64(const A,B: TLookup64): Integer;
+Function SameLookup64(const A,B: TLookup64): Boolean;
+
+//------------------------------------------------------------------------------
+
+Function BufferLookup64(const Hash: TLookup64; const Buffer; Size: TMemSize): TLookup64; overload;
+Function BufferLookup64(const Buffer; Size: TMemSize): TLookup64; overload;
+
+Function AnsiStringLookup64(const Str: AnsiString): TLookup64;
+Function WideStringLookup64(const Str: WideString): TLookup64;
+Function StringLookup64(const Str: String): TLookup64;
+
+Function StreamLookup64(Stream: TStream; Count: Int64 = -1): TLookup64;
+Function FileLookup64(const FileName: String): TLookup64;
+
+//------------------------------------------------------------------------------
+type
+  TLookup64Context = type Pointer;
+
+Function Lookup64_Init: TLookup64Context;
+procedure Lookup64_Update(const Context: TLookup64Context; const Buffer; Size: TMemSize);
+Function Lookup64_Final(var Context: TLookup64Context; const Buffer; Size: TMemSize): TLookup64; overload;
+Function Lookup64_Final(var Context: TLookup64Context): TLookup64; overload;
+Function Lookup64_Hash(const Buffer; Size: TMemSize): TLookup64;
+
 implementation
 
 uses
-  SysUtils;
+  SysUtils,
+  UInt64Utils;
 
 {$IFOPT Q+}
   {$DEFINE OverflowChecks}
@@ -319,7 +408,6 @@ If Length(Str) > 0 then
   end
 else Result := TLookupHashBase.LookupToSys(ZeroLookup);
 end;
-
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -464,7 +552,6 @@ If Hash is TLookupHashBase then
 else
   raise ELHIncompatibleClass.CreateFmt('TLookupHashBase.Same: Incompatible class (%s).',[Hash.ClassName]);
 end;
-
 
 //------------------------------------------------------------------------------
 
@@ -630,7 +717,7 @@ end;
 {$IFDEF OverflowChecks}{$Q-}{$ENDIF}
 {$IFDEF RangeChecks}{$R-}{$ENDIF}
 
-Function Lookup3Process(const InitVal: TLookupSys; const Buffer; Size: TMemSize): TLookupSys;
+procedure Lookup3Process(var ValHi,ValLo: TLookupSys; const Buffer; Size: TMemSize); overload;
 
   Function ROT(const Value: TLookupSys; Shift: Integer): TLookupSys;
   begin
@@ -671,9 +758,9 @@ var
 begin
 If Size > 0 then
   begin
-    A := $DEADBEEF + TLookupSys(Size) + InitVal;
+    A := $DEADBEEF + TLookupSys(Size) + ValLo;
     B := A;
-    C := A;
+    C := A + ValHi;
     CurrentData := @Buffer;
   {
     Process blocks
@@ -699,13 +786,37 @@ If Size > 0 then
     C := C + {$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(ReadBuffer.Words[2]);
     // final touches
     Lookup3Final(A,B,C);
-    Result := C;
   end
-else Result := $DEADBEEF + InitVal;
+else
+  begin
+    B := $DEADBEEF + ValLo;
+    C := B + ValHi;
+  end;
+// return result(s)  
+ValHi := B;
+ValLo := C;
 end;
 
 {$IFDEF RangeChecks}{$R+}{$ENDIF}
 {$IFDEF OverflowChecks}{$Q+}{$ENDIF}
+//------------------------------------------------------------------------------
+
+Function Lookup3Process(const InitVal: TLookupSys; const Buffer; Size: TMemSize): TLookupSys; overload;
+var
+  Dummy:  TLookupSys;
+begin
+Result := InitVal;
+Dummy := 0;
+Lookup3Process(Dummy,Result,Buffer,Size);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Lookup3Process(const InitVal: TLookup64Sys; const Buffer; Size: TMemSize): TLookup64Sys; overload;
+begin
+Result := InitVal;
+Lookup3Process(Int64Rec(Result).Hi,Int64Rec(Result).Lo,Buffer,Size);
+end;
 
 {===============================================================================
     TLookup3Hash - class declaration
@@ -726,6 +837,274 @@ end;
 class Function TLookup3Hash.HashName: String;
 begin
 Result := 'Lookup3';
+end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                  TLookup64Hash                                  
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TLookup64Hash - auxiliary functions
+===============================================================================}
+
+Function SwapEndian(Hash: TLookup64Sys): TLookup64Sys; overload;
+begin
+Int64Rec(Result).Hi := SwapEndian(Int64Rec(Result).Lo);
+Int64Rec(Result).Lo := SwapEndian(Int64Rec(Result).Hi);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function SwapEndian(Hash: TLookup64): TLookup64; overload;
+begin
+Result := TLookup64(SwapEndian(TLookup64Sys(Hash)));
+end;
+
+//==============================================================================
+
+Function Lookup64Compare(const A,B: TLookup64Sys): Integer;
+begin
+Result := UInt64Utils.CompareUInt64(A,B);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Lookup64Same(const A,B: TLookup64Sys): Boolean;
+begin
+Result := A = B;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Lookup64AsString(const Lookup: TLookup64Sys): String;
+begin
+Result := IntToHex(Lookup,16);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Lookup64FromString(const Str: String): TLookup64Sys;
+begin
+If Length(Str) > 0 then
+  begin
+    If Str[1] = '$' then
+      Result := TLookup64Sys(StrToInt64(Str))
+    else
+      Result := TLookup64Sys(StrToInt64('$' + Str));
+  end
+else Result := TLookup64Hash.Lookup64ToSys(ZeroLookup64);
+end;
+
+{===============================================================================
+    TLookup64Hash - class declaration
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TLookup64Hash - protected methods
+-------------------------------------------------------------------------------}
+
+Function TLookup64Hash.GetLookup64: TLookup64;
+begin
+Result := Lookup64FromSys(fLookup64Value);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLookup64Hash.CalculateHash(Memory: Pointer; Count: TMemSize);
+begin
+fLookup64Value := Lookup3Process(fLookup64Value,Memory^,Count);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLookup64Hash.Initialize;
+begin
+inherited;
+fLookup64Value := Lookup64ToSys(ZeroLookup64);
+end;
+
+{-------------------------------------------------------------------------------
+    TLookup64Hash - public methods
+-------------------------------------------------------------------------------}
+
+class Function TLookup64Hash.Lookup64ToSys(Hash: TLookup64): TLookup64Sys;
+begin
+Result := TLookup64Sys({$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(Hash));
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.Lookup64FromSys(Hash: TLookup64Sys): TLookup64;
+begin
+Result := TLookup64({$IFDEF ENDIAN_BIG}SwapEndian{$ENDIF}(Hash));
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.Lookup64ToLE(Hash: TLookup64): TLookup64;
+begin
+Result := Hash;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.Lookup64ToBE(Hash: TLookup64): TLookup64;
+begin
+Result := SwapEndian(Hash);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.Lookup64FromLE(Hash: TLookup64): TLookup64;
+begin
+Result := Hash;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.Lookup64FromBE(Hash: TLookup64): TLookup64;
+begin
+Result := SwapEndian(Hash);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.HashType: THashType;
+begin
+Result := htHash;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.HashSize: TMemSize;
+begin
+Result := SizeOf(TLookup64);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.HashName: String;
+begin
+Result := 'Lookup64';
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.HashEndianness: THashEndianness;
+begin
+Result := heLittle;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TLookup64Hash.HashFinalization: Boolean;
+begin
+Result := True;
+end;
+
+//------------------------------------------------------------------------------
+
+constructor TLookup64Hash.CreateAndInitFrom(Hash: THashBase);
+begin
+inherited CreateAndInitFrom(Hash);
+If Hash is TLookup64Hash then
+  fLookup64Value := TLookup64Hash(Hash).Lookup64Sys
+else
+  raise ELHIncompatibleClass.CreateFmt('TLookup64Hash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+constructor TLookup64Hash.CreateAndInitFrom(Hash: TLookup64);
+begin
+CreateAndInit;
+fLookup64Value := Lookup64ToSys(Hash);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLookup64Hash.Init;
+begin
+inherited;
+fLookup64Value := Lookup64ToSys(InitialLookup64);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TLookup64Hash.Compare(Hash: THashBase): Integer;
+begin
+If Hash is TLookup64Hash then
+  Result := Lookup64Compare(fLookup64Value,TLookup64Hash(Hash).Lookup64Sys)
+else
+  raise ELHIncompatibleClass.CreateFmt('TLookup64Hash.Compare: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TLookup64Hash.Same(Hash: THashBase): Boolean;
+begin
+If Hash is TLookup64Hash then
+  Result := Lookup64Same(fLookup64Value,TLookup64Hash(Hash).Lookup64Sys)
+else
+  raise ELHIncompatibleClass.CreateFmt('TLookup64Hash.Same: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TLookup64Hash.AsString: String;
+begin
+Result := Lookup64AsString(fLookup64Value);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLookup64Hash.FromString(const Str: String);
+begin
+fLookup64Value := Lookup64FromString(Str);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLookup64Hash.FromStringDef(const Str: String; const Default: TLookup64);
+begin
+inherited FromStringDef(Str,Default);
+If not TryFromString(Str) then
+  fLookup64Value := Lookup64ToSys(Default);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLookup64Hash.SaveToStream(Stream: TStream; Endianness: THashEndianness = heDefault);
+var
+  Temp: TLookup64;
+begin
+case Endianness of
+  heSystem: Temp := {$IFDEF ENDIAN_BIG}Lookup64ToBE{$ELSE}Lookup64ToLE{$ENDIF}(Lookup64FromSys(fLookup64Value));
+  heLittle: Temp := Lookup64ToLE(Lookup64FromSys(fLookup64Value));
+  heBig:    Temp := Lookup64ToBE(Lookup64FromSys(fLookup64Value));
+else
+ {heDefault}
+  Temp := Lookup64FromSys(fLookup64Value);
+end;
+Stream.WriteBuffer(Temp,SizeOf(TLookup64));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TLookup64Hash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
+var
+  Temp: TLookup64;
+begin
+Temp := ZeroLookup64;
+Stream.ReadBuffer(Temp,SizeOf(TLookup64));
+case Endianness of
+  heSystem: fLookup64Value := Lookup64ToSys({$IFDEF ENDIAN_BIG}Lookup64FromBE{$ELSE}Lookup64FromLE{$ENDIF}(Temp));
+  heLittle: fLookup64Value := Lookup64ToSys(Lookup64FromLE(Temp));
+  heBig:    fLookup64Value := Lookup64ToSys(Lookup64FromBE(Temp));
+else
+ {heDefault}
+  fLookup64Value := Lookup64ToSys(Temp);
+end;
 end;
 
 
@@ -1005,6 +1384,166 @@ end;
 Function Lookup3_Hash(const Buffer; Size: TMemSize): TLookup;
 begin
 Result := BufferLookup3(Buffer,Size);
+end;
+
+{===============================================================================
+    Lookup64 procedural interface - declaration
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Lookup64 procedural interface - utility functions
+-------------------------------------------------------------------------------}
+
+Function Lookup64ToStr(const Hash: TLookup64): String;
+begin
+Result := Lookup64AsString(TLookup64Hash.Lookup64ToSys(Hash));
+end;
+
+//------------------------------------------------------------------------------
+
+Function StrToLookup64(const Str: String): TLookup64;
+begin
+Result := TLookup64Hash.Lookup64FromSys(Lookup64FromString(Str));
+end;
+
+//------------------------------------------------------------------------------
+
+Function TryStrToLookup64(const Str: String; out Hash: TLookup64): Boolean;
+begin
+try
+  Hash := TLookup64Hash.Lookup64FromSys(Lookup64FromString(Str));
+  Result := True;
+except
+  Result := False;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StrToLookup64Def(const Str: String; const Default: TLookup64): TLookup64;
+begin
+If not TryStrToLookup64(Str,Result) then
+  Result := Default;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CompareLookup64(const A,B: TLookup64): Integer;
+begin
+Result := Lookup64Compare(TLookup64Hash.Lookup64ToSys(A),TLookup64Hash.Lookup64ToSys(B));
+end;
+
+//------------------------------------------------------------------------------
+
+Function SameLookup64(const A,B: TLookup64): Boolean;
+begin
+Result := Lookup64Same(TLookup64Hash.Lookup64ToSys(A),TLookup64Hash.Lookup64ToSys(B));
+end;
+
+{-------------------------------------------------------------------------------
+    Lookup64 procedural interface - processing functions
+-------------------------------------------------------------------------------}
+
+Function BufferLookup64(const Hash: TLookup64; const Buffer; Size: TMemSize): TLookup64;
+begin
+Result := TLookup64Hash.Lookup64FromSys(Lookup3Process(TLookup64Hash.Lookup64ToSys(Hash),Buffer,Size));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BufferLookup64(const Buffer; Size: TMemSize): TLookup64;
+begin
+Result := TLookup64Hash.Lookup64FromSys(Lookup3Process(TLookup64Hash.Lookup64ToSys(InitialLookup64),Buffer,Size));
+end;
+
+//------------------------------------------------------------------------------
+
+Function AnsiStringLookup64(const Str: AnsiString): TLookup64;
+begin
+Result := BufferLookup64(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
+end;
+
+//------------------------------------------------------------------------------
+
+Function WideStringLookup64(const Str: WideString): TLookup64;
+begin
+Result := BufferLookup64(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
+end;
+
+//------------------------------------------------------------------------------
+
+Function StringLookup64(const Str: String): TLookup64;
+begin
+Result := BufferLookup64(PChar(Str)^,Length(Str) * SizeOf(Char));
+end;
+
+//------------------------------------------------------------------------------
+
+Function StreamLookup64(Stream: TStream; Count: Int64 = -1): TLookup64;
+var
+  Hasher: TLookup64Hash;
+begin
+Hasher := TLookup64Hash.Create;
+try
+  Hasher.HashStream(Stream,Count);
+  Result := Hasher.Lookup64;
+finally
+  Hasher.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FileLookup64(const FileName: String): TLookup64;
+var
+  Hasher: TLookup64Hash;
+begin
+Hasher := TLookup64Hash.Create;
+try
+  Hasher.HashFile(FileName);
+  Result := Hasher.Lookup64;
+finally
+  Hasher.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Lookup64 procedural interface - context functions
+-------------------------------------------------------------------------------}
+
+Function Lookup64_Init: TLookup64Context;
+begin
+Result := TLookup64Context(TLookup64Hash.CreateAndInit);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure Lookup64_Update(const Context: TLookup64Context; const Buffer; Size: TMemSize);
+begin
+TLookup64Hash(Context).Update(Buffer,Size);
+end;
+
+//------------------------------------------------------------------------------
+
+Function Lookup64_Final(var Context: TLookup64Context; const Buffer; Size: TMemSize): TLookup64;
+begin
+Lookup64_Update(Context,Buffer,Size);
+Result := Lookup64_Final(Context);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function Lookup64_Final(var Context: TLookup64Context): TLookup64;
+begin
+TLookup64Hash(Context).Final;
+Result := TLookup64Hash(Context).Lookup64;
+FreeAndNil(TLookup64Hash(Context));
+end;
+
+//------------------------------------------------------------------------------
+
+Function Lookup64_Hash(const Buffer; Size: TMemSize): TLookup64;
+begin
+Result := BufferLookup64(Buffer,Size);
 end;
 
 end.

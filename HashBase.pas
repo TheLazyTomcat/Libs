@@ -18,9 +18,9 @@
     stored in a memory buffer and then the processing is run as a whole at
     finalization.
 
-  Version 1.0.8 (2026-07-09)
+  Version 1.0.9 (2026-07-10)
 
-  Last change 2026-07-09
+  Last change 2026-07-10
 
   ©2020-2026 František Milt
 
@@ -877,16 +877,7 @@ procedure TBlockHash.ProcessBuffer(const Buffer; Size: TMemSize);
 var
   RemainingSize:  TMemSize;
   WorkPtr:        Pointer;
-  i:              Integer;  
-
-  procedure DispatchBlock(const Block);
-  begin
-    If fFirstBlock then
-      ProcessFirst(Block)
-    else
-      ProcessBlock(Block);
-  end;
-
+  i:              TMemSize;
 begin
 If Size > 0 then
   begin
@@ -897,7 +888,10 @@ If Size > 0 then
           begin
             // data will fill, and potentially overflow, the transfer block
             Move(Buffer,PtrAdvance(fTransBlock,TMemOff(fTransCount))^,fBlockSize - fTransCount);
-            DispatchBlock(fTransBlock^);
+            If fFirstBlock then
+              ProcessFirst(fTransBlock^)
+            else
+              ProcessBlock(fTransBlock^);
             RemainingSize := Size - (fBlockSize - fTransCount);
             fTransCount := 0;
             If RemainingSize > 0 then
@@ -914,14 +908,22 @@ If Size > 0 then
       begin
         // nothing is stored in the transfer block
         WorkPtr := Addr(Buffer);
-        // process whole blocks
-        For i := 1 to Integer(Size div fBlockSize) do
+        RemainingSize := Size;
+        // process first block, if not already done
+        If fFirstBlock and (RemainingSize >= fBlockSize) then
           begin
-            DispatchBlock(WorkPtr^);
+            ProcessFirst(WorkPtr^);
+            WorkPtr := PtrAdvance(WorkPtr,TMemOff(fBlockSize));
+            Dec(RemainingSize,fBlockSize);
+          end;
+        // process whole blocks
+        For i := 1 to (RemainingSize div fBlockSize) do
+          begin
+            ProcessBlock(WorkPtr^);
             WorkPtr := PtrAdvance(WorkPtr,TMemOff(fBlockSize));
           end;
         // store partial block (if any)
-        fTransCount := Size mod fBlockSize;
+        fTransCount := RemainingSize mod fBlockSize;
         If fTransCount > 0 then
           Move(WorkPtr^,fTransBlock^,fTransCount);
       end;

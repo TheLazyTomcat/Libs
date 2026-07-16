@@ -18,9 +18,9 @@
     Author of this algorithm is Paul Hsieh, sometimes this hash is refered to
     as Paul Hsieh's Hash.
 
-  Version 1.0 (2026-07-08)
+  Version 1.0.1 (2026-07-14)
 
-  Last change 2026-07-08
+  Last change 2026-07-14
 
   ©2026 František Milt
 
@@ -495,9 +495,12 @@ constructor TSuperFastHash.CreateAndInitFrom(Hash: THashBase);
 begin
 inherited CreateAndInitFrom(Hash);
 If Hash is TSuperFastHash then
-  fSuperFastValue := TSuperFastHash(Hash).SuperFastSys
-else
-  raise ESFHIncompatibleClass.CreateFmt('TSuperFastHash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
+  begin
+    fSuperFastValue := TSuperFastHash(Hash).SuperFastSys;
+    fRemainder := TSuperFastHash(Hash).fRemainder;
+    fRemainderBytes := TSuperFastHash(Hash).fRemainderBytes;
+  end
+else raise ESFHIncompatibleClass.CreateFmt('TSuperFastHash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
