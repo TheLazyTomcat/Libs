@@ -18,7 +18,7 @@
 
   version 1.0.1 (2026-06-18)
 
-  Last change 2026-06-18
+  Last change 2026-07-24
 
   ©2026 František Milt
 
@@ -169,9 +169,9 @@ type
 
     WARNING - it should be clear from the description above that the read
               data might still be corrupted even when successfully loaded.
-              It is highly unlikely that damaged data will match with stored
-              checksum (which can also be damaged), but it cannot be
-              discounted.
+              It is highly unlikely that damaged data will match with
+              stored checksum (which can also be damaged), but it is still
+              possible.
 
   This mechanism should only be used for uni-directional sharing (ie. one
   thread is writing, others are only reading). Bi-directional communication

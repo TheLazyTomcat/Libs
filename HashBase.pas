@@ -18,9 +18,9 @@
     stored in a memory buffer and then the processing is run as a whole at
     finalization.
 
-  Version 1.0.9 (2026-07-10)
+  Version 1.0.10 (2026-07-21)
 
-  Last change 2026-07-10
+  Last change 2026-07-21
 
   ©2020-2026 František Milt
 
@@ -247,6 +247,7 @@ type
     Function TryFromString(const Str: String): Boolean; virtual;
     procedure FromStringDef(const Str: String; const Default); virtual;
     Function IsHashing: Boolean; virtual;
+    Function AbortHashing: Boolean; virtual;
   {
     BreakProcessing, when called inside of progress event or callback, will
     cause premature termination of hashing right after return from the call.
@@ -815,6 +816,15 @@ end;
 Function THashBase.IsHashing: Boolean;
 begin
 Result := fInitialized and not fFinalized;
+end;
+
+//------------------------------------------------------------------------------
+
+Function THashBase.AbortHashing: Boolean;
+begin
+Result := fInitialized and not fFinalized;
+If Result then
+  fInitialized := False;
 end;
 
 //------------------------------------------------------------------------------

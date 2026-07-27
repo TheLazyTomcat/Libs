@@ -30,7 +30,7 @@
 
   Version 1.8.1 (2026-07-04)
 
-  Last change 2026-07-08
+  Last change 2026-07-18
 
   ©2011-2026 František Milt
 
@@ -1796,7 +1796,7 @@ If CRC32ToSys(Preset.Check) = fCRC32Value then
       TempCRC := Preset.Check
     else
       TempCRC := SwapEndian(Preset.Check);
-    TempStr := '123456789' + StringOfChar('0',SizeOf(TCRC32));
+    TempStr := AnsiString('123456789') + AnsiString(StringOfChar('0',SizeOf(TCRC32)));
     Move(TempCRC,Addr(TempStr[10])^,SizeOf(TCRC32));
     HashAnsiString(TempStr);
     If CRC32ToSys(Preset.Residue) = (fCRC32Value xor CRC32ToSys(fXOROutValue)) then
