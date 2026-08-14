@@ -67,7 +67,7 @@
 
   Version 2.2 (2025-03-04)
 
-  Last change 2026-02-25
+  Last change 2026-07-31
 
   ©2024-2026 František Milt
 
@@ -1388,24 +1388,33 @@ end;
 
 Function TUSSignalDispatcher.LowIndex: Integer;
 begin
-fMainListLock.Enter;
-try
-  Result := Low(fUtilitySignals);
-finally
-  fMainListLock.Leave;
-end;
+// AuxClasses library calls here before the lock can be created
+If Assigned(fMainListLock) then
+  begin
+    fMainListLock.Enter;
+    try
+      Result := Low(fUtilitySignals);
+    finally
+      fMainListLock.Leave;
+    end;
+  end
+else Result := Low(fUtilitySignals);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TUSSignalDispatcher.HighIndex: Integer;
 begin
-fMainListLock.Enter;
-try
-  Result := Pred(fCount);
-finally
-  fMainListLock.Leave;
-end;
+If Assigned(fMainListLock) then
+  begin
+    fMainListLock.Enter;
+    try
+      Result := Pred(fCount);
+    finally
+      fMainListLock.Leave;
+    end
+  end
+else Result := Pred(fCount);
 end;
 
 //------------------------------------------------------------------------------

@@ -12,11 +12,11 @@
     Some types (eg. integers of defined size) that are not guaranteed to be
     declared in all compilers.
 
-  version 1.1.2 (2023-12-19)
+  version 1.1.3 (2026-08-14)
 
-  Last change 2023-12-19
+  Last change 2026-08-14
 
-  ©2015-2023 František Milt
+  ©2015-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -231,6 +231,15 @@ type
 {$ENDIF}
   PFloat80  = ^Float80;
   PPFloat80 = ^PFloat80;
+
+{$IF SizeOf(Pointer) = 8}
+  PtrFloat  = Float64;
+{$ELSEIF SizeOf(Pointer) = 4}
+  PtrFloat  = Float32;
+{$ELSE}
+  {$MESSAGE FATAL 'Unsupported size of pointer type'}
+{$IFEND}
+  PPtrFloat = ^PtrFloat;    PPPtrFloat = ^PPtrFloat;
 
 //== Strings ===================================================================
 

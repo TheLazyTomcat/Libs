@@ -18,9 +18,9 @@
     Tag is an 8bit unsigned integer (byte) that can have value between 0 and
     254. Value of 255 is reserved for a context tag - this tag signals that
     next byte(s) are not data, but a new context.
-    Context is a 16bit unsigned integer that can be set to any value (none is
-    reserved). Since the tag has very limited range, contexts are here to allow
-    more unique identification of data points.
+    Context is a 16bit unsigned integer that can be set to any value (none
+    is reserved). Since the tag has very limited range, contexts are here to
+    allow for more unique identification of data points.
 
     Unlike tags, which are stored before each data point, context is stored
     only when it changes. You should refrain from changing it too often, as
@@ -34,15 +34,16 @@
             ClosingSequence       - bytes $FF, $80 (see further for details)
 
       There can be no context group written, in which case absolutely nothing
-      is written in the stream (not even signature or closing sequence).
+      is written in the stream (not even signature or closing sequence - but
+      see property WriteEmptyStream of the writer class).
 
-      The closing sequence consinsts of context tag ($FF), which marks a context
-      change, followed by context flags without an actual new context ID. In the
-      context flags, a close flag is set - this actually marks the end of tagged
-      data (usually no other flag is set, so the value $80).
+      The closing sequence consinsts of context tag ($FF), which marks a
+      context change, followed by context flags without an actual new context
+      ID. In the context flags, a close flag is set - this actually marks the
+      end of tagged data (usually no other flag is set, so the value $80).
 
-      Context group is a sequence of context tag, context flags, context ID and
-      an array of tagged data points:
+      Context group is a sequence of context tag, context flags, context ID
+      and an array of tagged data points:
 
           ContextGroup
             ContextTag            - tag of value $FF
@@ -63,9 +64,9 @@
 
       All metadata (signature, context ID) are written with little endianess.
 
-  Version 1.0.3 (2024-11-15)
+  Version 1.0.4 (2026-08-10)
 
-  Last change 2026-02-25
+  Last change 2026-08-10
 
   ©2022-2026 František Milt
 
@@ -121,8 +122,6 @@ unit TaggedBinaryData;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -173,18 +172,28 @@ const
   to a first call to Write method. Meaning no matter how many times you call
   SetContext or SetTag, nothing will be written into destination stream until
   you write some actual data, at which point only the last set context and tag
-  will be written (and possibly the signature).
+  will be written (and possibly the signature if at the start of stream).
 
   At the start, no context is written into destination, unless you explicitly
-  set it (first, implicit, context has ID of 0) - first written thing after
+  change it (first, implicit, context has ID of 0) - first written thing after
   signature will be tag of the first data. If you do not set the tag before
   writing data, it will be 0.
 
-  If you do not write any data, nothing is stored in the destination, not even
-  the signature or closing sequence will be written.
+  If current context matches the one last stored, then no context will be
+  written, even if you explicitly set it.
+
+  When property WriteEmptyStream is set to false (default value), then, if you
+  do not write any data, nothing is stored in the destination, not even the
+  signature or closing sequence will be written.
+  WriteEmptyStream of true ensures that at least signature and closing sequence
+  is written into destination stream, even if you do not write any actual data.
 
   It is possible to store compound data via multiple calls to write, only the
   first write after SetTag will actually write the tag (and other metadata).
+
+  If context change is written, it also means that a tag is written, even if
+  you do not explicitly set it before. This ensures that there are no bare
+  (tag-less) data just after the context.
 
   An example on how to use the writer could be something like this (uses
   BinaryStreaming library):
@@ -234,22 +243,21 @@ const
         FF        - context tag
         80        - context flags with close flag set
 }
-
-type
-  TTBDWriterAction = (waWriteSignature,waWriteContext,waWriteTag);
-
-  TTBDWriterActions = set of TTBDWriterAction;
-
 {===============================================================================
     TTaggedBinaryDataWriter - class declaration
 ===============================================================================}
 type
   TTaggedBinaryDataWriter = class(TStream)
   protected
-    fDestination:     TStream;
-    fActions:         TTBDWriterActions;
-    fCurrentContext:  TTBDContextID;
-    fCurrentTag:      TTBDTag;
+    fDestination:       TStream;
+    fDeferredActions:   set of (daWriteSignature,daWriteContext,daWriteTag);
+    fPreviousContext:   TTBDContextID;
+    fCurrentContext:    TTBDContextID;
+    fCurrentTag:        TTBDTag;
+    fWriteEmptyStream:  Boolean;
+    fMetaBytes:         Int64;
+    fDataBytes:         Int64;
+    Function GetUtilization: Double; virtual;
     procedure Initialize(Destination: TStream); virtual;
     procedure Finalize; virtual;
     procedure WriteSignature; virtual;
@@ -264,8 +272,10 @@ type
     Function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
     procedure SetContext(Context: TTBDContextID); virtual;
   {
-    SetTag returns reference to self, so it can be used for inline tag set and
-    write, for example:
+    SetTag
+
+    Returns reference to self, so it can be used for inline tag set and write,
+    for example:
 
       Writer.SetTag(15).WriteBuffer(Buff,SizeOf(Buff));
 
@@ -275,6 +285,40 @@ type
     property Destination: TStream read fDestination;
     property CurrentContext: TTBDContextID read fCurrentContext;
     property CurrentTag: TTBDTag read fCurrentTag;
+    property WriteEmptyStream: Boolean read fWriteEmptyStream write fWriteEmptyStream;
+  {
+    MetaBytes
+
+    Number of bytes written that are not actual data - this includes signature,
+    contexts and tags.
+
+    Overwrites (eg. after back-seeking) are not catched - this number counts
+    all meta data written, not what eventually ends-up in the stream.   
+  }
+    property MetaBytes: Int64 read fMetaBytes;
+  {
+    DataBytes
+
+    Number of bytes written that belongs to the actual user-written data, not
+    meta data (tags, contexts, ...).
+
+    Overwrites are not catched - this number counts all actual data written,
+    not what eventually ends-up in the stream.
+  }
+    property DataBytes: Int64 read fDataBytes;
+  {
+    Utilization
+
+    Indicates how many of written bytes were actual data, not metadata (tags,
+    contexts, ...). It is given as normalized value in range [0,1], where 0
+    means that all written bytes were metadata, 1 means all written bytes were
+    actual usefull data. It is calculated like:
+
+      Utilization := DataBytes / (DataBytes + MetaBytes)
+
+    If no data were writen, then 0 is returned.
+  }
+    property Utilization: Double read GetUtilization;
   end;
 
   // shorter alias
@@ -298,15 +342,15 @@ type
   When GetTag returns true, it indicates that a tag was read and properties
   CurrentContext and CurrentTag now contains proper values. Use those values
   to discern which data point to read next. Size of the data point is not
-  managed by this library so you are responsible to read proper number of bytes
-  (if you fail to do so, you will damage the reading process and further
+  managed by this library so you are responsible to read proper number of
+  bytes (if you fail to do so, you will damage the reading process and further
   behavior of the reader is completely undefined).
 
-  When it returns false, it indicates either end of source stream or end of
-  tagged binary data stream pseudostructure (also indicated by property
-  EndOfDataReached). In any case, you should stop reading any further data
-  points. Also, in this situation, values stored in properties CurrentContext
-  and CurrentTag are undefined.
+  When it returns false, it indicates that either the end of source stream or
+  end of tagged binary data stream pseudostructure (also indicated by property
+  EndOfDataReached) was reached. In any case, you should stop reading any
+  further data points. Also, in this situation, values stored in properties
+  CurrentContext and CurrentTag are undefined.
 
   An example how to use the reader could be (note that it is reading the same
   data that would be stored in the example for writer - see above):
@@ -331,8 +375,12 @@ type
         Reader.Free;
       end;
 
-    This is just one possible approach, you can create your own implementation
-    (for example using provided events fired on context and tag change).
+  This is just one possible approach, you can create your own implementation,
+  for example using provided events fired on context and tag change...
+
+      NOTE - OnTagChange* is called even if the actual tag does not change
+             from last occurence. This is to account for situation where
+             two or more datapoints of the same tag are stored together.
 }
 {===============================================================================
     TTaggedBinaryDataReader - class declaration
@@ -344,11 +392,14 @@ type
     fEndOfDataReached:      Boolean;
     fCurrentContext:        TTBDContextID;
     fCurrentTag:            TTBDTag;
-    fDefaultContext:        Boolean;
+    fInitialContext:        Boolean;
+    fMetaBytes:             Int64;
+    fDataBytes:             Int64;
     fContextChangeEvent:    TNotifyEvent;
     fContextChangeCallback: TNotifyCallback;
     fTagChangeEvent:        TNotifyEvent;
     fTagChangeCallback:     TNotifyCallback;
+    Function GetUtilization: Double; virtual;
     procedure Initialize(Source: TStream); virtual;
     procedure Finalize; virtual;
     procedure DoContextChange; virtual;
@@ -364,6 +415,9 @@ type
     property EndOfDataReached: Boolean read fEndOfDataReached;
     property CurrentContext: TTBDContextID read fCurrentContext;
     property CurrentTag: TTBDTag read fCurrentTag;
+    property MetaBytes: Int64 read fMetaBytes;
+    property DataBytes: Int64 read fDataBytes;
+    property Utilization: Double read GetUtilization;
     property OnContextChangeEvent: TNotifyEvent read fContextChangeEvent write fContextChangeEvent;
     property OnContextChangeCallback: TNotifyCallback read fContextChangeCallback write fContextChangeCallback;
     property OnContextChange: TNotifyEvent read fContextChangeEvent write fContextChangeEvent;
@@ -379,10 +433,14 @@ implementation
 uses
   BinaryStreamingLite;
 
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
-{$ENDIF}
+{===============================================================================
+    Auxiliary routines
+===============================================================================}
+
+Function ConsumeArgs(const Args: array of const): Integer;
+begin
+Result := Length(Args) * 0;
+end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -396,15 +454,29 @@ uses
     TTaggedBinaryDataWriter - protected methods
 -------------------------------------------------------------------------------}
 
+Function TTaggedBinaryDataWriter.GetUtilization: Double;
+begin
+If (fMetaBytes + fDataBytes) <> 0 then
+  Result := fDataBytes / (fDataBytes + fMetaBytes)
+else
+  Result := 0.0;
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TTaggedBinaryDataWriter.Initialize(Destination: TStream);
 begin
 If Assigned(Destination) then
   fDestination := Destination
 else
   raise ETBDInvalidValue.Create('TTaggedBinaryDataWriter.Initialize: Destination stream not assigned.');
-fActions := [waWriteSignature,waWriteTag];
+fDeferredActions := [daWriteSignature,daWriteContext,daWriteTag];
+fPreviousContext := 0;
 fCurrentContext := 0;
 fCurrentTag := 0;
+fWriteEmptyStream := False;
+fMetaBytes := 0;
+fDataBytes := 0;
 end;
 
 //------------------------------------------------------------------------------
@@ -413,8 +485,6 @@ procedure TTaggedBinaryDataWriter.Finalize;
 begin
 If Assigned(fDestination) then
   WriteClose;
-fActions := [];
-fDestination := nil;
 end;
 
 //------------------------------------------------------------------------------
@@ -422,23 +492,26 @@ end;
 procedure TTaggedBinaryDataWriter.WriteSignature;
 begin
 Stream_WriteUInt32(fDestination,TBD_SIGNATURE);
-Exclude(fActions,waWriteSignature);
+Exclude(fDeferredActions,daWriteSignature);
+Inc(fMetaBytes,SizeOf(UInt32));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TTaggedBinaryDataWriter.WriteContext;
-
-  Function GetContextFlags: TTBDContextFlags;
-  begin
-    Result := 0;
-  end;
-
 begin
-Stream_WriteUInt8(fDestination,TBD_TAG_CONTEXT);
-Stream_WriteUInt8(fDestination,GetContextFlags);
-Stream_WriteUInt16(fDestination,fCurrentContext);
-Exclude(fActions,waWriteContext);
+// write context only if it really changed
+If fCurrentContext <> fPreviousContext then
+  begin
+    Stream_WriteUInt8(fDestination,TBD_TAG_CONTEXT);
+    Stream_WriteUInt8(fDestination,0{flags, nothing implemented atm});
+    Stream_WriteUInt16(fDestination,fCurrentContext);
+    // make sure bare data are not written directly after the context
+    Include(fDeferredActions,daWriteTag);
+    Inc(fMetaBytes,SizeOf(TTBDTag) + SizeOf(TTBDContextFlags) + SizeOf(TTBDContextID));
+  end;
+Exclude(fDeferredActions,daWriteContext);
+fPreviousContext := fCurrentContext;
 end;
 
 //------------------------------------------------------------------------------
@@ -446,20 +519,23 @@ end;
 procedure TTaggedBinaryDataWriter.WriteTag;
 begin
 Stream_WriteUInt8(fDestination,fCurrentTag);
-Exclude(fActions,waWriteTag);
+Exclude(fDeferredActions,daWriteTag);
+Inc(fMetaBytes,SizeOf(TTBDTag));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TTaggedBinaryDataWriter.WriteClose;
 begin
-// write closing sequence only if something was written to the stream
-If not(waWriteSignature in fActions) then
+If not(daWriteSignature in fDeferredActions){something was written} or fWriteEmptyStream then
   begin
-    // write closing tag
+    If daWriteSignature in fDeferredActions then
+      WriteSignature;
+    // closing tag
     Stream_WriteUInt8(fDestination,TBD_TAG_CONTEXT);
-    // write terminating context flags without context id
+    // terminating context flags without context id
     Stream_WriteUInt8(fDestination,TBD_CTXFLAGS_FLAG_CLOSE);
+    Inc(fMetaBytes,SizeOf(TTBDTag) + SizeOf(TTBDContextFlags));
   end;
 end;
 
@@ -483,27 +559,24 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TTaggedBinaryDataWriter.Read(var Buffer; Count: LongInt): LongInt;
 begin
-{$IFDEF FPC}
-Result := 0;
-{$ENDIF}
+{$IFDEF FPC}Result := {$ENDIF}ConsumeArgs([@Buffer,Count]);
 raise ETBDReadError.Create('TTaggedBinaryDataWriter.Read: Reading not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
 Function TTaggedBinaryDataWriter.Write(const Buffer; Count: LongInt): LongInt;
 begin
-If waWritesignature in fActions then
+If daWritesignature in fDeferredActions then
   WriteSignature;
-If waWriteContext in fActions then
+If daWriteContext in fDeferredActions then
   WriteContext;
-If waWriteTag in fActions then
+If daWriteTag in fDeferredActions then
   WriteTag;
 Result := fDestination.Write(Buffer,Count);
+Inc(fDataBytes,Int64(Result));
 end;
 
 //------------------------------------------------------------------------------
@@ -517,7 +590,7 @@ end;
 
 procedure TTaggedBinaryDataWriter.SetContext(Context: TTBDContextID);
 begin
-Include(fActions,waWriteContext);
+Include(fDeferredActions,daWriteContext);
 fCurrentContext := Context;
 end;
 
@@ -527,7 +600,7 @@ Function TTaggedBinaryDataWriter.SetTag(Tag: TTBDTag): TStream;
 begin
 If Tag <> TBD_TAG_CONTEXT then
   begin
-    Include(fActions,waWriteTag);
+    Include(fDeferredActions,daWriteTag);
     fCurrentTag := Tag;
     Result := Self;
   end
@@ -547,9 +620,19 @@ end;
     TTaggedBinaryDataReader - protected methods
 -------------------------------------------------------------------------------}
 
+Function TTaggedBinaryDataReader.GetUtilization: Double;
+begin
+If (fMetaBytes + fDataBytes) <> 0 then
+  Result := fDataBytes / (fDataBytes + fMetaBytes)
+else
+  Result := 0.0;
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TTaggedBinaryDataReader.Initialize(Source: TStream);
 var
-  temp: uint32;
+  Signature:  UInt32;
 begin
 If Assigned(Source) then
   fSource := Source
@@ -559,18 +642,22 @@ else
   Check if the source can contain a valid TBD stream, and if so whether it
   starts with a proper signature.
 }
+fMetaBytes := 0;  // must be here since it is used
 If (fSource.Size - fSource.Position) >= 6 {4B signature, 2B closing sequence} then
   begin
-    Temp := Stream_GetUInt32(fSource);
-    fEndOfDataReached := Temp <> TBD_SIGNATURE;
+    Signature := Stream_GetUInt32(fSource);
+    fEndOfDataReached := Signature <> TBD_SIGNATURE;
     If fEndOfDataReached then
-      fSource.Seek(-SizeOf(UInt32),soCurrent);
+      fSource.Seek(-SizeOf(UInt32),soCurrent)
+    else
+      Inc(fMetaBytes,SizeOf(UInt32));
   end
 else fEndOfDataReached := True;
-fDefaultContext := True;
+fInitialContext := True;
 // init other fields
 fCurrentContext := 0;
 fCurrentTag := 0;
+fDataBytes := 0;
 fContextChangeEvent := nil;
 fContextChangeCallback := nil;
 fTagChangeEvent := nil;
@@ -595,7 +682,7 @@ If Assigned(fContextChangeEvent) then
   fContextChangeEvent(Self)
 else If Assigned(fContextChangeCallback) then
   fContextChangeCallback(Self);
-fDefaultContext := False;
+fInitialContext := False;
 end;
 
 //------------------------------------------------------------------------------
@@ -631,19 +718,16 @@ end;
 Function TTaggedBinaryDataReader.Read(var Buffer; Count: LongInt): LongInt;
 begin
 Result := fSource.Read(Buffer,Count);
+Inc(fDataBytes,Int64(Result));
 end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TTaggedBinaryDataReader.Write(const Buffer; Count: LongInt): LongInt;
 begin
-{$IFDEF FPC}
-Result := 0;
-{$ENDIF}
+{$IFDEF FPC}Result := {$ENDIF}ConsumeArgs([@Buffer,Count]);
 raise ETBDWriteError.Create('TTaggedBinaryDataReader.Write: Writing not allowed.');
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -663,31 +747,36 @@ If not fEndOfDataReached then
       begin
         // tag can fit in the rest of the stream after current position
         fCurrentTag := Stream_GetUInt8(fSource);
+        Inc(fMetaBytes,SizeOf(TTBDTag));
         If fCurrentTag = TBD_TAG_CONTEXT then
           begin
             If (fSource.Size - fSource.Position) >= SizeOf(TTBDContextFlags) then
-              If (Stream_GetUInt8(fSource) and TBD_CTXFLAGS_FLAG_CLOSE) = 0 then
-                If (fSource.Size - fSource.Position) >= SizeOf(TTBDContextID) then
-                  begin
-                    fCurrentContext := Stream_GetUInt16(fSource);
-                    DoContextChange;
-                  {
-                    Recursively call GetTag again to read next thing after the
-                    context change (whatever it will be).
+              begin
+                Inc(fMetaBytes,SizeOf(TTBDContextFlags));
+                If (Stream_GetUInt8(fSource) and TBD_CTXFLAGS_FLAG_CLOSE) = 0 then
+                  If (fSource.Size - fSource.Position) >= SizeOf(TTBDContextID) then
+                    begin
+                      fCurrentContext := Stream_GetUInt16(fSource);
+                      Inc(fMetaBytes,SizeOf(TTBDContextID));
+                      DoContextChange;
+                    {
+                      Recursively call GetTag again to read next thing after
+                      the context change (whatever it will be).
 
-                    Note the brackets must be there for FPC - otherwise GetTag
-                    is parsed as a result of this function (Boolean), not as a
-                    call to it.
-                  }
-                    Result := GetTag();
-                    Exit;
-                  end;
+                      Note the brackets must be there for FPC - otherwise
+                      GetTag is parsed as a result of this function (Boolean),
+                      not as a call to it.
+                    }
+                      Result := GetTag();
+                      Exit;
+                    end;
+              end;
             fEndOfDataReached := True;
           end
         else
           begin
-            // non-context tag read
-            If fDefaultContext then
+            // non-context tag read, signal context change if at the start of stream
+            If fInitialContext then
               DoContextChange;
             DoTagChange;
             Result := True;
