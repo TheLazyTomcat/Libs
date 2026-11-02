@@ -30,7 +30,7 @@
 
   Version 1.8.1 (2026-07-04)
 
-  Last change 2026-07-18
+  Last change 2026-10-21
 
   ©2011-2026 František Milt
 
@@ -104,6 +104,8 @@ unit CRC32;
   {$IFNDEF PurePascal}
     {$ASMMODE Intel}
   {$ENDIF}
+  {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
 {$ELSE}
   {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
@@ -600,6 +602,17 @@ uses
   }
   {$DEFINE ASM_MachineCode}
 {$IFEND}
+
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
+{$ENDIF}
 
 {===============================================================================
     UIM variables
@@ -1725,6 +1738,8 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
+
 procedure TCRC32CustomHash.LoadPreset(const PresetName: String);
 var
   Aliases:  TStringList;
@@ -1753,6 +1768,7 @@ finally
   Aliases.Free;
 end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 

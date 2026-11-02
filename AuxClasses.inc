@@ -13,7 +13,7 @@
 
   Version 1.6 (2026-04-15)
 
-  Last change 2026-04-17
+  Last change 2026-08-17
 
   ©2018-2026 František Milt
 
@@ -875,9 +875,17 @@ type
   public
     constructor Create(ListCount: Integer);
     destructor Destroy; override;
-    Function LowIndex(List: Integer): Integer; virtual; abstract;
-    Function HighIndex(List: Integer): Integer; virtual; abstract;
-    Function CheckIndex(List,Index: Integer): Boolean; virtual;
+  {
+    LowIndex
+    HighIndex
+    CheckIndex
+
+    These three methods are overloaded so that descendants can implement
+    overloads for default list (ie. versions not needing list index).
+  }
+    Function LowIndex(List: Integer): Integer; overload; virtual; abstract;
+    Function HighIndex(List: Integer): Integer; overload; virtual; abstract;
+    Function CheckIndex(List,Index: Integer): Boolean; overload; virtual;
     // parametrized list resizing (growing/shrinking)
     procedure CopyListResizeSettings(Source: {$IF Defined(AC_Include_Interfaced)}TCustomInterfacedMultiListObject
       {$ELSEIF Defined(AC_Include_SInterfaced)}TCustomSimpleInterfacedMultiListObject{$ELSE}TCustomMultiListObject{$IFEND}); virtual;
@@ -1000,9 +1008,9 @@ type
   public
     constructor Create(ListCount: Integer);
     destructor Destroy; override;  
-    Function LowIndex(List: Integer): Int64; virtual; abstract;
-    Function HighIndex(List: Integer): Int64; virtual; abstract;
-    Function CheckIndex(List: Integer; Index: Int64): Boolean; virtual;
+    Function LowIndex(List: Integer): Int64; overload; virtual; abstract;
+    Function HighIndex(List: Integer): Int64; overload; virtual; abstract;
+    Function CheckIndex(List: Integer; Index: Int64): Boolean; overload; virtual;
     // parametrized list resizing (growing/shrinking)
     procedure CopyListResizeSettings(Source: {$IF Defined(AC_Include_Interfaced)}TCustomInterfacedMultiList64Object
       {$ELSEIF Defined(AC_Include_SInterfaced)}TCustomSimpleInterfacedMultiList64Object{$ELSE}TCustomMultiList64Object{$IFEND}); virtual;

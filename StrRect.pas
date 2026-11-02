@@ -49,11 +49,11 @@
               Also, if you are certain that some part, in here marked as
               dubious, is actually correct, let the author know.
 
-  Version 1.6.1 (2024-02-29)
+  Version 1.7 (2026-08-25)
 
-  Last change 2024-03-05
+  Last change 2026-10-21
 
-  ©2017-2024 František Milt
+  ©2017-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -94,8 +94,6 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
   {$MODESWITCH InitFinal+}
   {$INLINE ON}
   {$DEFINE CanInline}
-  {$DEFINE FPC_DisableWarns}
-  {$MACRO ON}
   {
     Activate symbol BARE_FPC if you want to compile this unit outside of
     Lazarus.
@@ -113,6 +111,8 @@ unit StrRect{$IF not Defined(FPC) and not(Defined(WINDOWS) or Defined(MSWINDOWS)
   {$IFDEF LCL}  // clearly not bare FPC...
     {$UNDEF BARE_FPC}
   {$ENDIF}
+  {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
 {$ELSE}
   {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
@@ -285,6 +285,17 @@ Function UnicodeStringCompare(const A,B: UnicodeString; CaseSensitive: Boolean):
 Function UCS4StringCompare(const A,B: UCS4String; CaseSensitive: Boolean): Integer;{$IFDEF CanInline} inline; {$ENDIF}
 Function StringCompare(const A,B: String; CaseSensitive: Boolean): Integer;
 
+//------------------------------------------------------------------------------
+
+Function ShortStringSame(const A,B: ShortString; CaseSensitive: Boolean): Boolean;
+Function AnsiStringSame(const A,B: AnsiString; CaseSensitive: Boolean): Boolean;
+Function UTF8StringSame(const A,B: UTF8String; CaseSensitive: Boolean): Boolean;
+Function WideStringSame(const A,B: WideString; CaseSensitive: Boolean): Boolean;
+Function UnicodeStringSame(const A,B: UnicodeString; CaseSensitive: Boolean): Boolean;
+Function UCS4StringSame(const A,B: UCS4String; CaseSensitive: Boolean): Boolean;{$IFDEF CanInline} inline; {$ENDIF}
+Function StringSame(const A,B: String; CaseSensitive: Boolean): Boolean;
+
+
 {===============================================================================
     String indexing helpers
 ===============================================================================}
@@ -334,22 +345,19 @@ Function CharInStr(C: Char; const Str: String): Boolean;
 
 implementation
 
-{$IF (not Defined(FPC) and (CompilerVersion >= 20)) or Defined(Windows)}
+{$IF Defined(Windows) or (not Defined(FPC) and (CompilerVersion >= 20))}
 uses
-{$IF not Defined(FPC) and (CompilerVersion >= 20)}(* Delphi2009+ *)
-  AnsiStrings{$IFDEF Windows},{$ENDIF}
-{$IFEND}
 {$IFDEF Windows}
-  Windows   
-{$ENDIF};
+  Windows
+{$ENDIF}
+{$IF not Defined(FPC) and (CompilerVersion >= 20)}(* Delphi2009+ *)
+  , AnsiStrings
+{$IFEND};
 {$IFEND}
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
-  {$DEFINE W4045:={$WARN 4045 OFF}} // Comparison might be always true due to range of constant and expression
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
-  {$DEFINE W6018:={$WARN 6018 OFF}} // unreachable code
-  {$PUSH}{$WARN 2005 OFF}           // Comment level $1 found
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
   {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
     {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
   {$ELSE}
@@ -506,9 +514,7 @@ If Length(Str) > 0 then
     TermZero := Ord(Str[High(Str)]) = 0;
     ResLen := 0;
     For i := Low(Str) to IfThenElse(TermZero,Pred(High(Str)),High(Str)) do
-    {$IFDEF FPCDWM}{$PUSH}W4045{$ENDIF}
-      Inc(ResLen, 1 + IfThenElse((Str[i] > $FFFF) and (Str[i] <= $10FFFF),1,0));
-    {$IFDEF FPCDWM}{$POP}{$ENDIF}
+      Inc(ResLen,1 + IfThenElse((Str[i] > $FFFF) and (UInt32(Str[i]) <= $10FFFF),1,0));
     // preallocation
     Result := '';
     SetLength(Result,ResLen);
@@ -519,19 +525,14 @@ If Length(Str) > 0 then
         CurrChar := Str[i];
         If CurrChar <= $FFFF then
           Result[ResLen] := WideChar(CurrChar)  // lone surrogates are just copied
-      {$IFDEF FPCDWM}{$PUSH}W4045{$ENDIF}
-        else If CurrChar <= $10FFFF then
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        else If UInt32(CurrChar) <= $10FFFF then
           begin
             // create surrogate pair
             Result[ResLen] := WideChar(((CurrChar - $10000) shr 10) + $D800);   // high surrogate
             Inc(ResLen);
             Result[ResLen] := WideChar(((CurrChar - $10000) and $3FF) + $DC00); // low surrogate
           end
-      {$IFDEF FPCDWM}{$PUSH}W6018{$ENDIF}
-        else
-          Result[ResLen] := WideChar($FFFD);    // unicode replacement character
-      {$IFDEF FPCDWM}{$POP}{$ENDIF}
+        else Result[ResLen] := WideChar($FFFD); // unicode replacement character
         Inc(ResLen);
       end;
   end
@@ -541,7 +542,30 @@ end;
 {===============================================================================
     Internal functions
 ===============================================================================}
+{$IFDEF FPC}
+Function ConsumeArg(const Arg: Pointer): Integer;
+var
+  iArg: PtrInt absolute Arg;
+begin
+Result := Integer(iArg);
+end;
 
+//------------------------------------------------------------------------------
+
+Function AnsiCompareStrLocal(const A,B: AnsiString): Integer;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+Result := Integer(WideStringManager.CompareStrAnsiStringProc(A,B));
+end;
+
+//------------------------------------------------------------------------------
+
+Function AnsiCompareTextLocal(const A,B: AnsiString): Integer;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+Result := Integer(WideStringManager.CompareTextAnsiStringProc(A,B));
+end;
+
+{$ENDIF}
+//------------------------------------------------------------------------------
 {$IFDEF Windows}
 type
   PUnicodeChar = PWideChar;
@@ -1654,7 +1678,6 @@ end;
     Explicit string comparison
 ===============================================================================}
 
-{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function ShortStringCompare(const A,B: ShortString; CaseSensitive: Boolean): Integer;
 begin
 If CaseSensitive then
@@ -1663,23 +1686,21 @@ If CaseSensitive then
 else
   Result := SysUtils.UnicodeCompareText(ShortToStr(A),ShortToStr(B));
 {$ELSE}
-  Result := SysUtils.AnsiCompareStr(ShortToStr(A),ShortToStr(B))
+  Result := {$IFDEF FPC}AnsiCompareStrLocal{$ELSE}SysUtils.AnsiCompareStr{$ENDIF}(ShortToStr(A),ShortToStr(B))
 else
-  Result := SysUtils.AnsiCompareText(ShortToStr(A),ShortToStr(B));
+  Result := {$IFDEF FPC}AnsiCompareTextLocal{$ELSE}SysUtils.AnsiCompareText{$ENDIF}(ShortToStr(A),ShortToStr(B));
 {$IFEND}
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function AnsiStringCompare(const A,B: AnsiString; CaseSensitive: Boolean): Integer;
 begin
 If CaseSensitive then
 {$IFDEF FPC}
-  Result := SysUtils.AnsiCompareStr(A,B)
+  Result := AnsiCompareStrLocal(A,B)
 else
-  Result := SysUtils.AnsiCompareText(A,B)
+  Result := AnsiCompareTextLocal(A,B)
 {$ELSE}
 {$IF Declared(AnsiStrings)}
   Result := AnsiStrings.AnsiCompareStr(A,B)
@@ -1692,7 +1713,6 @@ else
 {$IFEND}
 {$ENDIF}
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1757,7 +1777,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function StringCompare(const A,B: String; CaseSensitive: Boolean): Integer;
 begin
 If CaseSensitive then
@@ -1766,9 +1785,129 @@ If CaseSensitive then
 else
   Result := SysUtils.UnicodeCompareText(A,B)
 {$ELSE}
-  Result := SysUtils.AnsiCompareStr(A,B)
+  Result := {$IFDEF FPC}AnsiCompareStrLocal{$ELSE}SysUtils.AnsiCompareStr{$ENDIF}(A,B)
 else
-  Result := SysUtils.AnsiCompareText(A,B)
+  Result := {$IFDEF FPC}AnsiCompareTextLocal{$ELSE}SysUtils.AnsiCompareText{$ENDIF}(A,B)
+{$IFEND}
+end;
+
+//==============================================================================
+
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
+Function ShortStringSame(const A,B: ShortString; CaseSensitive: Boolean): Boolean;
+begin
+If CaseSensitive then
+{$IF Defined(FPC) and Defined(Unicode)}
+  Result := SysUtils.UnicodeSameStr(ShortToStr(A),ShortToStr(B))
+else
+  Result := SysUtils.UnicodeSameText(ShortToStr(A),ShortToStr(B));
+{$ELSE}
+  Result := SysUtils.AnsiSameStr(ShortToStr(A),ShortToStr(B))
+else
+  Result := SysUtils.AnsiSameText(ShortToStr(A),ShortToStr(B));
+{$IFEND}
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
+Function AnsiStringSame(const A,B: AnsiString; CaseSensitive: Boolean): Boolean;
+begin
+If CaseSensitive then
+{$IFDEF FPC}
+  Result := SysUtils.AnsiSameStr(A,B)
+else
+  Result := SysUtils.AnsiSameText(A,B)
+{$ELSE}
+{$IF Declared(AnsiStrings)}
+  Result := AnsiStrings.AnsiSameStr(A,B)
+else
+  Result := AnsiStrings.AnsiSameText(A,B)
+{$ELSE}
+  Result := SysUtils.AnsiSameStr(A,B)
+else
+  Result := SysUtils.AnsiSameText(A,B)
+{$IFEND}
+{$ENDIF}
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+//------------------------------------------------------------------------------
+
+Function UTF8StringSame(const A,B: UTF8String; CaseSensitive: Boolean): Boolean;
+begin
+If CaseSensitive then
+{$IFDEF FPC}
+  Result := SysUtils.UnicodeSameStr(UTF8ToUTF16(A),UTF8ToUTF16(B))
+else
+  Result := SysUtils.UnicodeSameText(UTF8ToUTF16(A),UTF8ToUTF16(B))
+{$ELSE}
+{$IFDEF Unicode}
+  Result := SysUtils.AnsiSameStr(UTF8ToUTF16(A),UTF8ToUTF16(B))
+else
+  Result := SysUtils.AnsiSameText(UTF8ToUTF16(A),UTF8ToUTF16(B))
+{$ELSE}
+  Result := SysUtils.WideSameStr(UTF8ToUTF16(A),UTF8ToUTF16(B))
+else
+  Result := SysUtils.WideSameText(UTF8ToUTF16(A),UTF8ToUTF16(B))
+{$ENDIF}
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function WideStringSame(const A,B: WideString; CaseSensitive: Boolean): Boolean;
+begin
+If CaseSensitive then
+  Result := SysUtils.WideSameStr(A,B)
+else
+  Result := SysUtils.WideSameText(A,B)
+end;
+
+//------------------------------------------------------------------------------
+
+Function UnicodeStringSame(const A,B: UnicodeString; CaseSensitive: Boolean): Boolean;
+begin
+If CaseSensitive then
+{$IFDEF FPC}
+  Result := SysUtils.UnicodeSameStr(A,B)
+else
+  Result := SysUtils.UnicodeSameText(A,B)
+{$ELSE}
+{$IFDEF Unicode}
+  Result := SysUtils.AnsiSameStr(A,B)
+else
+  Result := SysUtils.AnsiSameText(A,B)
+{$ELSE}
+  Result := SysUtils.WideSameStr(A,B)
+else
+  Result := SysUtils.WideSameText(A,B)
+{$ENDIF}
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+Function UCS4StringSame(const A,B: UCS4String; CaseSensitive: Boolean): Boolean;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+Result := UnicodeStringSame(UCS4Decode(A),UCS4Decode(B),CaseSensitive);
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
+Function StringSame(const A,B: String; CaseSensitive: Boolean): Boolean;
+begin
+If CaseSensitive then
+{$IF Defined(FPC) and Defined(Unicode)}
+  Result := SysUtils.UnicodeSameStr(A,B)
+else
+  Result := SysUtils.UnicodeSameText(A,B)
+{$ELSE}
+  Result := SysUtils.AnsiSameStr(A,B)
+else
+  Result := SysUtils.AnsiSameText(A,B)
 {$IFEND}
 end;
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
@@ -1790,48 +1929,43 @@ end;
 
 //==============================================================================
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function ShortStrLow(const Str: ShortString): TStrOff;
 begin
+{$IFDEF FPC}ConsumeArg(@Str);{$ENDIF}
 Result := VAR_STRIDXOFF;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function AnsiStrLow(const Str: AnsiString): TStrOff;
 begin
+{$IFDEF FPC}ConsumeArg(@Str);{$ENDIF}
 Result := VAR_STRIDXOFF;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function UTF8StrLow(const Str: UTF8String): TStrOff;
 begin
+{$IFDEF FPC}ConsumeArg(@Str);{$ENDIF}
 Result := VAR_STRIDXOFF;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function WideStrLow(const Str: WideString): TStrOff;
 begin
+{$IFDEF FPC}ConsumeArg(@Str);{$ENDIF}
 Result := VAR_STRIDXOFF;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function UnicodeStrLow(const Str: UnicodeString): TStrOff;
 begin
+{$IFDEF FPC}ConsumeArg(@Str);{$ENDIF}
 Result := VAR_STRIDXOFF;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1842,12 +1976,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function StrLow(const Str: String): TStrOff;
 begin
+{$IFDEF FPC}ConsumeArg(@Str);{$ENDIF}
 Result := VAR_STRIDXOFF;
 end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //==============================================================================
 

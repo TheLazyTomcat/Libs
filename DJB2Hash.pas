@@ -15,11 +15,11 @@
     Author of this algorithm is Daniel J. Bernstein, hence the name DJB.
 
     Along with the original form, this unit also provides alternative version
-    that is internally using different operations (here reffered to as DJB2X).
+    that is internally using different operations (here reffered to as DJB2A).
 
-  Version 1.1.1 (2026-07-04)
+  Version 1.1.2 (2026-08-24)
 
-  Last change 2026-07-08
+  Last change 2026-08-24
 
   ©2026 František Milt
 
@@ -159,7 +159,7 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                                   TDJB2XHash                                    
+                                   TDJB2AHash
 --------------------------------------------------------------------------------
 ===============================================================================}
 {
@@ -168,10 +168,10 @@ type
   source code).  
 }
 {===============================================================================
-    TDJB2XHash - class declaration
+    TDJB2AHash - class declaration
 ===============================================================================}
 type
-  TDJB2XHash = class(TDJB2Hash)
+  TDJB2AHash = class(TDJB2Hash)
   protected
     procedure ProcessBuffer(const Buffer; Size: TMemSize); override;
   public
@@ -227,29 +227,29 @@ Function DJB2_Hash(const Buffer; Size: TMemSize): TDJB2;
     Procedural interface (XOR variant) - declaration
 ===============================================================================}
 {
-  Following functions are using alternative algorithm (see class TDJB2XHash)
+  Following functions are using alternative algorithm (see class TDJB2AHash)
   for hash computation. Since the hash type itself does not differ, utility
-  functions (eg. DJB2XToStr) are not provided because you can use the ones
+  functions (eg. DJB2AToStr) are not provided because you can use the ones
   declared previously.
 }
 
-Function BufferDJB2X(const Hash: TDJB2; const Buffer; Size: TMemSize): TDJB2; overload;
-Function BufferDJB2X(const Buffer; Size: TMemSize): TDJB2; overload;
+Function BufferDJB2A(const Hash: TDJB2; const Buffer; Size: TMemSize): TDJB2; overload;
+Function BufferDJB2A(const Buffer; Size: TMemSize): TDJB2; overload;
 
-Function AnsiStringDJB2X(const Str: AnsiString): TDJB2;
-Function WideStringDJB2X(const Str: WideString): TDJB2;
-Function StringDJB2X(const Str: String): TDJB2;
+Function AnsiStringDJB2A(const Str: AnsiString): TDJB2;
+Function WideStringDJB2A(const Str: WideString): TDJB2;
+Function StringDJB2A(const Str: String): TDJB2;
 
-Function StreamDJB2X(Stream: TStream; Count: Int64 = -1): TDJB2;
-Function FileDJB2X(const FileName: String): TDJB2;
+Function StreamDJB2A(Stream: TStream; Count: Int64 = -1): TDJB2;
+Function FileDJB2A(const FileName: String): TDJB2;
 
 //------------------------------------------------------------------------------
 
-Function DJB2X_Init: TDJB2Context;
-procedure DJB2X_Update(var Context: TDJB2Context; const Buffer; Size: TMemSize);
-Function DJB2X_Final(var Context: TDJB2Context; const Buffer; Size: TMemSize): TDJB2; overload;
-Function DJB2X_Final(var Context: TDJB2Context): TDJB2; overload;
-Function DJB2X_Hash(const Buffer; Size: TMemSize): TDJB2;
+Function DJB2A_Init: TDJB2Context;
+procedure DJB2A_Update(var Context: TDJB2Context; const Buffer; Size: TMemSize);
+Function DJB2A_Final(var Context: TDJB2Context; const Buffer; Size: TMemSize): TDJB2; overload;
+Function DJB2A_Final(var Context: TDJB2Context): TDJB2; overload;
+Function DJB2A_Hash(const Buffer; Size: TMemSize): TDJB2;
 
 implementation
 
@@ -289,7 +289,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function DJB2XProcess(const Hash: TDJB2Sys; const Buffer; Size: TMemSize): TDJB2Sys;
+Function DJB2AProcess(const Hash: TDJB2Sys; const Buffer; Size: TMemSize): TDJB2Sys;
 var
   WorkHash:     TDJB2Sys;
   CurrentData:  PUInt8;
@@ -590,28 +590,28 @@ end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
-                                   TDJB2XHash                                    
+                                   TDJB2AHash                                    
 --------------------------------------------------------------------------------
 ===============================================================================}
 {===============================================================================
-    TDJB2XHash - class declaration
+    TDJB2AHash - class declaration
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TDJB2XHash - protected methods
+    TDJB2AHash - protected methods
 -------------------------------------------------------------------------------}
 
-procedure TDJB2XHash.ProcessBuffer(const Buffer; Size: TMemSize);
+procedure TDJB2AHash.ProcessBuffer(const Buffer; Size: TMemSize);
 begin
-fDJB2Value := DJB2XProcess(fDJB2Value,Buffer,Size);
+fDJB2Value := DJB2AProcess(fDJB2Value,Buffer,Size);
 end;
 
 {-------------------------------------------------------------------------------
-    TDJB2XHash - public methods
+    TDJB2AHash - public methods
 -------------------------------------------------------------------------------}
 
-class Function TDJB2XHash.HashName: String;
+class Function TDJB2AHash.HashName: String;
 begin
-Result := 'DJB2X';
+Result := 'DJB2A';
 end;
 
 
@@ -786,46 +786,46 @@ end;
     Procedural interface (XOR variant) - processing functions
 -------------------------------------------------------------------------------}
 
-Function BufferDJB2X(const Hash: TDJB2; const Buffer; Size: TMemSize): TDJB2;
+Function BufferDJB2A(const Hash: TDJB2; const Buffer; Size: TMemSize): TDJB2;
 begin
-Result := TDJB2Hash.DJB2FromSys(DJB2XProcess(TDJB2Hash.DJB2ToSys(Hash),Buffer,Size));
+Result := TDJB2Hash.DJB2FromSys(DJB2AProcess(TDJB2Hash.DJB2ToSys(Hash),Buffer,Size));
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function BufferDJB2X(const Buffer; Size: TMemSize): TDJB2;
+Function BufferDJB2A(const Buffer; Size: TMemSize): TDJB2;
 begin
-Result := TDJB2Hash.DJB2FromSys(DJB2XProcess(TDJB2Hash.DJB2ToSys(InitialDJB2),Buffer,Size));
+Result := TDJB2Hash.DJB2FromSys(DJB2AProcess(TDJB2Hash.DJB2ToSys(InitialDJB2),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
-Function AnsiStringDJB2X(const Str: AnsiString): TDJB2;
+Function AnsiStringDJB2A(const Str: AnsiString): TDJB2;
 begin
-Result := BufferDJB2X(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
+Result := BufferDJB2A(PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar));
 end;
 
 //------------------------------------------------------------------------------
 
-Function WideStringDJB2X(const Str: WideString): TDJB2;
+Function WideStringDJB2A(const Str: WideString): TDJB2;
 begin
-Result := BufferDJB2X(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
+Result := BufferDJB2A(PWideChar(Str)^,Length(Str) * SizeOf(WideChar));
 end;
 
 //------------------------------------------------------------------------------
 
-Function StringDJB2X(const Str: String): TDJB2;
+Function StringDJB2A(const Str: String): TDJB2;
 begin
-Result := BufferDJB2X(PChar(Str)^,Length(Str) * SizeOf(Char));
+Result := BufferDJB2A(PChar(Str)^,Length(Str) * SizeOf(Char));
 end;
 
 //------------------------------------------------------------------------------
 
-Function StreamDJB2X(Stream: TStream; Count: Int64 = -1): TDJB2;
+Function StreamDJB2A(Stream: TStream; Count: Int64 = -1): TDJB2;
 var
-  Hasher: TDJB2XHash;
+  Hasher: TDJB2AHash;
 begin
-Hasher := TDJB2XHash.Create;
+Hasher := TDJB2AHash.Create;
 try
   Hasher.HashStream(Stream,Count);
   Result := Hasher.DJB2;
@@ -836,11 +836,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function FileDJB2X(const FileName: String): TDJB2;
+Function FileDJB2A(const FileName: String): TDJB2;
 var
-  Hasher: TDJB2XHash;
+  Hasher: TDJB2AHash;
 begin
-Hasher := TDJB2XHash.Create;
+Hasher := TDJB2AHash.Create;
 try
   Hasher.HashFile(FileName);
   Result := Hasher.DJB2;
@@ -853,29 +853,29 @@ end;
     Procedural interface (XOR variant) - context functions
 -------------------------------------------------------------------------------}
 
-Function DJB2X_Init: TDJB2Context;
+Function DJB2A_Init: TDJB2Context;
 begin
 TDJB2Sys(Result) := TDJB2Hash.DJB2ToSys(InitialDJB2);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure DJB2X_Update(var Context: TDJB2Context; const Buffer; Size: TMemSize);
+procedure DJB2A_Update(var Context: TDJB2Context; const Buffer; Size: TMemSize);
 begin
-Context := TDJB2Context(DJB2XProcess(TDJB2Sys(Context),Buffer,Size));
+Context := TDJB2Context(DJB2AProcess(TDJB2Sys(Context),Buffer,Size));
 end;
 
 //------------------------------------------------------------------------------
 
-Function DJB2X_Final(var Context: TDJB2Context; const Buffer; Size: TMemSize): TDJB2;
+Function DJB2A_Final(var Context: TDJB2Context; const Buffer; Size: TMemSize): TDJB2;
 begin
-DJB2X_Update(Context,Buffer,Size);
+DJB2A_Update(Context,Buffer,Size);
 Result := DJB2_Final(Context);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Function DJB2X_Final(var Context: TDJB2Context): TDJB2;
+Function DJB2A_Final(var Context: TDJB2Context): TDJB2;
 begin
 Result := TDJB2Hash.DJB2FromSys(TDJB2Sys(Context));
 TDJB2Sys(Context) := TDJB2Hash.DJB2ToSys(ZeroDJB2);
@@ -883,9 +883,9 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function DJB2X_Hash(const Buffer; Size: TMemSize): TDJB2;
+Function DJB2A_Hash(const Buffer; Size: TMemSize): TDJB2;
 begin
-Result := BufferDJB2X(Buffer,Size);
+Result := BufferDJB2A(Buffer,Size);
 end;
 
 end.

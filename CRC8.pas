@@ -24,7 +24,7 @@
 
   Version 1.1 (2026-07-03)
 
-  Last change 2026-07-08
+  Last change 2026-10-21
 
   ©2026 František Milt
 
@@ -61,6 +61,8 @@ unit CRC8;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
+  {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -621,6 +623,17 @@ implementation
 
 uses
   SysUtils;
+
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
+{$ENDIF}
 
 {===============================================================================
     Internals implementation
@@ -1202,6 +1215,7 @@ end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 procedure TCRC8CustomHash.LoadPreset(const PresetName: String);
 var
   Aliases:  TStringList;
@@ -1231,9 +1245,11 @@ finally
   Aliases.Free;
 end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function TCRC8CustomHash.SelfTest(Preset: TCRC8CustomPreset): Boolean;
 var
   CodewordData: array of Byte;
@@ -1301,6 +1317,7 @@ If Preset.Check = fCRC8Value then
       end;
   end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 

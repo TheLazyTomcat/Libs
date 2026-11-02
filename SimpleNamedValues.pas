@@ -66,7 +66,7 @@
 
   Version 1.3.6 (2026-04-16)
 
-  Last change 2026-04-16
+  Last change 2026-10-21
 
   ©2020-2026 František Milt
 
@@ -368,7 +368,14 @@ uses
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
-  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+  {$DEFINE W5024:={$WARN 5024 OFF}}   // Parameter "$1" not used
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
 {$ENDIF}
 
 {===============================================================================
@@ -811,6 +818,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function TSimpleNamedValues.IndexOf(const Name: String): Integer;
 var
   i:  Integer;
@@ -823,6 +831,7 @@ For i := LowIndex to HighIndex do
       Break{For i};
     end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 

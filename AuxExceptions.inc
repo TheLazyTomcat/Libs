@@ -15,9 +15,9 @@
 
   Version 1.2.2 (2024-04-20)
 
-  Last change 2025-03-04
+  Last change 2026-10-21
 
-  ©2019-2025 František Milt
+  ©2019-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -782,6 +782,11 @@ uses
     {$DEFINE W7122:={$WARN 7122 OFF}} // Check size of memory operand "$1: memory-operand-size is $2 bits, but expected [$3 bits + $4 byte offset]"
   {$ELSE}
     {$DEFINE W7122:=}
+  {$IFEND}
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
   {$IFEND}
   {$POP}
 {$ENDIF}
@@ -1760,6 +1765,7 @@ end;
     TAEMapsParser - public methods
 -------------------------------------------------------------------------------}
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 procedure TAEMapsParser.AddLine(const LineStr: String);
 var
   i:        Integer;
@@ -1801,6 +1807,7 @@ If ParseLine(LineStr) then
     fMapsModules[ModIdx,AddrIdx] := fParsMapsLine;
   end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 {$ENDIF Windows}
 

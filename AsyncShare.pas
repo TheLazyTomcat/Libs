@@ -16,9 +16,14 @@
                 always make sure you use the same version of this library
                 in all sharing endpoints.
 
-  version 1.0.1 (2026-06-18)
+      WARNING - guarded sharing might not work properly. It depends on how
+                memory fencing instructions work, and since I am no expert
+                in this field, I cannot say whether current implementation
+                is correct or not. Consider this mechanism only experimental.
 
-  Last change 2026-07-24
+  version 1.0.2 (2026-10-23)
+
+  Last change 2026-10-23
 
   ©2026 František Milt
 
@@ -165,13 +170,13 @@ type
   doing something else).
   That being said, do not use this on shared data that are continuously being
   changed, as successful read here is pretty much a random occurence and such
-  situation would mean wery small chance of that happening.
+  situation would mean very small chance of that happening.
 
     WARNING - it should be clear from the description above that the read
               data might still be corrupted even when successfully loaded.
               It is highly unlikely that damaged data will match with
               stored checksum (which can also be damaged), but it is still
-              possible.
+              a possibility.
 
   This mechanism should only be used for uni-directional sharing (ie. one
   thread is writing, others are only reading). Bi-directional communication
@@ -580,11 +585,11 @@ Function GuardsWriteLock(Guards: PASGuards): Boolean; register; assembler;
 asm
 {
   This function is here only to eliminate a single function call (to
-  WriteBarrier, which just issues SFENCE), otherwise it does not bring
+  ReadWriteBarrier, which just issues MFENCE), otherwise it does not bring
   much benefit.
 
   Also note that we do no need to check whether current system supports
-  SSE extension (SFENCE) since it is done by InterlockedOps library used
+  SSE2 extension (MFENCE) since it is done by InterlockedOps library used
   here.
 }
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
@@ -595,16 +600,16 @@ asm
 {$IFDEF x64}
   {$IFDEF Windows}
     MOV     byte ptr [RCX], ASYNC_LOCK_LOCKED
-    SFENCE
+    MFENCE
     CMP     byte ptr [RCX + 1], 0
   {$ELSE}
     MOV     byte ptr [RDI], ASYNC_LOCK_LOCKED
-    SFENCE
+    MFENCE
     CMP     byte ptr [RDI + 1], 0
   {$ENDIF}
 {$ELSE}
     MOV     byte ptr [EAX], ASYNC_LOCK_LOCKED
-    SFENCE
+    MFENCE
     CMP     byte ptr [EAX + 1], 0
 {$ENDIF}
     SETE    AL
@@ -622,16 +627,16 @@ asm
 {$IFDEF x64}
   {$IFDEF Windows}
     MOV     byte ptr [RCX + 1], ASYNC_LOCK_LOCKED
-    SFENCE
+    MFENCE
     CMP     byte ptr [RCX], 0
   {$ELSE}
     MOV     byte ptr [RDI + 1], ASYNC_LOCK_LOCKED
-    SFENCE
+    MFENCE
     CMP     byte ptr [RDI], 0
   {$ENDIF}
 {$ELSE}
     MOV     byte ptr [EAX + 1], ASYNC_LOCK_LOCKED
-    SFENCE
+    MFENCE
     CMP     byte ptr [EAX], 0
 {$ENDIF}
     SETE    AL
@@ -655,7 +660,7 @@ end;
 procedure GuardedStoragePrepare(var Storage; StorageSize: TMemSize);
 begin
 PWord(PtrAdvance(@Storage,TMemOff(StorageSize) - 2))^ := 0;
-WriteBarrier;
+ReadWriteBarrier;
 end;
 
 //------------------------------------------------------------------------------
@@ -669,16 +674,15 @@ Guards := PASGuards(PtrAdvance(@Storage,TMemOff(Size)));
 {$IFDEF PurePascal}
 Guards^.WriteGuard := ASYNC_LOCK_LOCKED;
 {
-  Issuing write barrier (instruction SFENCE) to ensure previous memory store
-  is globally wisible.
+  Issuing read-write barrier (instruction MFENCE) to ensure previous memory
+  store is globally visible.
 
-  SFENCE is not serialized with memory loads, but it is with other SFENCE
-  instructions, and since reader also issues it at corresponding place, it
-  gets serialized with it and memory load that follows it there should, in
-  combination with fact that byte stores and loads are always atomic, see
-  what we have stored here.
+  MFENCE is serialized with other fencing instructions, and since reader also
+  issues it at corresponding place, it gets serialized with it and memory load
+  that follows it there should, in combination with fact that byte stores and
+  loads are always atomic, see what we have stored here.
 }
-WriteBarrier;
+ReadWriteBarrier;
 If Guards^.ReadGuard = ASYNC_LOCK_UNLOCKED then
 {$ELSE}
 If GuardsWriteLock(Guards) then
@@ -700,7 +704,7 @@ Result := False;
 Guards := PASGuards(PtrAdvance(@Storage,TMemOff(Size)));
 {$IFDEF PurePascal}
 Guards^.ReadGuard := ASYNC_LOCK_LOCKED;
-WriteBarrier;
+ReadWriteBarrier;
 If Guards^.WriteGuard = ASYNC_LOCK_UNLOCKED then
 {$ELSE}
 If GuardsReadLock(Guards) then

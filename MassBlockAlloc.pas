@@ -29,7 +29,7 @@
 
   Version 1.0.1 (2025-01-31)
 
-  Last change 2026-02-25
+  Last change 2026-10-28
 
   ©2024-2026 František Milt
 
@@ -2632,7 +2632,7 @@ try
       PrepareValidationInfo(ValidationInfo[i],Blocks[i]);
       For j := LowIndex to HighIndex do
         begin
-          If fSegments[i].BlockFind(Blocks[i],Index) then
+          If fSegments[j].BlockFind(Blocks[i],Index) then
             begin
               ValidationInfo[i].Owned := True;
               ValidationInfo[i].Allocated := fSegments[j].AllocationMap[Index];

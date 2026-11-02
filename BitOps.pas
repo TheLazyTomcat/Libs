@@ -19,9 +19,9 @@
                 Namely all memory and pointer operations will be moved (eg.
                 CopyBits, PtrAdvance or MemoryFind*).
 
-  Version 1.27 (2026-04-21)
+  Version 1.28 (2026-10-24)
 
-  Last change 2026-04-21
+  Last change 2026-10-24
 
   ©2014-2026 František Milt
 
@@ -10602,8 +10602,8 @@ asm
     DB  $66, $F3, $0F, $BD, $C0   // LZCNT   AX,  AX
 {$ELSE}
     LZCNT   AX, AX
-    SUB     AX, 8
 {$ENDIF}
+    SUB     EAX, 8
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

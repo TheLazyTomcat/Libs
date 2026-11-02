@@ -84,7 +84,7 @@
 
   Internal compatibility version 1
 
-  Last change 2026-02-26
+  Last change 2026-10-21
 
   ©2024-2026 František Milt
 
@@ -1502,6 +1502,7 @@ begin
 }
 with TFileStream.Create('/proc/self/stat',fmOpenRead or fmShareDenyWrite) do
 try
+  BufferString := '';
   SetLength(BufferString,READ_SIZE);
   repeat
     SlidingBuffer := PAnsiChar(Addr(BufferString[Succ(Length(BufferString) - READ_SIZE)]));

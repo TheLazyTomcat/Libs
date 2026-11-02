@@ -19,9 +19,9 @@
 
   Version 1.4 (2025-11-01)
 
-  Last change 2025-11-01
+  Last change 2026-10-21
 
-  ©2016-2025 František Milt
+  ©2016-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -113,6 +113,8 @@ unit SimpleCPUID;
   {$INLINE ON}
   {$DEFINE CanInline}
   {$ASMMODE Intel}
+  {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
 {$ELSE}
   {$IF CompilerVersion >= 17} // Delphi 2005+
     {$DEFINE CanInline}
@@ -861,6 +863,17 @@ uses
   {$LINKLIB C}
 {$ENDIF}
 
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
+{$ENDIF}
+
 {===============================================================================
     External and system functions
 ===============================================================================}
@@ -1253,6 +1266,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 procedure TSimpleCPUID.ProcessLeaf_0000_0000;
 const
   Manufacturers: array[0..13] of record
@@ -1300,6 +1314,7 @@ If Find($00000000,Index) then
         end;
   end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 

@@ -18,9 +18,9 @@
 
   Version 1.5 (2025-08-06)
 
-  Last change 2025-11-11
+  Last change 2026-10-21
 
-  ©2020-2025 František Milt
+  ©2020-2026 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -1353,7 +1353,14 @@ uses
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
+  {$DEFINE W4055:={$WARN 4055 OFF}}   // Conversion between ordinals and pointers is not portable
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
 {$ENDIF}
 
 {===============================================================================
@@ -2406,6 +2413,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function ContextSymbolFind(var Context: TDLULibraryContextInternal; const SymbolName: String; out Index: Integer): Boolean;
 var
   i:  Integer;
@@ -2421,6 +2429,7 @@ For i := Low(Context.Data.ResolvedSymbols) to Pred(Context.Internals.ResolvedSym
       Break{For i};
     end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 

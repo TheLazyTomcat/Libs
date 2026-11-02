@@ -17,7 +17,7 @@
 
   Version 1.1 (2026-07-10)
 
-  Last change 2026-07-10
+  Last change 2026-10-21
 
   ©2026 František Milt
 
@@ -850,8 +850,8 @@ end;
 
 Function SwapEndian(Hash: TLookup64Sys): TLookup64Sys; overload;
 begin
-Int64Rec(Result).Hi := SwapEndian(Int64Rec(Result).Lo);
-Int64Rec(Result).Lo := SwapEndian(Int64Rec(Result).Hi);
+Int64Rec(Result).Hi := SwapEndian(Int64Rec(Hash).Lo);
+Int64Rec(Result).Lo := SwapEndian(Int64Rec(Hash).Hi);
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

@@ -30,9 +30,9 @@
              Linux build was tested only in virtual machine, so performance and
              stability there is also unknown.
 
-  Version 2.0.2 (2026-07-05)
+  Version 2.0.3 (2026-11-02)
 
-  Last change 2026-07-08
+  Last change 2026-11-02
 
   ©2022-2026 František Milt
 
@@ -116,12 +116,11 @@ unit MD6;
 {$H+}
 
 //------------------------------------------------------------------------------
-// do not touch following
-{$IF not Defined(PurePascal) and Defined(x86)}
+// do not touch...
+{$UNDEF VectorCompression}
+{$IFNDEF PurePascal}
   {$DEFINE VectorCompression}
-{$ELSE}
-  {$UNDEF VectorCompression}
-{$IFEND}
+{$ENDIF}
 
 interface
 
@@ -731,6 +730,21 @@ uses
   {$LINKLIB PTHREAD}
 {$ENDIF}
 
+//------------------------------------------------------------------------------
+
+{$UNDEF DirectMachineCode}
+{$IFDEF VectorCompression}
+  {$IFDEF FPC}
+    {$IF FPC_FULLVERSION < 30000}
+      {$DEFINE DirectMachineCode}
+    {$IFEND}
+  {$ELSE}
+    {$IFNDEF x64}
+      {$DEFINE DirectMachineCode}
+    {$ENDIF}
+  {$ENDIF}
+{$ENDIF}
+
 {===============================================================================
     Imported (external/system) functions
 ===============================================================================}
@@ -1091,19 +1105,21 @@ end;
 
 //------------------------------------------------------------------------------
 {$IFDEF VectorCompression}
-var
-  VAR_SSE2Supported: Boolean = False;
 
-procedure CompressionRoundSSE({EAX}RoundConst, {EDX}FirstWord: PInt64); register; assembler;
 const
   Shifts: array[0..31] of Int64 = (
     10, 5, 13, 10, 11, 12, 2, 7, 14, 15, 7, 13, 11, 7, 6, 12, // right shifts
     11, 24, 9, 16, 15, 9, 27, 15, 6, 2, 29, 8, 15, 5, 31, 9); // left shifts
+
+var
+  VAR_SSE2Supported:  Boolean = False;
+  VAR_AVX2Supported:  Boolean = False;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+procedure CompressionRoundSSE2({EAX,RCX,RDI}RoundConst, {EDX,RDX,RSI}FirstWord: PInt64); register; assembler;
 asm
 {
-  Compression is implemented in SSE only for 32bit code simply because it is
-  not needed elsewhere.
-
   As the MD6 hash is based around 64bit words, 32bit processors cannot handle
   them directly and most things must be emulated in code - and that is slow.
   Therefore I have decided to implement processing in SSE, which can handle
@@ -1111,44 +1127,68 @@ asm
   I cannot say anything conclusive, but for me the SSE was more than 3x faster
   than best result produced from pascal code by any compiler.
 
-  Code produced by the compiler (namely FPC) for 64bit CPUs seems to be well
-  optimized and provides even better performance than this SSE implementation.
-
-  AVX[2/512/10] could probably speed this even more thanks to 256 or 512bit
-  registers, but my prehistoric computer does not offer those extensions, so
-  I cannot develop for them.
+  In 64bit mode, it also seems to be faster, so it is implemented too.
 }
+{$IFDEF x64}
+  {$IFNDEF Windows}
+    {
+      No fancy things here, just shuffle registers so they are the same as
+      in win64.
+    }
+      MOV       RCX, RDI
+      MOV       RDX, RSI
+  {$ENDIF}
+      MOVQ      XMM4, [RCX]
+      MOVLHPS   XMM4, XMM4
+      LEA       RAX, [RIP + Shifts]
+      MOV       RCX, 8
+{$ELSE}
       MOVQ      XMM4, [EAX]
       MOVLHPS   XMM4, XMM4
-
       LEA       EAX, [Shifts]
       MOV       ECX, 8
+{$ENDIF}
 
   @CycleStart:
 
       MOVDQA    XMM5, XMM4
 
+{$IFDEF x64}
+      MOVDQU    XMM0, [RDX - 144]   // [i - 18]
+      MOVDQU    XMM1, [RDX - 168]   // [i - 21]
+      MOVDQU    XMM2, [RDX - 248]   // [i - 31]
+      MOVDQU    XMM3, [RDX - 536]   // [i - 67]
+{$ELSE}
       MOVDQU    XMM0, [EDX - 144]   // [i - 18]
       MOVDQU    XMM1, [EDX - 168]   // [i - 21]
-
       MOVDQU    XMM2, [EDX - 248]   // [i - 31]
       MOVDQU    XMM3, [EDX - 536]   // [i - 67]
+{$ENDIF}
 
       PAND      XMM0, XMM1
       PXOR      XMM5, XMM0
 
+{$IFDEF x64}
+      MOVDQU    XMM0, [RDX - 712]   // [i - 89]
+      MOVDQU    XMM1, [RDX - 136]   // [i - 17]
+{$ELSE}
       MOVDQU    XMM0, [EDX - 712]   // [i - 89]
       MOVDQU    XMM1, [EDX - 136]   // [i - 17]
+{$ENDIF}
 
       PAND      XMM2, XMM3
       PXOR      XMM5, XMM2
-
       PXOR      XMM5, XMM0
       PXOR      XMM5, XMM1
 
       // right shift
+{$IFDEF x64}
+      MOVQ      XMM0, [RAX]
+      MOVQ      XMM1, [RAX + 8]
+{$ELSE}
       MOVQ      XMM0, [EAX]
       MOVQ      XMM1, [EAX + 8]
+{$ENDIF}
       MOVQ      XMM2, XMM5
       MOVHLPS   XMM3, XMM5
       PSRLQ     XMM2, XMM0
@@ -1157,27 +1197,170 @@ asm
       PXOR      XMM5, XMM2
 
       // left shift
+{$IFDEF x64}
+      MOVQ      XMM0, [RAX + 128]
+      MOVQ      XMM1, [RAX + 136]
+{$ELSE}
       MOVQ      XMM0, [EAX + 128]
       MOVQ      XMM1, [EAX + 136]
+{$ENDIF}
       MOVQ      XMM2, XMM5
       MOVHLPS   XMM3, XMM5
       PSLLQ     XMM2, XMM0
       PSLLQ     XMM3, XMM1
       MOVLHPS   XMM2, XMM3
       PXOR      XMM5, XMM2
-    {
-      Is there any way of shifting each element in the vector register by
-      different amount, other than AVX2 instructions VPSRLVQ and VPSLLVQ?
-      See above why I cannot use these.
-    }
 
+      // store result, move pointers and decrement counter
+{$IFDEF x64}
+      MOVDQU    [RDX], XMM5
+
+      ADD       RDX, 16
+      ADD       RAX, 16
+      DEC       RCX
+{$ELSE}
       MOVDQU    [EDX], XMM5
 
       ADD       EDX, 16
       ADD       EAX, 16
-
       DEC       ECX
+{$ENDIF}
       JNZ       @CycleStart
+end;
+
+//--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
+
+procedure CompressionRoundAVX2({EAX,RCX,RDI}RoundConst, {EDX,RDX,RSI}FirstWord: PInt64); register; assembler;
+asm
+{
+  On my CPU (AMD Ryzen 7 260), following is almost 2x faster than SSE code
+  above and about 7x faster than optimized (O3) scalar code produced by FPC
+  version 3.2.2.
+}
+{$IFDEF x64}
+  {$IFNDEF Windows}
+      MOV           RCX, RDI
+      MOV           RDX, RSI
+  {$ENDIF}
+  {$IFDEF DirectMachineCode}
+      DB $C4, $E2, $7D, $19, $01                    // VBROADCASTSD  YMM0, [RCX]
+  {$ELSE}
+      VBROADCASTSD  YMM0, [RCX]
+  {$ENDIF}
+      LEA           RAX, [RIP + Shifts]
+      MOV           RCX, 4
+{$ELSE}
+  {$IFDEF DirectMachineCode}
+      DB $C4, $E2, $7D, $19, $00                    // VBROADCASTSD  YMM0, [EAX]
+  {$ELSE}
+      VBROADCASTSD  YMM0, [EAX]
+  {$ENDIF}
+      LEA           EAX, [Shifts]
+      MOV           ECX, 4
+{$ENDIF}
+
+  @CycleStart:
+
+{$IFDEF DirectMachineCode}
+    {
+      Note that the opcodes do not change whether this is compiled for 32bit
+      or 64bit as we are using the same registers (EDX - RDX, EAX - RAX) and
+      offsets.
+    }
+      DB $C5, $FE, $6F, $8A, $38, $FD, $FF, $FF     // VMOVDQU       YMM1, [EDX - 712]
+      DB $C5, $FE, $6F, $92, $78, $FF, $FF, $FF     // VMOVDQU       YMM2, [EDX - 136]
+
+      DB $C5, $FE, $6F, $9A, $70, $FF, $FF, $FF     // VMOVDQU       YMM3, [EDX - 144]
+      DB $C5, $FE, $6F, $A2, $58, $FF, $FF, $FF     // VMOVDQU       YMM4, [EDX - 168]
+
+      DB $C5, $FE, $6F, $AA, $08, $FF, $FF, $FF     // VMOVDQU       YMM5, [EDX - 248]
+      DB $C5, $FE, $6F, $B2, $E8, $FD, $FF, $FF     // VMOVDQU       YMM6, [EDX - 536]
+
+      DB $C5, $F5, $EF, $CA                         // VPXOR         YMM1, YMM1, YMM2
+      DB $C5, $E5, $DB, $DC                         // VPAND         YMM3, YMM3, YMM4
+      DB $C5, $D5, $DB, $EE                         // VPAND         YMM5, YMM5, YMM6
+
+      DB $C5, $F5, $EF, $C8                         // VPXOR         YMM1, YMM1, YMM0
+      DB $C5, $E5, $EF, $DD                         // VPXOR         YMM3, YMM3, YMM5
+      DB $C5, $F5, $EF, $CB                         // VPXOR         YMM1, YMM1, YMM3
+
+      DB $C5, $FE, $6F, $18                         // VMOVDQU       YMM3, [EAX]
+      DB $C5, $FD, $6F, $D1                         // VMOVDQA       YMM2, YMM1
+      DB $C4, $E2, $ED, $45, $D3                    // VPSRLVQ       YMM2, YMM2, YMM3
+      DB $C5, $F5, $EF, $CA                         // VPXOR         YMM1, YMM1, YMM2
+
+      DB $C5, $FE, $6F, $98, $80, $00, $00, $00     // VMOVDQU       YMM3, [EAX + 128]
+      DB $C5, $FD, $6F, $D1                         // VMOVDQA       YMM2, YMM1
+      DB $C4, $E2, $ED, $47, $D3                    // VPSLLVQ       YMM2, YMM2, YMM3
+      DB $C5, $F5, $EF, $CA                         // VPXOR         YMM1, YMM1, YMM2
+
+      DB $C5, $FE, $7F, $0A                         // VMOVDQU       [EDX], YMM1
+{$ELSE}
+  {$IFDEF x64}
+      VMOVDQU       YMM1, [RDX - 712]   // [i - 89]
+      VMOVDQU       YMM2, [RDX - 136]   // [i - 17]
+
+      VMOVDQU       YMM3, [RDX - 144]   // [i - 18]
+      VMOVDQU       YMM4, [RDX - 168]   // [i - 21]
+
+      VMOVDQU       YMM5, [RDX - 248]   // [i - 31]
+      VMOVDQU       YMM6, [RDX - 536]   // [i - 67]
+  {$ELSE}
+      VMOVDQU       YMM1, [EDX - 712]   // [i - 89]
+      VMOVDQU       YMM2, [EDX - 136]   // [i - 17]
+
+      VMOVDQU       YMM3, [EDX - 144]   // [i - 18]
+      VMOVDQU       YMM4, [EDX - 168]   // [i - 21]
+
+      VMOVDQU       YMM5, [EDX - 248]   // [i - 31]
+      VMOVDQU       YMM6, [EDX - 536]   // [i - 67]
+  {$ENDIF}
+      VPXOR         YMM1, YMM1, YMM2
+      VPAND         YMM3, YMM3, YMM4
+      VPAND         YMM5, YMM5, YMM6
+
+      VPXOR         YMM1, YMM1, YMM0
+      VPXOR         YMM3, YMM3, YMM5
+      VPXOR         YMM1, YMM1, YMM3
+
+      // right shift
+    {$IFDEF x64}
+      VMOVDQU       YMM3, [RAX]
+    {$ELSE}
+      VMOVDQU       YMM3, [EAX]
+    {$ENDIF}
+      VMOVDQA       YMM2, YMM1
+      VPSRLVQ       YMM2, YMM2, YMM3
+      VPXOR         YMM1, YMM1, YMM2
+
+      // left shift
+    {$IFDEF x64}
+      VMOVDQU       YMM3, [RAX + 128]
+    {$ELSE}
+      VMOVDQU       YMM3, [EAX + 128]
+    {$ENDIF}
+      VMOVDQA       YMM2, YMM1
+      VPSLLVQ       YMM2, YMM2, YMM3
+      VPXOR         YMM1, YMM1, YMM2
+
+    {$IFDEF x64}
+      VMOVDQU       [RDX], YMM1
+    {$ELSE}
+      VMOVDQU       [EDX], YMM1
+    {$ENDIF}
+{$ENDIF}
+{$IFDEF x64}
+      ADD           RDX, 32
+      ADD           RAX, 32
+
+      DEC           RCX
+{$ELSE}
+      ADD           EDX, 32
+      ADD           EAX, 32
+
+      DEC           ECX
+{$ENDIF}
+      JNZ           @CycleStart
 end;
 
 //--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --
@@ -1201,8 +1384,10 @@ while i <= (Length(BlockArray) - MD6_CHUNK_LEN) do
   begin
     // unrolled round (16 steps)...
   {$IFDEF VectorCompression}
-    If VAR_SSE2Supported then
-      CompressionRoundSSE(@RoundConst,Addr(BlockArray[i]))
+    If VAR_AVX2Supported then
+      CompressionRoundAVX2(@RoundConst,Addr(BlockArray[i]))
+    else If VAR_SSE2Supported then
+      CompressionRoundSSE2(@RoundConst,Addr(BlockArray[i]))
     else
   {$ENDIF}
       begin
@@ -4808,6 +4993,7 @@ begin
 with TSimpleCPUID.Create do
 try
   VAR_SSE2Supported := Info.SupportedExtensions.SSE2;
+  VAR_AVX2Supported := Info.SupportedExtensions.AVX2;
 finally
   Free;
 end;

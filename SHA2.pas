@@ -40,7 +40,7 @@
 
   Version 1.1.4 (2026-07-05)
 
-  Last change 2026-07-08
+  Last change 2026-10-21
 
   ©2015-2026 František Milt
 
@@ -1011,7 +1011,7 @@ else If Length(Str) > Integer(HashSize * 2) then
   TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
 else
   TempStr := Str;
-FillChar(Hash,FullSize,0);
+FillChar(Addr(Hash)^,FullSize,0);
 HashPtr := @Hash;
 For i := 0 to Pred(Integer(HashSize)) do
   begin

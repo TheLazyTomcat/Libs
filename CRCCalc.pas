@@ -37,7 +37,7 @@
 
   Version 1.0 (2026-07-26)
 
-  Last change 2026-07-27
+  Last change 2026-10-21
 
   ©2026 František Milt
 
@@ -76,6 +76,8 @@ unit CRCCalc;
 {$IFDEF FPC}
   {$MODE ObjFPC}
   {$MODESWITCH ClassicProcVars+}
+  {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
 {$ENDIF}
 {$H+}
 
@@ -776,6 +778,17 @@ uses
   {$DEFINE OverflowChecks}
 {$ELSE}
   {$UNDEF OverflowChecks}
+{$ENDIF}
+
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$PUSH}{$WARN 2005 OFF}             // Comment level $1 found
+  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30200)}
+    {$DEFINE W6058:={$WARN 6058 OFF}} // Call to subroutine "$1" marked as inline is not inlined
+  {$ELSE}
+    {$DEFINE W6058:=}
+  {$IFEND}
+  {$POP}
 {$ENDIF}
 
 {===============================================================================
@@ -2276,6 +2289,7 @@ end;
     TCRCCalculatorTester - internal auxiliary functions
 ===============================================================================}
 
+{$IFDEF FPCDWM}{$PUSH}W6058{$ENDIF}
 Function StrInArrIndex(const Str: String; const Arr: array of String): Integer;
 var
   i:  Integer;
@@ -2288,6 +2302,7 @@ For i := Low(Arr) to High(Arr) do
       Break{For i};
     end;
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
